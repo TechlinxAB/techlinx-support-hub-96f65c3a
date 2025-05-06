@@ -349,7 +349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           companyId: block.company_id,
           title: block.title,
           content: block.content,
-          type: block.type,
+          type: block.type as DashboardBlock['type'], // Cast to ensure compatibility
           position: block.position,
           parentId: block.parent_id || undefined,
           createdAt: new Date(block.created_at),
@@ -373,6 +373,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     block: Omit<DashboardBlock, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
   ): Promise<string | undefined> => {
     try {
+      // Ensure we have the current user's ID
+      if (!user) {
+        throw new Error('User must be logged in to add dashboard blocks');
+      }
+
       const { data, error } = await supabase
         .from('dashboard_blocks')
         .insert({
@@ -381,7 +386,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           content: block.content,
           type: block.type,
           position: block.position,
-          parent_id: block.parentId
+          parent_id: block.parentId,
+          created_by: user.id // Add the user ID as created_by
         })
         .select();
       
