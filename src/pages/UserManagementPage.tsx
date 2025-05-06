@@ -68,14 +68,8 @@ const UserManagementPage = () => {
   const [password, setPassword] = useState('');
   const [userStatus, setUserStatus] = useState('active');
   
-  // Only consultants can access this page
-  if (currentUser?.role !== 'consultant') {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <p className="text-lg text-muted-foreground">You don't have permission to access this page.</p>
-      </div>
-    );
-  }
+  // The early return was causing hook order issues - we'll move it after all hooks
+  const isConsultant = currentUser?.role === 'consultant';
   
   // Reset state when dialog is closed
   useEffect(() => {
@@ -563,6 +557,15 @@ const UserManagementPage = () => {
         );
     }
   };
+
+  // Now render UI based on permission check
+  if (!isConsultant) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <p className="text-lg text-muted-foreground">You don't have permission to access this page.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
