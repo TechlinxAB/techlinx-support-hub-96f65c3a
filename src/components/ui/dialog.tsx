@@ -40,15 +40,23 @@ const DialogContent = React.forwardRef<
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className
       )}
-      onCloseAutoFocus={(event) => {
-        // Prevent focus issues when dialog closes
-        event.preventDefault();
+      // Completely bypassing focus management on close
+      onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        // Release any trapped focus
+        setTimeout(() => {
+          document.body.focus();
+        }, 0);
       }}
-      onEscapeKeyDown={(event) => {
-        // Let the escape key work even during loading states
-        event.preventDefault();
+      // Handle escape key directly
+      onEscapeKeyDown={(e) => {
+        // Let the dialog close even during loading states
         if (props.onEscapeKeyDown) {
-          props.onEscapeKeyDown(event);
+          props.onEscapeKeyDown(e);
+        } else {
+          // Default behavior - close the dialog
+          const closeEvent = new CustomEvent('close-dialog');
+          window.dispatchEvent(closeEvent);
         }
       }}
       {...props}

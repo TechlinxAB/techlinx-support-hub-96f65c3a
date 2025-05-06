@@ -7,7 +7,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 3000 // Reducing to 3 seconds for faster toast removal
+const TOAST_REMOVE_DELAY = 2000 // Reducing to 2 seconds for faster toast removal
 
 type ToasterToast = ToastProps & {
   id: string
@@ -136,6 +136,15 @@ if (typeof window !== 'undefined') {
     toastTimeouts.forEach(timeout => clearTimeout(timeout));
     toastTimeouts.clear();
   });
+  
+  // Clean up on component mount/unmount to avoid memory leaks
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      // When page is hidden, clear all toast timeouts
+      toastTimeouts.forEach(timeout => clearTimeout(timeout));
+      toastTimeouts.clear();
+    }
+  });
 }
 
 const listeners: Array<(state: State) => void> = []
@@ -162,6 +171,14 @@ function toast({ ...props }: Toast) {
     
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
+  // Auto-dismiss after a short delay
+  const autoDismiss = setTimeout(() => {
+    dismiss();
+  }, TOAST_REMOVE_DELAY);
+
+  // Store the auto-dismiss timeout so we can clear it if needed
+  toastTimeouts.set(`auto-${id}`, autoDismiss);
+
   dispatch({
     type: "ADD_TOAST",
     toast: {
@@ -169,7 +186,15 @@ function toast({ ...props }: Toast) {
       id,
       open: true,
       onOpenChange: (open) => {
-        if (!open) dismiss()
+        if (!open) {
+          // Clear the auto-dismiss timeout when manually dismissed
+          const autoDismissTimeout = toastTimeouts.get(`auto-${id}`);
+          if (autoDismissTimeout) {
+            clearTimeout(autoDismissTimeout);
+            toastTimeouts.delete(`auto-${id}`);
+          }
+          dismiss();
+        }
       },
     },
   })
