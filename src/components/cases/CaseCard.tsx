@@ -15,9 +15,9 @@ const CaseCard = ({ caseItem }: CaseCardProps) => {
   const navigate = useNavigate();
   const { companies, users, categories } = useAppContext();
   
-  const company = companies.find((c) => c.id === caseItem.companyId) as Company;
-  const user = users.find((u) => u.id === caseItem.userId) as User;
-  const category = categories.find((c) => c.id === caseItem.categoryId) as CaseCategory;
+  const company = companies.find((c) => c.id === caseItem.companyId);
+  const user = users.find((u) => u.id === caseItem.userId);
+  const category = categories.find((c) => c.id === caseItem.categoryId);
   const assignedTo = caseItem.assignedToId 
     ? users.find((u) => u.id === caseItem.assignedToId) 
     : undefined;
@@ -28,32 +28,32 @@ const CaseCard = ({ caseItem }: CaseCardProps) => {
   
   const getStatusBadgeClass = () => {
     switch (caseItem.status) {
-      case 'new': return 'status-new';
-      case 'ongoing': return 'status-ongoing';
-      case 'resolved': return 'status-resolved';
-      case 'completed': return 'status-completed';
+      case 'new': return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
+      case 'ongoing': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
+      case 'resolved': return 'bg-green-100 text-green-800 hover:bg-green-200';
+      case 'completed': return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
       default: return '';
     }
   };
   
   const getPriorityBadgeClass = () => {
     switch (caseItem.priority) {
-      case 'low': return 'priority-low';
-      case 'medium': return 'priority-medium';
-      case 'high': return 'priority-high';
+      case 'low': return 'bg-green-100 text-green-800 hover:bg-green-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
+      case 'high': return 'bg-red-100 text-red-800 hover:bg-red-200';
       default: return '';
     }
   };
   
   return (
     <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow"
+      className="cursor-pointer hover:shadow-md transition-shadow border-2 border-primary/10 hover:border-primary/30"
       onClick={handleClick}
     >
       <CardHeader className="pb-2">
         <div className="flex justify-between">
           <h3 className="text-md font-semibold">{caseItem.title}</h3>
-          <Badge variant="outline" className={cn("status-badge", getStatusBadgeClass())}>
+          <Badge className={cn(getStatusBadgeClass())}>
             {caseItem.status}
           </Badge>
         </div>
@@ -64,11 +64,11 @@ const CaseCard = ({ caseItem }: CaseCardProps) => {
       <CardFooter className="pt-0">
         <div className="w-full flex flex-col gap-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{user.name}</span>
-            <span>{company.name}</span>
+            <span>{user?.name || 'Unknown User'}</span>
+            <span>{company?.name || 'Unknown Company'}</span>
           </div>
           <div className="flex justify-between items-center">
-            <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass())}>
+            <Badge variant="outline" className={cn(getPriorityBadgeClass())}>
               {caseItem.priority}
             </Badge>
             <span className="text-xs text-muted-foreground">

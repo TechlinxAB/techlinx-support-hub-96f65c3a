@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import CaseCard from './CaseCard';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, RefreshCw } from 'lucide-react';
 
 interface CaseListProps {
   title?: string;
@@ -22,12 +22,19 @@ interface CaseListProps {
 
 const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListProps) => {
   const navigate = useNavigate();
-  const { cases, companies, categories, currentUser } = useAppContext();
+  const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetchCases();
+    setRefreshing(false);
+  };
   
   // Filter cases based on user role
   let filteredCases = currentUser?.role === 'consultant' 
@@ -79,8 +86,17 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListPr
             </Button>
           )}
           <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button 
             size="sm" 
             onClick={() => navigate('/cases/new')}
+            className="bg-primary hover:bg-primary/90"
           >
             <Plus className="h-4 w-4 mr-2" />
             New Case

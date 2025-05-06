@@ -9,16 +9,435 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      announcements: {
+        Row: {
+          company_id: string
+          content: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          content: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          content?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_attachments: {
+        Row: {
+          case_id: string
+          content_type: string | null
+          created_at: string | null
+          created_by: string
+          file_name: string
+          file_path: string
+          id: string
+          size: number | null
+        }
+        Insert: {
+          case_id: string
+          content_type?: string | null
+          created_at?: string | null
+          created_by: string
+          file_name: string
+          file_path: string
+          id?: string
+          size?: number | null
+        }
+        Update: {
+          case_id?: string
+          content_type?: string | null
+          created_at?: string | null
+          created_by?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          size?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_attachments_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_attachments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cases: {
+        Row: {
+          assigned_to_id: string | null
+          category_id: string
+          company_id: string
+          created_at: string | null
+          description: string
+          id: string
+          priority: Database["public"]["Enums"]["case_priority"] | null
+          status: Database["public"]["Enums"]["case_status"] | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_to_id?: string | null
+          category_id: string
+          company_id: string
+          created_at?: string | null
+          description: string
+          id?: string
+          priority?: Database["public"]["Enums"]["case_priority"] | null
+          status?: Database["public"]["Enums"]["case_status"] | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_to_id?: string | null
+          category_id?: string
+          company_id?: string
+          created_at?: string | null
+          description?: string
+          id?: string
+          priority?: Database["public"]["Enums"]["case_priority"] | null
+          status?: Database["public"]["Enums"]["case_status"] | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cases_assigned_to_id_fkey"
+            columns: ["assigned_to_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      companies: {
+        Row: {
+          created_at: string | null
+          id: string
+          logo: string | null
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          logo?: string | null
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          logo?: string | null
+          name?: string
+        }
+        Relationships: []
+      }
+      documentation: {
+        Row: {
+          company_id: string
+          content: string
+          created_at: string | null
+          id: string
+          parent_id: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          parent_id?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          parent_id?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentation_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentation_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "documentation"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      faqs: {
+        Row: {
+          company_id: string
+          content: string
+          created_at: string | null
+          id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faqs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notes: {
+        Row: {
+          case_id: string
+          content: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          case_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          case_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar: string | null
+          company_id: string | null
+          created_at: string | null
+          email: string
+          id: string
+          name: string
+          phone: string | null
+          preferred_language:
+            | Database["public"]["Enums"]["language_preference"]
+            | null
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Insert: {
+          avatar?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          email: string
+          id: string
+          name: string
+          phone?: string | null
+          preferred_language?:
+            | Database["public"]["Enums"]["language_preference"]
+            | null
+          role?: Database["public"]["Enums"]["user_role"]
+        }
+        Update: {
+          avatar?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          preferred_language?:
+            | Database["public"]["Enums"]["language_preference"]
+            | null
+          role?: Database["public"]["Enums"]["user_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      replies: {
+        Row: {
+          case_id: string
+          content: string
+          created_at: string | null
+          id: string
+          is_internal: boolean | null
+          user_id: string
+        }
+        Insert: {
+          case_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          is_internal?: boolean | null
+          user_id: string
+        }
+        Update: {
+          case_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_internal?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "replies_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "replies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      belongs_to_company: {
+        Args: { company_id: string }
+        Returns: boolean
+      }
+      is_consultant: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      case_priority: "low" | "medium" | "high"
+      case_status: "new" | "ongoing" | "resolved" | "completed"
+      language_preference: "en" | "sv"
+      user_role: "user" | "consultant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +552,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      case_priority: ["low", "medium", "high"],
+      case_status: ["new", "ongoing", "resolved", "completed"],
+      language_preference: ["en", "sv"],
+      user_role: ["user", "consultant"],
+    },
   },
 } as const
