@@ -10,24 +10,40 @@ const AlertDialog = ({
   onOpenChange,
   ...props 
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) => {
-  const { setIsModalOpen } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Update modal state when alert dialog opens/closes
+  // Update modal state when alert dialog opens/closes with enhanced cleanup
   React.useEffect(() => {
     if (open) {
       setIsModalOpen(true);
     } else {
-      // Important: Update when closing with a delay for animation
-      setTimeout(() => {
+      // Important: Update when closing with a delay for animation and proper cleanup
+      const timer = setTimeout(() => {
         setIsModalOpen(false);
+        // Force overlay cleanup when alert dialog fully closes
+        if (!open) resetModalState();
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [open, setIsModalOpen, resetModalState]);
+  
+  // Handle open change with improved cleanup
+  const handleOpenChange = React.useCallback((newOpen: boolean) => {
+    if (onOpenChange) onOpenChange(newOpen);
+    
+    // Always ensure cleanup when dialog closes
+    if (!newOpen) {
+      setTimeout(() => {
+        resetModalState();
       }, 300);
     }
-  }, [open, setIsModalOpen]);
+  }, [onOpenChange, resetModalState]);
   
   return (
     <AlertDialogPrimitive.Root
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       {...props}
     />
   );
@@ -70,6 +86,11 @@ const AlertDialogContent = React.forwardRef<
           } else if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
           }
+          
+          // Ensure cleanup after ESC key
+          setTimeout(() => {
+            resetModalState();
+          }, 300);
         }}
         onCloseAutoFocus={(event) => {
           // Reset modal state when closed
@@ -150,10 +171,25 @@ const AlertDialogAction = React.forwardRef<
   const { resetModalState } = useModal();
   
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    resetModalState();
+    // First call original handler
     if (onClick) {
       onClick(e);
     }
+    
+    // Always ensure thorough cleanup
+    resetModalState();
+    
+    // Extra safety cleanup after animation
+    setTimeout(() => {
+      const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+      if (overlays.length > 0) {
+        overlays.forEach(overlay => {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        });
+      }
+    }, 300);
   }, [onClick, resetModalState]);
   
   return (
@@ -174,10 +210,25 @@ const AlertDialogCancel = React.forwardRef<
   const { resetModalState } = useModal();
   
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    resetModalState();
+    // First call original handler
     if (onClick) {
       onClick(e);
     }
+    
+    // Always ensure thorough cleanup
+    resetModalState();
+    
+    // Extra safety cleanup after animation
+    setTimeout(() => {
+      const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+      if (overlays.length > 0) {
+        overlays.forEach(overlay => {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        });
+      }
+    }, 300);
   }, [onClick, resetModalState]);
   
   return (

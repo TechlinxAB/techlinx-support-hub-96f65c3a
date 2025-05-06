@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
@@ -11,24 +10,40 @@ const Dialog = ({
   onOpenChange,
   ...props 
 }: React.ComponentProps<typeof DialogPrimitive.Root>) => {
-  const { setIsModalOpen } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Update modal state when dialog opens/closes
+  // Update modal state when dialog opens/closes with improved cleanup
   React.useEffect(() => {
     if (open) {
       setIsModalOpen(true);
     } else {
       // Important: Update when closing with a delay for animation
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setIsModalOpen(false);
+        // Force cleanup when dialog fully closes
+        if (!open) resetModalState();
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [open, setIsModalOpen, resetModalState]);
+  
+  // When dialog is closed by user, ensure proper cleanup
+  const handleOpenChange = React.useCallback((newOpen: boolean) => {
+    if (onOpenChange) onOpenChange(newOpen);
+    
+    // Always ensure cleanup when dialog is closed
+    if (!newOpen) {
+      setTimeout(() => {
+        resetModalState();
       }, 300);
     }
-  }, [open, setIsModalOpen]);
+  }, [onOpenChange, resetModalState]);
   
   return (
     <DialogPrimitive.Root 
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       {...props} 
     />
   );
@@ -42,10 +57,15 @@ const DialogClose = ({ onClick, ...props }: React.ComponentProps<typeof DialogPr
   const { resetModalState } = useModal();
   
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    resetModalState();
+    // First call original handler
     if (onClick) {
       onClick(e);
     }
+    
+    // Always ensure cleanup
+    setTimeout(() => {
+      resetModalState();
+    }, 300);
   }, [onClick, resetModalState]);
   
   return <DialogPrimitive.Close onClick={handleClick} {...props} />;
@@ -86,6 +106,11 @@ const DialogContent = React.forwardRef<
             if (props.onEscapeKeyDown) {
               props.onEscapeKeyDown(e);
             }
+            
+            // Ensure cleanup after ESC
+            setTimeout(() => {
+              resetModalState();
+            }, 300);
           }
         }}
         onPointerDownOutside={(e) => {
@@ -97,6 +122,11 @@ const DialogContent = React.forwardRef<
             if (props.onPointerDownOutside) {
               props.onPointerDownOutside(e);
             }
+            
+            // Ensure cleanup after outside click
+            setTimeout(() => {
+              resetModalState();
+            }, 300);
           }
         }}
         onCloseAutoFocus={(e) => {
@@ -105,7 +135,7 @@ const DialogContent = React.forwardRef<
             props.onCloseAutoFocus(e);
           }
           
-          // Ensure UI is reset when dialog closes
+          // Always ensure UI is fully reset when dialog closes
           resetModalState();
         }}
         className={cn(
@@ -117,7 +147,12 @@ const DialogContent = React.forwardRef<
         {children}
         <DialogPrimitive.Close 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-          onClick={resetModalState}
+          onClick={() => {
+            // Ensure UI is properly reset
+            setTimeout(() => {
+              resetModalState();
+            }, 300);
+          }}
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>

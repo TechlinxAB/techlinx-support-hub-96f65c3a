@@ -10,24 +10,39 @@ const Popover = ({
   onOpenChange,
   ...props 
 }: React.ComponentProps<typeof PopoverPrimitive.Root>) => {
-  const { setIsModalOpen } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Update modal state when popover opens/closes
+  // Update modal state when popover opens/closes with proper cleanup
   React.useEffect(() => {
     if (open) {
       setIsModalOpen(true);
     } else {
-      // Important: Update when closing with a delay for animation
-      setTimeout(() => {
+      // Important: Update when closing with a proper delay for animation
+      const timer = setTimeout(() => {
         setIsModalOpen(false);
+        // Force cleanup in case anything is stuck
+        if (!open) {
+          const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+          if (overlays.length > 0) {
+            resetModalState();
+          }
+        }
       }, 300);
+      
+      return () => clearTimeout(timer);
     }
-  }, [open, setIsModalOpen]);
+  }, [open, setIsModalOpen, resetModalState]);
   
   return (
     <PopoverPrimitive.Root
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(newOpen) => {
+        if (onOpenChange) onOpenChange(newOpen);
+        // Force cleanup when closing
+        if (!newOpen) {
+          setTimeout(resetModalState, 300);
+        }
+      }}
       {...props}
     />
   );
@@ -53,6 +68,9 @@ const PopoverContent = React.forwardRef<
             event.preventDefault();
           } else if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
+          } else {
+            // Ensure cleanup after ESC closes popover
+            setTimeout(resetModalState, 300);
           }
         }}
         onPointerDownOutside={(event) => {
@@ -61,10 +79,13 @@ const PopoverContent = React.forwardRef<
             event.preventDefault();
           } else if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
+          } else {
+            // Ensure cleanup after click outside closes popover
+            setTimeout(resetModalState, 300);
           }
         }}
         onCloseAutoFocus={(event) => {
-          // Reset modal state when popover closes
+          // Always reset modal state when popover closes
           resetModalState();
           
           if (props.onCloseAutoFocus) {

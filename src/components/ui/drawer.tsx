@@ -6,25 +6,45 @@ import { cn } from "@/lib/utils"
 
 const Drawer = ({
   shouldScaleBackground = true,
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) => {
-  const { setIsModalOpen } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Set modal state when drawer opens/closes
+  // Set modal state when drawer opens/closes with improved cleanup
   React.useEffect(() => {
-    if (props.open) {
+    if (open) {
       setIsModalOpen(true);
     } else {
-      // Important: Also update when closing
-      setTimeout(() => {
+      // Important: Cleanup when closing with proper timing
+      const timer = setTimeout(() => {
         setIsModalOpen(false);
-      }, 300); // Wait for animation to complete
+        // Force overlay cleanup when drawer closes
+        if (!open) resetModalState();
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
-  }, [props.open, setIsModalOpen]);
+  }, [open, setIsModalOpen, resetModalState]);
+  
+  // Handle open change with improved cleanup
+  const handleOpenChange = React.useCallback((newOpen: boolean) => {
+    if (onOpenChange) onOpenChange(newOpen);
+    
+    // Always ensure cleanup when drawer closes
+    if (!newOpen) {
+      setTimeout(() => {
+        resetModalState();
+      }, 300);
+    }
+  }, [onOpenChange, resetModalState]);
   
   return (
     <DrawerPrimitive.Root
       shouldScaleBackground={shouldScaleBackground}
+      open={open}
+      onOpenChange={handleOpenChange}
       {...props}
     />
   );
@@ -39,10 +59,15 @@ const DrawerClose = ({ onClick, ...props }: React.ComponentProps<typeof DrawerPr
   const { resetModalState } = useModal();
   
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    resetModalState();
+    // First call original handler
     if (onClick) {
       onClick(e);
     }
+    
+    // Always ensure cleanup when drawer closes
+    setTimeout(() => {
+      resetModalState();
+    }, 300);
   }, [onClick, resetModalState]);
   
   return <DrawerPrimitive.Close onClick={handleClick} {...props} />;
@@ -56,6 +81,12 @@ const DrawerOverlay = React.forwardRef<
     ref={ref}
     className={cn("fixed inset-0 z-50 bg-black/80", className)}
     {...props}
+    onPointerDown={(e) => {
+      // Run original handler if provided
+      if (props.onPointerDown) {
+        props.onPointerDown(e);
+      }
+    }}
   />
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
@@ -84,6 +115,11 @@ const DrawerContent = React.forwardRef<
           if (props.onInteractOutside) {
             props.onInteractOutside(event);
           }
+          
+          // Ensure cleanup after outside interaction
+          setTimeout(() => {
+            resetModalState();
+          }, 300);
         }}
         onEscapeKeyDown={(event) => {
           // Prevent escape if loading
@@ -94,6 +130,11 @@ const DrawerContent = React.forwardRef<
           if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
           }
+          
+          // Ensure cleanup after ESC key
+          setTimeout(() => {
+            resetModalState();
+          }, 300);
         }}
         onCloseAutoFocus={(event) => {
           // Ensure modal state is properly reset

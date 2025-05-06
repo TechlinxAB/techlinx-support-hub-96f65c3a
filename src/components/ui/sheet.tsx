@@ -1,4 +1,3 @@
-
 import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
@@ -12,24 +11,40 @@ const Sheet = ({
   onOpenChange,
   ...props 
 }: React.ComponentProps<typeof SheetPrimitive.Root>) => {
-  const { setIsModalOpen } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Update modal state when sheet opens/closes
+  // Update modal state when sheet opens/closes with improved cleanup
   React.useEffect(() => {
     if (open) {
       setIsModalOpen(true);
     } else {
-      // Important: Update when closing with a delay for animation
-      setTimeout(() => {
+      // Important: Update when closing with proper delay and cleanup
+      const timer = setTimeout(() => {
         setIsModalOpen(false);
+        // Force cleanup when sheet fully closes
+        if (!open) resetModalState();
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [open, setIsModalOpen, resetModalState]);
+  
+  // Handle open change with thorough cleanup
+  const handleOpenChange = React.useCallback((newOpen: boolean) => {
+    if (onOpenChange) onOpenChange(newOpen);
+    
+    // Always ensure cleanup when sheet closes
+    if (!newOpen) {
+      setTimeout(() => {
+        resetModalState();
       }, 300);
     }
-  }, [open, setIsModalOpen]);
+  }, [onOpenChange, resetModalState]);
   
   return (
     <SheetPrimitive.Root
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       {...props}
     />
   );
@@ -41,10 +56,25 @@ const SheetClose = ({ onClick, ...props }: React.ComponentProps<typeof SheetPrim
   const { resetModalState } = useModal();
   
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    resetModalState();
+    // First call original handler
     if (onClick) {
       onClick(e);
     }
+    
+    // Always ensure thorough cleanup
+    resetModalState();
+    
+    // Extra safety cleanup after animation
+    setTimeout(() => {
+      const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+      if (overlays.length > 0) {
+        overlays.forEach(overlay => {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        });
+      }
+    }, 300);
   }, [onClick, resetModalState]);
   
   return <SheetPrimitive.Close onClick={handleClick} {...props} />;
@@ -63,6 +93,12 @@ const SheetOverlay = React.forwardRef<
     )}
     {...props}
     ref={ref}
+    onPointerDown={(e) => {
+      // Run original handler if provided
+      if (props.onPointerDown) {
+        props.onPointerDown(e);
+      }
+    }}
   />
 ))
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
@@ -109,6 +145,11 @@ const SheetContent = React.forwardRef<
           } else if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
           }
+          
+          // Ensure cleanup after ESC key
+          setTimeout(() => {
+            resetModalState();
+          }, 300);
         }}
         onPointerDownOutside={(event) => {
           // Prevent clicks outside from dismissing if loading
@@ -117,6 +158,11 @@ const SheetContent = React.forwardRef<
           } else if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
           }
+          
+          // Ensure cleanup after outside click
+          setTimeout(() => {
+            resetModalState();
+          }, 300);
         }}
         onCloseAutoFocus={(event) => {
           // Reset modal state when sheet is closed
@@ -125,13 +171,28 @@ const SheetContent = React.forwardRef<
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
           }
+          
+          // Extra cleanup for any remaining elements
+          setTimeout(() => {
+            document.querySelectorAll('[data-radix-portal]').forEach(portal => {
+              const isEmptyPortal = portal.children.length === 0;
+              if (isEmptyPortal && portal.parentNode) {
+                portal.parentNode.removeChild(portal);
+              }
+            });
+          }, 350);
         }}
         {...props}
       >
         {children}
         <SheetPrimitive.Close 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
-          onClick={resetModalState}
+          onClick={() => {
+            // Ensure reset when close button is clicked
+            setTimeout(() => {
+              resetModalState();
+            }, 300);
+          }}
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>

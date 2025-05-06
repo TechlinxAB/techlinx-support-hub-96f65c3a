@@ -35,7 +35,7 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     console.log(`Modal state: ${isModalOpen ? 'open' : 'closed'}`);
   }, [isModalOpen]);
 
-  // Simple function to reset all modal state
+  // Enhanced function to reset all modal state and force cleanup of DOM
   const resetModalState = useCallback(() => {
     setIsModalOpen(false);
     setIsLoading(false);
@@ -48,13 +48,45 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     document.body.removeAttribute('data-modal-open');
     document.body.removeAttribute('data-loading');
     
+    // Force remove any overlay elements that might be stuck
+    const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+    overlays.forEach(overlay => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+        console.log('Forcefully removed overlay element during reset');
+      }
+    });
+    
+    // Force remove any dialog elements that might be stuck
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    dialogs.forEach(dialog => {
+      // Check if the dialog has state="closed" but is still visible
+      if (dialog.getAttribute('data-state') === 'closed') {
+        if (dialog.parentNode) {
+          dialog.parentNode.removeChild(dialog);
+          console.log('Forcefully removed closed dialog element');
+        }
+      }
+    });
+    
+    // Force all popovers to close
+    document.querySelectorAll('[data-radix-popover-content-wrapper]').forEach(element => {
+      if (element.parentNode) {
+        element.parentNode.removeChild(element);
+        console.log('Forcefully removed popover element');
+      }
+    });
+    
     // Restore scroll position if we previously locked the body
     if (bodyWasLocked.current) {
       window.scrollTo(0, scrollPosition.current);
       bodyWasLocked.current = false;
     }
     
-    console.log('Modal state reset');
+    // Make sure click/touch events work again
+    document.documentElement.style.pointerEvents = '';
+    
+    console.log('Modal state fully reset and DOM cleaned');
   }, []);
 
   // Handle body styles when modal state changes
@@ -81,6 +113,19 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
       // Restore scroll position
       window.scrollTo(0, scrollPosition.current);
       bodyWasLocked.current = false;
+      
+      // Force cleanup of any zombie overlays
+      setTimeout(() => {
+        const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+        if (overlays.length > 0 && !isModalOpen) {
+          overlays.forEach(overlay => {
+            if (overlay.parentNode) {
+              overlay.parentNode.removeChild(overlay);
+              console.log('Delayed cleanup of overlay element');
+            }
+          });
+        }
+      }, 300);
     }
   }, [isModalOpen]);
 
