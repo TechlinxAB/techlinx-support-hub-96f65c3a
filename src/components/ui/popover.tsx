@@ -1,8 +1,9 @@
+
 import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
-import { useModal, useModalInstance } from "@/components/ui/modal-provider"
+import { useModal } from "@/components/ui/modal-provider"
 
 const Popover = PopoverPrimitive.Root
 
@@ -12,29 +13,18 @@ const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
-  const { forceResetModalState } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Register this popover instance with the modal system
-  useModalInstance('popover');
-  
-  // Keep track of animation state
-  const [isClosing, setIsClosing] = React.useState(false);
-  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // Force cleanup on unmount
+  // Set modal state when content mounts/unmounts
   React.useEffect(() => {
+    setIsModalOpen(true);
     return () => {
-      // Clean up timer if component unmounts during close animation
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-      }
-      
-      // Ensure modal state is reset if unmounted unexpectedly
-      if (!isClosing) {
-        forceResetModalState();
-      }
+      // Small delay to ensure animations complete
+      setTimeout(() => {
+        setIsModalOpen(false);
+      }, 100);
     };
-  }, [forceResetModalState, isClosing]);
+  }, [setIsModalOpen]);
 
   return (
     <PopoverPrimitive.Portal>
@@ -42,63 +32,28 @@ const PopoverContent = React.forwardRef<
         ref={ref}
         align={align}
         sideOffset={sideOffset}
-        onOpenAutoFocus={(event) => {
-          // Let native autofocus happen unless explicitly overridden
-          if (props.onOpenAutoFocus) {
-            props.onOpenAutoFocus(event);
-          }
-        }}
-        onCloseAutoFocus={(event) => {
-          // Clean up everything on close with a delay for animations
-          closeTimerRef.current = setTimeout(() => {
-            forceResetModalState();
-            setIsClosing(false);
-          }, 300);
-          
-          if (props.onCloseAutoFocus) {
-            props.onCloseAutoFocus(event);
-          }
-        }}
         onEscapeKeyDown={(event) => {
           // Prevent closing if loading state is active
-          const loadingAttr = document.body.getAttribute('data-loading');
-          if (loadingAttr === 'true') {
+          if (document.body.getAttribute('data-loading') === 'true') {
             event.preventDefault();
-            return;
-          }
-          
-          // Mark as closing so we can track animation state
-          setIsClosing(true);
-          
-          if (props.onEscapeKeyDown) {
+          } else if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
           }
         }}
         onPointerDownOutside={(event) => {
           // Prevent clicks outside from dismissing if loading
-          const loadingAttr = document.body.getAttribute('data-loading');
-          if (loadingAttr === 'true') {
+          if (document.body.getAttribute('data-loading') === 'true') {
             event.preventDefault();
-            return;
-          }
-          
-          // Mark as closing so we can track animation state
-          setIsClosing(true);
-          
-          if (props.onPointerDownOutside) {
+          } else if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
           }
         }}
-        onAnimationEnd={(event) => {
-          // Additional cleanup on animation end
-          const target = event.target as HTMLElement;
-          if (target.getAttribute('data-state') === 'closed') {
-            forceResetModalState();
-            setIsClosing(false);
-          }
+        onCloseAutoFocus={(event) => {
+          // Reset modal state when popover closes
+          setTimeout(resetModalState, 100);
           
-          if (props.onAnimationEnd) {
-            props.onAnimationEnd(event);
+          if (props.onCloseAutoFocus) {
+            props.onCloseAutoFocus(event);
           }
         }}
         className={cn(

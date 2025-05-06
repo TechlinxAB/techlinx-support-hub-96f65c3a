@@ -8,7 +8,6 @@ import { AuthProvider } from "./context/AuthContext";
 import { ModalProvider } from "./components/ui/modal-provider";
 import ModalStyles from "./components/ui/modal-styles";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import { useEffect } from "react";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -28,73 +27,6 @@ import SearchPage from "./pages/SearchPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 
-// Global UI recovery component
-const UIRecovery = () => {
-  useEffect(() => {
-    // Global UI recovery system
-    const recoverUI = () => {
-      // Check for stale modal state
-      if (document.body.style.position === 'fixed') {
-        const dialogs = document.querySelectorAll('[role="dialog"]');
-        if (dialogs.length === 0) {
-          // Reset UI to make it responsive
-          document.body.style.position = '';
-          document.body.style.top = '';
-          document.body.style.width = '';
-          document.body.style.overflow = '';
-          document.body.removeAttribute('data-modal-open');
-          document.body.removeAttribute('data-loading');
-          
-          // Restore scroll position if needed
-          const scrollY = document.body.style.top;
-          if (scrollY) {
-            window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
-          }
-          
-          console.log('UI automatically recovered by global safety system');
-        }
-      }
-    };
-    
-    // Run recovery on route changes
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList' || mutation.type === 'attributes') {
-          recoverUI();
-        }
-      }
-    });
-    
-    // Track DOM changes that might indicate a navigation
-    observer.observe(document.body, { 
-      childList: true, 
-      subtree: true, 
-      attributes: true,
-      attributeFilter: ['data-state', 'class', 'style']
-    });
-    
-    // Run recovery on clicks and key presses
-    const handleUserInteraction = () => {
-      setTimeout(recoverUI, 100);
-    };
-    
-    document.addEventListener('click', handleUserInteraction, true);
-    document.addEventListener('keydown', handleUserInteraction, true);
-    
-    // Safety interval
-    const safetyInterval = setInterval(recoverUI, 5000);
-    
-    return () => {
-      clearInterval(safetyInterval);
-      observer.disconnect();
-      document.removeEventListener('click', handleUserInteraction, true);
-      document.removeEventListener('keydown', handleUserInteraction, true);
-    };
-  }, []);
-  
-  return null;
-};
-
 // Create a new QueryClient instance
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,7 +42,6 @@ const App = () => (
     <AuthProvider>
       <AppProvider>
         <ModalProvider>
-          <UIRecovery />
           <ModalStyles />
           <TooltipProvider>
             <Toaster />

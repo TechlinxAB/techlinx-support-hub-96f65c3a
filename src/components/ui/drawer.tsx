@@ -1,24 +1,54 @@
+
 import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
+import { useModal } from "@/components/ui/modal-provider"
 
 import { cn } from "@/lib/utils"
 
 const Drawer = ({
   shouldScaleBackground = true,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) => (
-  <DrawerPrimitive.Root
-    shouldScaleBackground={shouldScaleBackground}
-    {...props}
-  />
-)
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) => {
+  const { setIsModalOpen } = useModal();
+  
+  // Set modal state when drawer opens/closes
+  React.useEffect(() => {
+    if (props.open) {
+      setIsModalOpen(true);
+    }
+    
+    return () => {
+      if (props.open) {
+        setIsModalOpen(false);
+      }
+    };
+  }, [props.open, setIsModalOpen]);
+  
+  return (
+    <DrawerPrimitive.Root
+      shouldScaleBackground={shouldScaleBackground}
+      {...props}
+    />
+  );
+}
 Drawer.displayName = "Drawer"
 
 const DrawerTrigger = DrawerPrimitive.Trigger
 
 const DrawerPortal = DrawerPrimitive.Portal
 
-const DrawerClose = DrawerPrimitive.Close
+const DrawerClose = ({ onClick, ...props }: React.ComponentProps<typeof DrawerPrimitive.Close>) => {
+  const { resetModalState } = useModal();
+  
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    resetModalState();
+    if (onClick) {
+      onClick(e);
+    }
+  }, [onClick, resetModalState]);
+  
+  return <DrawerPrimitive.Close onClick={handleClick} {...props} />;
+};
 
 const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
@@ -35,22 +65,41 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DrawerPortal>
-    <DrawerOverlay />
-    <DrawerPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
-        className
-      )}
-      {...props}
-    >
-      <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
-      {children}
-    </DrawerPrimitive.Content>
-  </DrawerPortal>
-))
+>(({ className, children, ...props }, ref) => {
+  const { resetModalState } = useModal();
+  
+  // Ensure modal state is reset when drawer is closed
+  React.useEffect(() => {
+    const onClose = () => {
+      setTimeout(resetModalState, 100);
+    };
+    
+    const drawerContent = ref?.current;
+    if (drawerContent) {
+      drawerContent.addEventListener('close', onClose);
+      return () => {
+        drawerContent.removeEventListener('close', onClose);
+      };
+    }
+  }, [ref, resetModalState]);
+
+  return (
+    <DrawerPortal>
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
+          className
+        )}
+        {...props}
+      >
+        <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+        {children}
+      </DrawerPrimitive.Content>
+    </DrawerPortal>
+  );
+})
 DrawerContent.displayName = "DrawerContent"
 
 const DrawerHeader = ({

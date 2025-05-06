@@ -1,10 +1,11 @@
+
 import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
-import { useModal, useModalInstance } from "@/components/ui/modal-provider"
+import { useModal } from "@/components/ui/modal-provider"
 
 const Sheet = SheetPrimitive.Root
 
@@ -56,29 +57,18 @@ const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
 >(({ side = "right", className, children, ...props }, ref) => {
-  const { forceResetModalState } = useModal();
+  const { setIsModalOpen, resetModalState } = useModal();
   
-  // Register this sheet instance with the modal system
-  useModalInstance('sheet');
-  
-  // Keep track of animation state
-  const [isClosing, setIsClosing] = React.useState(false);
-  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // Force cleanup on unmount
+  // Set modal state when content mounts/unmounts
   React.useEffect(() => {
+    setIsModalOpen(true);
     return () => {
-      // Clean up timer if component unmounts during close animation
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-      }
-      
-      // Ensure modal state is reset if unmounted unexpectedly
-      if (!isClosing) {
-        forceResetModalState();
-      }
+      // Small delay to ensure animations complete
+      setTimeout(() => {
+        setIsModalOpen(false);
+      }, 100);
     };
-  }, [forceResetModalState, isClosing]);
+  }, [setIsModalOpen]);
   
   return (
     <SheetPortal>
@@ -86,62 +76,28 @@ const SheetContent = React.forwardRef<
       <SheetPrimitive.Content
         ref={ref}
         className={cn(sheetVariants({ side }), className)}
-        onOpenAutoFocus={(event) => {
-          if (props.onOpenAutoFocus) {
-            props.onOpenAutoFocus(event);
-          }
-        }}
-        onCloseAutoFocus={(event) => {
-          // Force cleanup on close with a delay to allow animations
-          closeTimerRef.current = setTimeout(() => {
-            forceResetModalState();
-            setIsClosing(false);
-          }, 300);
-          
-          if (props.onCloseAutoFocus) {
-            props.onCloseAutoFocus(event);
-          }
-        }}
         onEscapeKeyDown={(event) => {
           // Prevent default behavior if loading
-          const loadingAttr = document.body.getAttribute('data-loading');
-          if (loadingAttr === 'true') {
+          if (document.body.getAttribute('data-loading') === 'true') {
             event.preventDefault();
-            return;
-          }
-          
-          // Mark as closing so we can track animation state
-          setIsClosing(true);
-          
-          if (props.onEscapeKeyDown) {
+          } else if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
           }
         }}
         onPointerDownOutside={(event) => {
           // Prevent clicks outside from dismissing if loading
-          const loadingAttr = document.body.getAttribute('data-loading');
-          if (loadingAttr === 'true') {
+          if (document.body.getAttribute('data-loading') === 'true') {
             event.preventDefault();
-            return;
-          }
-          
-          // Mark as closing so we can track animation state
-          setIsClosing(true);
-          
-          if (props.onPointerDownOutside) {
+          } else if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
           }
         }}
-        onAnimationEnd={(event) => {
-          // Cleanup when animation ends for closing
-          const state = (event.target as HTMLElement).getAttribute('data-state');
-          if (state === 'closed') {
-            forceResetModalState();
-            setIsClosing(false);
-          }
+        onCloseAutoFocus={(event) => {
+          // Reset modal state when sheet is closed
+          setTimeout(resetModalState, 100);
           
-          if (props.onAnimationEnd) {
-            props.onAnimationEnd(event);
+          if (props.onCloseAutoFocus) {
+            props.onCloseAutoFocus(event);
           }
         }}
         {...props}
@@ -149,16 +105,7 @@ const SheetContent = React.forwardRef<
         {children}
         <SheetPrimitive.Close 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
-          onClick={() => {
-            // Mark as closing and schedule cleanup
-            setIsClosing(true);
-            
-            // Schedule a complete reset after animation
-            closeTimerRef.current = setTimeout(() => {
-              forceResetModalState();
-              setIsClosing(false);
-            }, 300);
-          }}
+          onClick={resetModalState}
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>

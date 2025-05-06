@@ -1,14 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
   Dialog,
@@ -35,12 +28,13 @@ import {
   Trash2, 
   Plus 
 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
+import { useModal } from '@/components/ui/modal-provider';
 
 const CompanyManagementPage = () => {
   const { companies, currentUser, addCompany, updateCompany, deleteCompany } = useAppContext();
+  const { resetModalState } = useModal();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
@@ -55,26 +49,16 @@ const CompanyManagementPage = () => {
   // Reset form state when dialog closes
   useEffect(() => {
     if (!isDialogOpen) {
-      // Use a timeout to ensure state resets after animations complete
-      const timer = setTimeout(() => {
-        setSelectedCompany(null);
-        setName('');
-        setLogo('');
-      }, 300);
-      
-      return () => clearTimeout(timer);
+      setSelectedCompany(null);
+      setName('');
+      setLogo('');
     }
   }, [isDialogOpen]);
 
   // Reset delete state when delete dialog closes
   useEffect(() => {
     if (!isDeleteDialogOpen) {
-      // Use a timeout to ensure state resets after animations complete
-      const timer = setTimeout(() => {
-        setCompanyToDelete(null);
-      }, 300);
-      
-      return () => clearTimeout(timer);
+      setCompanyToDelete(null);
     }
   }, [isDeleteDialogOpen]);
   
@@ -117,26 +101,20 @@ const CompanyManagementPage = () => {
     
     setLoading(true);
     try {
-      // Close dialog before operation
+      // Close dialog
       setIsDeleteDialogOpen(false);
+      setCompanyToDelete(null);
       
       await deleteCompany(companyToDelete);
       
-      // First set the company to delete to null before showing toast
-      const deletedCompanyId = companyToDelete;
-      setCompanyToDelete(null);
+      toast({
+        title: "Company Deleted",
+        description: "The company has been successfully removed",
+      });
       
-      // Show toast after UI state is updated
-      setTimeout(() => {
-        toast({
-          title: "Company Deleted",
-          description: "The company has been successfully removed",
-        });
-      }, 300);
+      // Reset UI state
+      resetModalState();
     } catch (error: any) {
-      // Make sure we clean up state even on error
-      setCompanyToDelete(null);
-      
       toast({
         title: "Error",
         description: error.message || "Failed to delete company",
@@ -145,6 +123,7 @@ const CompanyManagementPage = () => {
       console.error('Error deleting company:', error);
     } finally {
       setLoading(false);
+      resetModalState();
     }
   };
   
@@ -159,33 +138,30 @@ const CompanyManagementPage = () => {
           logo: logo || undefined
         });
         
-        // Close the dialog before showing toast
+        // Close the dialog
         setIsDialogOpen(false);
         
-        // Add a small delay before showing toast to ensure dialog is closed
-        setTimeout(() => {
-          toast({
-            title: "Company Created",
-            description: "New company has been successfully created",
-          });
-        }, 300);
+        toast({
+          title: "Company Created",
+          description: "New company has been successfully created",
+        });
       } else if (dialogMode === 'edit' && selectedCompany) {
         await updateCompany(selectedCompany, {
           name,
           logo: logo || undefined
         });
         
-        // Close the dialog before showing toast
+        // Close the dialog
         setIsDialogOpen(false);
         
-        // Add a small delay before showing toast to ensure dialog is closed
-        setTimeout(() => {
-          toast({
-            title: "Company Updated",
-            description: "Company information has been successfully updated",
-          });
-        }, 300);
+        toast({
+          title: "Company Updated",
+          description: "Company information has been successfully updated",
+        });
       }
+      
+      // Reset modal state
+      resetModalState();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -193,10 +169,9 @@ const CompanyManagementPage = () => {
         variant: "destructive",
       });
       console.error('Error submitting form:', error);
-      
-      // Don't close dialog on error so user can try again
     } finally {
       setLoading(false);
+      resetModalState();
     }
   };
   
@@ -256,12 +231,7 @@ const CompanyManagementPage = () => {
       
       <Dialog 
         open={isDialogOpen} 
-        onOpenChange={(open) => {
-          // Only allow closing if not currently loading
-          if (!loading || !open) {
-            setIsDialogOpen(open);
-          }
-        }}
+        onOpenChange={setIsDialogOpen}
       >
         <DialogContent>
           <DialogHeader>
@@ -298,9 +268,7 @@ const CompanyManagementPage = () => {
               <Button 
                 type="button" 
                 variant="outline" 
-                onClick={() => {
-                  if (!loading) setIsDialogOpen(false);
-                }}
+                onClick={() => setIsDialogOpen(false)}
                 disabled={loading}
               >
                 Cancel
@@ -316,12 +284,7 @@ const CompanyManagementPage = () => {
 
       <AlertDialog 
         open={isDeleteDialogOpen} 
-        onOpenChange={(open) => {
-          // Only allow closing if not currently loading
-          if (!loading || !open) {
-            setIsDeleteDialogOpen(open);
-          }
-        }}
+        onOpenChange={setIsDeleteDialogOpen}
       >
         <AlertDialogContent>
           <AlertDialogHeader>

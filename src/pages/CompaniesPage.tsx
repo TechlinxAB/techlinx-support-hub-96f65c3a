@@ -10,7 +10,8 @@ import {
   FileText, 
   LayoutDashboard, 
   Plus,
-  Trash2
+  Trash2,
+  MoreVertical
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -37,10 +38,10 @@ const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setIsModalOpen, setIsLoading, forceResetModalState } = useModal();
+  const { setIsLoading, resetModalState } = useModal();
   const { withLoading } = useLoadingOperation();
   
-  // All state declarations must be at the top level, not conditionally
+  // State
   const [isLoaded, setIsLoaded] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [companyName, setCompanyName] = useState('');
@@ -49,86 +50,22 @@ const CompaniesPage = () => {
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   
-  // Cleanup function to ensure UI remains responsive
-  const cleanupUIState = useCallback(() => {
-    forceResetModalState();
-    setLoading(false);
-  }, [forceResetModalState]);
-  
-  // Update global modal state when local dialog state changes
-  useEffect(() => {
-    setIsModalOpen(isDialogOpen || isDeleteDialogOpen);
-    
-    return () => {
-      // Safety cleanup when component unmounts
-      setIsModalOpen(false);
-    };
-  }, [isDialogOpen, isDeleteDialogOpen, setIsModalOpen]);
-  
-  // Update global loading state when local loading state changes
-  useEffect(() => {
-    setIsLoading(loading);
-    
-    return () => {
-      // Safety cleanup when component unmounts
-      setIsLoading(false);
-    };
-  }, [loading, setIsLoading]);
-  
   // Reset form state when dialog closes
   useEffect(() => {
     if (!isDialogOpen) {
-      // Use a timeout to ensure state resets after animations complete
-      const timer = setTimeout(() => {
-        setCompanyName('');
-        setCompanyLogo('');
-      }, 300);
-      
-      return () => clearTimeout(timer);
+      setCompanyName('');
+      setCompanyLogo('');
     }
   }, [isDialogOpen]);
 
   // Reset delete state when delete dialog closes
   useEffect(() => {
     if (!isDeleteDialogOpen) {
-      // Use a timeout to ensure state resets after animations complete
-      const timer = setTimeout(() => {
-        setCompanyToDelete(null);
-      }, 300);
-      
-      return () => clearTimeout(timer);
+      setCompanyToDelete(null);
     }
   }, [isDeleteDialogOpen]);
   
-  // Define all callback functions outside of any conditionals
-  const resetDialogStates = useCallback(() => {
-    if (!loading) {
-      setIsDialogOpen(false);
-      setIsDeleteDialogOpen(false);
-      cleanupUIState();
-    }
-  }, [loading, cleanupUIState]);
-
-  const handleDialogClose = useCallback((open: boolean) => {
-    // Only allow closing if not currently loading
-    if (!loading || !open) {
-      setIsDialogOpen(open);
-      if (!open) {
-        cleanupUIState();
-      }
-    }
-  }, [loading, cleanupUIState]);
-
-  const handleDeleteDialogClose = useCallback((open: boolean) => {
-    // Only allow closing if not currently loading
-    if (!loading || !open) {
-      setIsDeleteDialogOpen(open);
-      if (!open) {
-        cleanupUIState();
-      }
-    }
-  }, [loading, cleanupUIState]);
-
+  // Confirm delete company
   const confirmDeleteCompany = useCallback((companyId: string) => {
     setCompanyToDelete(companyId);
     setIsDeleteDialogOpen(true);
@@ -138,9 +75,11 @@ const CompaniesPage = () => {
   const handleDeleteCompany = useCallback(async () => {
     if (!companyToDelete) return;
     
-    setLoading(true);
     try {
-      // First close the dialog completely
+      setLoading(true);
+      setIsLoading(true);
+      
+      // First close the dialog
       setIsDeleteDialogOpen(false);
       
       // Store the ID before clearing it
@@ -150,13 +89,14 @@ const CompaniesPage = () => {
       // Then delete the company
       await deleteCompany(deletedId);
       
-      // Show toast after a slight delay to ensure UI updates first
-      setTimeout(() => {
-        toast({
-          title: "Success",
-          description: "Company deleted successfully",
-        });
-      }, 500);
+      // Show toast
+      toast({
+        title: "Success",
+        description: "Company deleted successfully",
+      });
+      
+      // Reset all modal state
+      resetModalState();
     } catch (error: any) {
       console.error('Error deleting company:', error.message);
       toast({
@@ -165,10 +105,11 @@ const CompaniesPage = () => {
         variant: "destructive",
       });
     } finally {
-      // Make sure to restore UI responsiveness
-      cleanupUIState();
+      setLoading(false);
+      setIsLoading(false);
+      resetModalState();
     }
-  }, [companyToDelete, deleteCompany, toast, cleanupUIState]);
+  }, [companyToDelete, deleteCompany, toast, setIsLoading, resetModalState]);
   
   // Handle adding company
   const handleAddCompany = useCallback(async (e: React.FormEvent) => {
@@ -183,26 +124,30 @@ const CompaniesPage = () => {
       return;
     }
     
-    setLoading(true);
     try {
+      setLoading(true);
+      setIsLoading(true);
+      
       await addCompany({
         name: companyName,
         logo: companyLogo || undefined
       });
       
-      // Close dialog AFTER successful operation
+      // Close dialog
       setIsDialogOpen(false);
       
-      // Reset form with a delay to ensure dialog closes first
-      setTimeout(() => {
-        setCompanyName('');
-        setCompanyLogo('');
-        
-        toast({
-          title: "Success",
-          description: "Company created successfully",
-        });
-      }, 500);
+      // Show toast
+      toast({
+        title: "Success",
+        description: "Company created successfully",
+      });
+      
+      // Reset form
+      setCompanyName('');
+      setCompanyLogo('');
+      
+      // Reset all modal state
+      resetModalState();
     } catch (error: any) {
       console.error('Error creating company:', error.message);
       toast({
@@ -211,10 +156,11 @@ const CompaniesPage = () => {
         variant: "destructive",
       });
     } finally {
-      // Make sure to restore UI responsiveness
-      cleanupUIState();
+      setLoading(false);
+      setIsLoading(false);
+      resetModalState();
     }
-  }, [companyName, companyLogo, addCompany, toast, cleanupUIState]);
+  }, [companyName, companyLogo, addCompany, toast, setIsLoading, resetModalState]);
 
   // Navigation and initialization effects
   useEffect(() => {
@@ -290,9 +236,7 @@ const CompaniesPage = () => {
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={loading}>
                           <span className="sr-only">Open menu</span>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-more-vertical">
-                            <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
-                          </svg>
+                          <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -350,10 +294,7 @@ const CompaniesPage = () => {
                       variant="outline" 
                       size="sm"
                       className="flex gap-1 items-center justify-center"
-                      onClick={() => {
-                        navigate('/cases');
-                        // Here we would implement filtering by company
-                      }}
+                      onClick={() => navigate('/cases')}
                       disabled={loading}
                     >
                       <MessageCircle className="h-4 w-4" />
@@ -370,15 +311,9 @@ const CompaniesPage = () => {
       {/* Add Company Dialog */}
       <Dialog 
         open={isDialogOpen} 
-        onOpenChange={handleDialogClose}
+        onOpenChange={setIsDialogOpen}
       >
-        <DialogContent 
-          onEscapeKeyDown={(e) => {
-            if (loading) {
-              e.preventDefault();
-            }
-          }}
-        >
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Company</DialogTitle>
             <DialogDescription>
@@ -411,9 +346,7 @@ const CompaniesPage = () => {
               <Button 
                 type="button" 
                 variant="outline" 
-                onClick={() => {
-                  if (!loading) setIsDialogOpen(false);
-                }}
+                onClick={() => setIsDialogOpen(false)}
                 disabled={loading}
               >
                 Cancel
@@ -429,7 +362,7 @@ const CompaniesPage = () => {
       {/* Delete Company Confirmation Dialog */}
       <AlertDialog 
         open={isDeleteDialogOpen} 
-        onOpenChange={handleDeleteDialogClose}
+        onOpenChange={setIsDeleteDialogOpen}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -442,7 +375,7 @@ const CompaniesPage = () => {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => withLoading(handleDeleteCompany)}
+              onClick={handleDeleteCompany}
               disabled={loading}
               className="bg-red-600 hover:bg-red-700"
             >
