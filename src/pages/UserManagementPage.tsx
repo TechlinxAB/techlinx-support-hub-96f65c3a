@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Table, 
   TableBody, 
@@ -17,7 +18,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -42,15 +42,21 @@ import {
   UserCog, 
   KeyRound, 
   UserX, 
-  UserCheck 
+  UserCheck,
+  AlertCircle 
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const UserManagementPage = () => {
-  const { users, companies, currentUser } = useAppContext();
+  const { users, companies, currentUser, refetchUsers } = useAppContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'reset'>('create');
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -60,6 +66,7 @@ const UserManagementPage = () => {
   const [role, setRole] = useState('user');
   const [preferredLanguage, setPreferredLanguage] = useState('en');
   const [password, setPassword] = useState('');
+  const [userStatus, setUserStatus] = useState('active');
   
   // Only consultants can access this page
   if (currentUser?.role !== 'consultant') {
@@ -90,9 +97,10 @@ const UserManagementPage = () => {
         setName(user.name);
         setEmail(user.email);
         setPhone(user.phone || '');
-        setCompanyId(user.companyId);
+        setCompanyId(user.companyId || '');
         setRole(user.role);
         setPreferredLanguage(user.preferredLanguage);
+        setUserStatus('active'); // Assuming all users in the list are active
       }
     } else if (mode === 'reset') {
       // Just reset password field
@@ -101,24 +109,134 @@ const UserManagementPage = () => {
     
     setIsDialogOpen(true);
   };
+
+  const handleConfirmDelete = (userId: string) => {
+    setUserToDelete(userId);
+    setIsDeleteDialogOpen(true);
+  };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    setLoading(true);
+    try {
+      // In a real implementation, we would delete the user from auth and profiles
+      // Deleting from profiles should cascade to auth due to foreign key constraints
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userToDelete);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "User Deleted",
+        description: "The user has been successfully removed",
+      });
+      
+      // Refresh the users list
+      await refetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Error Deleting User",
+        description: error.message,
+        variant: "destructive",
+      });
+      console.error('Error deleting user:', error);
+    } finally {
+      setLoading(false);
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    }
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // In a real app, we would implement the API calls to create/update/reset password
-    console.log('Submitting', { 
-      mode: dialogMode, 
-      userId: selectedUser,
-      name,
-      email,
-      phone,
-      companyId,
-      role,
-      preferredLanguage,
-      password: dialogMode === 'reset' ? password : undefined 
-    });
-    
-    setIsDialogOpen(false);
+    setLoading(true);
+    try {
+      if (dialogMode === 'create') {
+        // Create new user
+        // First, create auth user
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true, // Auto-confirm email
+        });
+        
+        if (authError) throw authError;
+        
+        // If auth user created successfully, update their profile
+        if (authData.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              name,
+              email,
+              phone: phone || null,
+              company_id: companyId || null,
+              role: role as 'user' | 'consultant',
+              preferred_language: preferredLanguage as 'en' | 'sv'
+            })
+            .eq('id', authData.user.id);
+          
+          if (profileError) throw profileError;
+        }
+        
+        toast({
+          title: "User Created",
+          description: "New user has been successfully created",
+        });
+      } else if (dialogMode === 'edit' && selectedUser) {
+        // Update existing user
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            name,
+            email,
+            phone: phone || null,
+            company_id: companyId || null,
+            role: role as 'user' | 'consultant',
+            preferred_language: preferredLanguage as 'en' | 'sv'
+          })
+          .eq('id', selectedUser);
+        
+        if (error) throw error;
+        
+        toast({
+          title: "User Updated",
+          description: "User information has been successfully updated",
+        });
+      } else if (dialogMode === 'reset' && selectedUser) {
+        // Reset password
+        const { error } = await supabase.auth.admin.updateUserById(
+          selectedUser,
+          { password }
+        );
+        
+        if (error) throw error;
+        
+        toast({
+          title: "Password Reset",
+          description: "User password has been successfully reset",
+        });
+      }
+      
+      // Refresh the users list
+      await refetchUsers();
+      
+      // Close the dialog
+      setIsDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      console.error('Error submitting form:', error);
+    } finally {
+      setLoading(false);
+    }
   };
   
   const getDialogContent = () => {
@@ -212,9 +330,25 @@ const UserManagementPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="password">Initial Password</Label>
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    placeholder="Set initial password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Create User</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create User'}
+                </Button>
               </DialogFooter>
             </form>
           </>
@@ -309,9 +443,29 @@ const UserManagementPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select 
+                    value={userStatus} 
+                    onValueChange={setUserStatus}
+                  >
+                    <SelectTrigger id="status">
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Update User</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Updating...' : 'Update User'}
+                </Button>
               </DialogFooter>
             </form>
           </>
@@ -339,7 +493,12 @@ const UserManagementPage = () => {
                 />
               </div>
               <DialogFooter>
-                <Button type="submit">Reset Password</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Resetting...' : 'Reset Password'}
+                </Button>
               </DialogFooter>
             </form>
           </>
@@ -408,9 +567,12 @@ const UserManagementPage = () => {
                           Reset Password
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleConfirmDelete(user.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
                           <UserX className="h-4 w-4 mr-2" />
-                          Deactivate
+                          Delete User
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -427,6 +589,28 @@ const UserManagementPage = () => {
           {getDialogContent()}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the user
+              and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteUser}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {loading ? 'Deleting...' : 'Delete User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

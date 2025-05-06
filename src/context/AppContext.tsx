@@ -98,6 +98,15 @@ interface AppContextType {
   updateDashboardBlock: (blockId: string, updates: Partial<DashboardBlock>) => Promise<void>;
   deleteDashboardBlock: (blockId: string) => Promise<void>;
   refetchDashboardBlocks: (companyId?: string) => Promise<void>;
+
+  // Company management
+  addCompany: (company: Omit<Company, 'id'>) => Promise<string | undefined>;
+  updateCompany: (companyId: string, updates: Partial<Company>) => Promise<void>;
+  deleteCompany: (companyId: string) => Promise<void>;
+  refetchCompanies: () => Promise<void>;
+  
+  // User management
+  refetchUsers: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -193,6 +202,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refetchCompanies = async () => {
+    await fetchCompanies();
+  };
+
+  const addCompany = async (company: Omit<Company, 'id'>): Promise<string | undefined> => {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .insert({
+          name: company.name,
+          logo: company.logo
+        })
+        .select();
+      
+      if (error) throw error;
+      
+      if (data && data[0]) {
+        await refetchCompanies();
+        toast({
+          title: "Company Created",
+          description: "The company has been successfully created",
+        });
+        return data[0].id;
+      }
+    } catch (error: any) {
+      console.error('Error adding company:', error.message);
+      toast({
+        title: "Error Creating Company",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+    return undefined;
+  };
+
+  const updateCompany = async (companyId: string, updates: Partial<Company>) => {
+    try {
+      // Convert from camelCase to snake_case for Supabase
+      const dbUpdates: any = {};
+      
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.logo !== undefined) dbUpdates.logo = updates.logo;
+      
+      const { error } = await supabase
+        .from('companies')
+        .update(dbUpdates)
+        .eq('id', companyId);
+      
+      if (error) throw error;
+      
+      await refetchCompanies();
+      
+      toast({
+        title: "Company Updated",
+        description: "The company has been successfully updated",
+      });
+    } catch (error: any) {
+      console.error('Error updating company:', error.message);
+      toast({
+        title: "Error Updating Company",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteCompany = async (companyId: string) => {
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', companyId);
+      
+      if (error) throw error;
+      
+      await refetchCompanies();
+      
+      toast({
+        title: "Company Deleted",
+        description: "The company has been successfully deleted",
+      });
+    } catch (error: any) {
+      console.error('Error deleting company:', error.message);
+      toast({
+        title: "Error Deleting Company",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase
@@ -217,6 +317,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error('Error fetching users:', error.message);
     }
+  };
+
+  const refetchUsers = async () => {
+    await fetchUsers();
   };
 
   const fetchCases = async () => {
@@ -642,7 +746,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addDashboardBlock,
         updateDashboardBlock,
         deleteDashboardBlock,
-        refetchDashboardBlocks
+        refetchDashboardBlocks,
+        addCompany,
+        updateCompany,
+        deleteCompany,
+        refetchCompanies,
+        refetchUsers
       }}
     >
       {children}
