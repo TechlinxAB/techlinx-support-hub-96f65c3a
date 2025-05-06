@@ -74,13 +74,19 @@ const DrawerContent = React.forwardRef<
       setTimeout(resetModalState, 100);
     };
     
-    const drawerContent = ref?.current;
-    if (drawerContent) {
-      drawerContent.addEventListener('close', onClose);
+    // Safe ref handling that works with both callback refs and object refs
+    const drawerElement = typeof ref === 'function' 
+      ? null // Can't access DOM with callback refs
+      : ref?.current;
+    
+    if (drawerElement) {
+      drawerElement.addEventListener('close', onClose);
       return () => {
-        drawerContent.removeEventListener('close', onClose);
+        drawerElement.removeEventListener('close', onClose);
       };
     }
+    
+    return undefined;
   }, [ref, resetModalState]);
 
   return (
