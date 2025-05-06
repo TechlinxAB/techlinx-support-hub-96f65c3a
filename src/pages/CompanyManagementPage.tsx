@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { 
   Table, 
@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { toast } from '@/hooks/use-toast';
 
 const CompanyManagementPage = () => {
   const { companies, currentUser, addCompany, updateCompany, deleteCompany } = useAppContext();
@@ -50,6 +51,20 @@ const CompanyManagementPage = () => {
   // Form state
   const [name, setName] = useState('');
   const [logo, setLogo] = useState('');
+  
+  // Reset form state when dialog closes
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setSelectedCompany(null);
+    }
+  }, [isDialogOpen]);
+
+  // Reset delete state when delete dialog closes
+  useEffect(() => {
+    if (!isDeleteDialogOpen) {
+      setCompanyToDelete(null);
+    }
+  }, [isDeleteDialogOpen]);
   
   // Only consultants can access this page
   if (currentUser?.role !== 'consultant') {
@@ -90,13 +105,27 @@ const CompanyManagementPage = () => {
     
     setLoading(true);
     try {
+      // Close dialog before operation
+      setIsDeleteDialogOpen(false);
+      
       await deleteCompany(companyToDelete);
-    } catch (error) {
+      
+      toast({
+        title: "Company Deleted",
+        description: "The company has been successfully removed",
+      });
+      
+      // Clear company being deleted
+      setCompanyToDelete(null);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete company",
+        variant: "destructive",
+      });
       console.error('Error deleting company:', error);
     } finally {
       setLoading(false);
-      setIsDeleteDialogOpen(false);
-      setCompanyToDelete(null);
     }
   };
   
@@ -110,15 +139,31 @@ const CompanyManagementPage = () => {
           name,
           logo: logo || undefined
         });
+        
+        toast({
+          title: "Company Created",
+          description: "New company has been successfully created",
+        });
       } else if (dialogMode === 'edit' && selectedCompany) {
         await updateCompany(selectedCompany, {
           name,
           logo: logo || undefined
         });
+        
+        toast({
+          title: "Company Updated",
+          description: "Company information has been successfully updated",
+        });
       }
       
+      // Close dialog before showing toast
       setIsDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
       console.error('Error submitting form:', error);
     } finally {
       setLoading(false);

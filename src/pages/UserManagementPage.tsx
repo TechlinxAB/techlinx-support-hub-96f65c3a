@@ -77,6 +77,28 @@ const UserManagementPage = () => {
     );
   }
   
+  // Reset state when dialog is closed
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setSelectedUser(null);
+      setName('');
+      setEmail('');
+      setPhone('');
+      setCompanyId('');
+      setRole('user');
+      setPreferredLanguage('en');
+      setPassword('');
+      setUserStatus('active');
+    }
+  }, [isDialogOpen]);
+
+  // Reset state when delete dialog is closed
+  useEffect(() => {
+    if (!isDeleteDialogOpen) {
+      setUserToDelete(null);
+    }
+  }, [isDeleteDialogOpen]);
+  
   const handleOpenDialog = (mode: 'create' | 'edit' | 'reset', userId?: string) => {
     setDialogMode(mode);
     setSelectedUser(userId || null);
@@ -120,6 +142,9 @@ const UserManagementPage = () => {
     
     setLoading(true);
     try {
+      // Close the delete dialog first
+      setIsDeleteDialogOpen(false);
+      
       // In a real implementation, we would delete the user from auth and profiles
       // Deleting from profiles should cascade to auth due to foreign key constraints
       const { error } = await supabase
@@ -134,6 +159,9 @@ const UserManagementPage = () => {
         description: "The user has been successfully removed",
       });
       
+      // Clear the user being deleted
+      setUserToDelete(null);
+      
       // Refresh the users list
       await refetchUsers();
     } catch (error: any) {
@@ -145,8 +173,6 @@ const UserManagementPage = () => {
       console.error('Error deleting user:', error);
     } finally {
       setLoading(false);
-      setIsDeleteDialogOpen(false);
-      setUserToDelete(null);
     }
   };
   
@@ -225,7 +251,7 @@ const UserManagementPage = () => {
       // Refresh the users list
       await refetchUsers();
       
-      // Close the dialog
+      // Close the dialog (do this before showing toast)
       setIsDialogOpen(false);
     } catch (error: any) {
       toast({
