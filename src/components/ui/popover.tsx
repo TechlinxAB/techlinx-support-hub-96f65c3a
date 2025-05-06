@@ -20,14 +20,24 @@ const Popover = ({
       // Important: Update when closing with a proper delay for animation
       const timer = setTimeout(() => {
         setIsModalOpen(false);
-        // Force cleanup in case anything is stuck
+        
+        // Enhanced cleanup on close - run resetModalState only if still closed
         if (!open) {
           resetModalState();
         }
       }, 300);
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+      };
     }
+    
+    // Cleanup on unmount
+    return () => {
+      if (!open) {
+        resetModalState();
+      }
+    };
   }, [open, setIsModalOpen, resetModalState]);
   
   return (
@@ -35,9 +45,15 @@ const Popover = ({
       open={open}
       onOpenChange={(newOpen) => {
         if (onOpenChange) onOpenChange(newOpen);
-        // Force cleanup when closing
+        
+        // Force cleanup when closing with extra safety delay
         if (!newOpen) {
-          setTimeout(resetModalState, 300);
+          const cleanupTimer = setTimeout(() => {
+            resetModalState();
+          }, 350); // Slightly longer than animation duration
+          
+          // Clean up timer if component unmounts
+          return () => clearTimeout(cleanupTimer);
         }
       }}
       {...props}
@@ -52,20 +68,75 @@ const PopoverContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
   const { resetModalState } = useModal();
-
-  // Handle safe unmount with cleanup
-  const unmountRef = React.useRef<() => void>(() => {});
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const portalRef = React.useRef<HTMLDivElement | null>(null);
+  
+  // Handle safe unmount with enhanced cleanup
   React.useEffect(() => {
-    return () => {
-      // Run cleanup function when component unmounts
-      unmountRef.current();
+    // Store references to DOM elements for cleanup
+    const handleContentRefChange = (node: HTMLDivElement | null) => {
+      if (node) {
+        contentRef.current = node;
+        
+        // Find and store portal reference
+        let parent = node.parentElement;
+        while (parent) {
+          if (parent.hasAttribute('data-radix-portal')) {
+            portalRef.current = parent;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+      }
     };
-  }, []);
+    
+    // Apply ref handling
+    if (typeof ref === 'function') {
+      const originalRef = ref;
+      ref = (node) => {
+        originalRef(node);
+        handleContentRefChange(node);
+      };
+    } else if (ref) {
+      const originalRef = ref.current;
+      handleContentRefChange(originalRef);
+    }
+    
+    // Cleanup function
+    return () => {
+      // Safe removal of portal element on unmount with multiple safety checks
+      setTimeout(() => {
+        try {
+          if (portalRef.current && portalRef.current.isConnected) {
+            const parentNode = portalRef.current.parentNode;
+            if (parentNode) {
+              parentNode.removeChild(portalRef.current);
+            }
+          }
+          
+          // Final safety reset
+          resetModalState();
+        } catch (error) {
+          console.log('Safe cleanup error (ignorable):', error);
+        }
+      }, 100);
+    };
+  }, [ref, resetModalState]);
 
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
-        ref={ref}
+        ref={(node) => {
+          // Handle ref properly
+          if (typeof ref === 'function') {
+            ref(node);
+          } else if (ref) {
+            ref.current = node;
+          }
+          
+          // Store our own reference
+          contentRef.current = node;
+        }}
         align={align}
         sideOffset={sideOffset}
         onEscapeKeyDown={(event) => {
@@ -74,10 +145,16 @@ const PopoverContent = React.forwardRef<
             event.preventDefault();
           } else if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
-          } else {
-            // Ensure cleanup after ESC closes popover
-            setTimeout(resetModalState, 300);
           }
+          
+          // Safe delayed cleanup
+          setTimeout(() => {
+            try {
+              resetModalState();
+            } catch (err) {
+              console.log('Safe cleanup error (ignorable):', err);
+            }
+          }, 300);
         }}
         onPointerDownOutside={(event) => {
           // Prevent clicks outside from dismissing if loading
@@ -85,27 +162,27 @@ const PopoverContent = React.forwardRef<
             event.preventDefault();
           } else if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
-          } else {
-            // Ensure cleanup after click outside closes popover
-            setTimeout(resetModalState, 300);
           }
+          
+          // Safe delayed cleanup
+          setTimeout(() => {
+            try {
+              resetModalState();
+            } catch (err) {
+              console.log('Safe cleanup error (ignorable):', err);
+            }
+          }, 300);
         }}
         onCloseAutoFocus={(event) => {
           // Always reset modal state when popover closes
-          resetModalState();
+          try {
+            resetModalState();
+          } catch (err) {
+            console.log('Safe cleanup error (ignorable):', err);
+          }
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
-          }
-        }}
-        onOpenAutoFocus={(event) => {
-          // Store cleanup function for later
-          unmountRef.current = () => {
-            setTimeout(() => resetModalState(), 100);
-          };
-          
-          if (props.onOpenAutoFocus) {
-            props.onOpenAutoFocus(event);
           }
         }}
         className={cn(
