@@ -1,15 +1,26 @@
 
-
 import { useEffect, useRef } from 'react';
 import { useModal } from './modal-provider';
 
-// Helper function for safer DOM manipulation
-const safeRemoveElement = (element: Element): boolean => {
+// Enhanced helper function for safer DOM manipulation with additional validation
+const safeRemoveElement = (element: Element | null): boolean => {
+  if (!element) return false;
+  
   try {
-    if (element && element.isConnected && element.parentNode) {
-      element.parentNode.removeChild(element);
-      return true;
-    }
+    // Multiple safety checks before attempting removal
+    if (!element.isConnected) return false;
+    if (!element.parentNode) return false;
+    
+    // Check if parent still contains this child
+    if (!element.parentNode.contains(element)) return false;
+    
+    // Verify parent reference is stable before removal
+    const parent = element.parentNode;
+    if (element.parentNode !== parent) return false;
+    
+    // Finally attempt removal with proper exception handling
+    parent.removeChild(element);
+    return true;
   } catch (error) {
     console.log('Safe element removal error (ignorable):', error);
   }
@@ -19,6 +30,41 @@ const safeRemoveElement = (element: Element): boolean => {
 export const ModalStyles = () => {
   const { isModalOpen, resetModalState } = useModal();
   const lastCheckTime = useRef(0);
+  const elementRemovalQueue = useRef<Element[]>([]);
+  const isProcessingQueue = useRef(false);
+  
+  // Process queued element removals in a controlled manner
+  const processElementRemovalQueue = () => {
+    if (isProcessingQueue.current || elementRemovalQueue.current.length === 0) return;
+    
+    isProcessingQueue.current = true;
+    
+    try {
+      // Take just one element and process it
+      const element = elementRemovalQueue.current.shift();
+      if (element) {
+        safeRemoveElement(element);
+      }
+    } finally {
+      isProcessingQueue.current = false;
+      
+      // Continue processing queue with a small delay if items remain
+      if (elementRemovalQueue.current.length > 0) {
+        setTimeout(processElementRemovalQueue, 50);
+      }
+    }
+  };
+  
+  // Queue an element for safe removal
+  const queueElementRemoval = (element: Element) => {
+    if (!element) return;
+    elementRemovalQueue.current.push(element);
+    
+    // Start processing if not already in progress
+    if (!isProcessingQueue.current) {
+      setTimeout(processElementRemovalQueue, 0);
+    }
+  };
   
   // Enhanced global UI recovery system with safer DOM cleanup
   useEffect(() => {
@@ -56,17 +102,17 @@ export const ModalStyles = () => {
       }
       
       if (hasOrphanedOverlays) {
-        // Found overlay elements but no active modal - force cleanup SAFELY
+        // Found overlay elements but no active modal - queue for safe cleanup
         overlays.forEach(overlay => {
-          safeRemoveElement(overlay);
+          queueElementRemoval(overlay);
         });
         resetModalState();
       }
       
       if (hasStuckPopovers) {
-        // Found popover elements but no active modal - force cleanup SAFELY
+        // Found popover elements but no active modal - queue for safe cleanup
         popovers.forEach(popover => {
-          safeRemoveElement(popover);
+          queueElementRemoval(popover);
         });
         resetModalState();
       }
@@ -74,10 +120,10 @@ export const ModalStyles = () => {
       // Check for portals with no visible content
       if (openPortals.length > 0) {
         openPortals.forEach(portal => {
-          // If portal has no visible children, remove it SAFELY
+          // If portal has no visible children, queue for removal
           const hasVisibleChildren = portal.querySelector('[data-state="open"]');
           if (!hasVisibleChildren) {
-            safeRemoveElement(portal);
+            queueElementRemoval(portal);
           }
         });
       }
@@ -90,32 +136,51 @@ export const ModalStyles = () => {
       }
     };
     
-    // Mutation observer to detect and correct DOM changes
+    // Mutation observer to detect and correct DOM changes with improved error resilience
     const bodyObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        // If something has been added to the DOM that might be modal-related
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          Array.from(mutation.addedNodes).forEach(node => {
-            if (node instanceof HTMLElement) {
-              // For portals and overlays without associated modals
-              if (node.hasAttribute('data-radix-portal') && !isModalOpen) {
-                setTimeout(recoverUI, 500); // Delayed check
+      // Use try-catch to ensure observer doesn't crash
+      try {
+        for (const mutation of mutations) {
+          // If something has been added to the DOM that might be modal-related
+          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            Array.from(mutation.addedNodes).forEach(node => {
+              if (node instanceof HTMLElement) {
+                // For portals and overlays without associated modals
+                if (node.hasAttribute('data-radix-portal') && !isModalOpen) {
+                  setTimeout(recoverUI, 500); // Delayed check
+                }
               }
-            }
-          });
+            });
+          }
+          
+          // Look for detached nodes that might cause reference errors
+          if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
+            setTimeout(recoverUI, 100); // Quick recovery check after DOM changes
+          }
         }
+      } catch (observerError) {
+        console.log('Mutation observer error (ignorable):', observerError);
       }
     });
     
-    // Watch body element for changes
-    bodyObserver.observe(document.body, { childList: true, subtree: true });
+    // Watch body element for changes with error handling
+    try {
+      bodyObserver.observe(document.body, { childList: true, subtree: true });
+    } catch (observerError) {
+      console.log('Failed to initialize observer:', observerError);
+    }
     
-    // Run recovery checks on a timer - more frequently
+    // Run recovery checks on a timer
     const recoveryInterval = setInterval(recoverUI, 500);
     
-    // Also run recovery on user interactions
+    // Also run recovery on user interactions with debounce
+    let interactionTimer: number | null = null;
+    
     const handleUserInteraction = () => {
-      setTimeout(recoverUI, 100);
+      if (interactionTimer !== null) {
+        window.clearTimeout(interactionTimer);
+      }
+      interactionTimer = window.setTimeout(recoverUI, 100);
     };
     
     document.addEventListener('click', handleUserInteraction, true);
@@ -126,6 +191,9 @@ export const ModalStyles = () => {
       bodyObserver.disconnect();
       document.removeEventListener('click', handleUserInteraction, true);
       document.removeEventListener('keydown', handleUserInteraction, true);
+      if (interactionTimer !== null) {
+        window.clearTimeout(interactionTimer);
+      }
     };
   }, [resetModalState, isModalOpen]);
   
@@ -138,12 +206,12 @@ export const ModalStyles = () => {
         setTimeout(() => {
           // Remove any "orphaned" overlay elements SAFELY
           document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80').forEach(overlay => {
-            safeRemoveElement(overlay);
+            queueElementRemoval(overlay);
           });
           
           // Find any elements with open state that should be closed
           document.querySelectorAll('[data-state="open"]').forEach(element => {
-            // Only remove if not within an open dialog and is connected to DOM
+            // Only modify if not within an open dialog and is connected to DOM
             const parentDialog = element.closest('[role="dialog"]');
             if (!parentDialog && element.isConnected) {
               try {
@@ -175,7 +243,7 @@ export const ModalStyles = () => {
         const focusTrapElements = document.querySelectorAll('[data-radix-focus-guard]');
         if (focusTrapElements.length > 0) {
           focusTrapElements.forEach(element => {
-            safeRemoveElement(element);
+            queueElementRemoval(element);
           });
         }
       }
@@ -185,7 +253,7 @@ export const ModalStyles = () => {
     return () => clearInterval(interval);
   }, [isModalOpen]);
   
-  // NEW: Add special emergency recovery button (invisible but available on triple-ESC)
+  // Enhanced emergency recovery functionality
   useEffect(() => {
     let escCount = 0;
     let escTimer: number | null = null;
@@ -203,7 +271,6 @@ export const ModalStyles = () => {
         
         // Triple ESC activates emergency cleanup
         if (escCount >= 3) {
-          // Force aggressive cleanup
           setTimeout(() => {
             console.log('Triple ESC emergency cleanup activated');
             
@@ -213,19 +280,19 @@ export const ModalStyles = () => {
             document.body.style.overflow = '';
             document.documentElement.style.pointerEvents = '';
             
-            // Remove all overlay elements
+            // Queue all overlay elements for safe removal
             document.querySelectorAll('.fixed.inset-0').forEach(overlay => {
-              safeRemoveElement(overlay);
+              queueElementRemoval(overlay);
             });
             
-            // Remove all portal elements
+            // Queue all portal elements for safe removal
             document.querySelectorAll('[data-radix-portal]').forEach(portal => {
-              safeRemoveElement(portal);
+              queueElementRemoval(portal);
             });
             
-            // Remove all popover elements
+            // Queue all popover elements for safe removal
             document.querySelectorAll('[data-radix-popover-content-wrapper]').forEach(popover => {
-              safeRemoveElement(popover);
+              queueElementRemoval(popover);
             });
             
             // Reset modal state
@@ -248,6 +315,40 @@ export const ModalStyles = () => {
         clearTimeout(escTimer);
       }
     };
+  }, [resetModalState]);
+  
+  // New: Race condition protection with DOM tree reconnection check
+  useEffect(() => {
+    const preventDomReferenceLoss = () => {
+      // Check for menu items that may lose their DOM connection
+      document.querySelectorAll('[role="menuitem"]').forEach(item => {
+        if (!item.isConnected) {
+          console.log('Detected disconnected menu item - triggering reset');
+          setTimeout(() => resetModalState(), 10);
+        }
+      });
+      
+      // Check for dialog elements that may have reference issues
+      document.querySelectorAll('[role="dialog"]').forEach(dialog => {
+        try {
+          // Just accessing properties can sometimes reveal reference issues
+          const isVisible = dialog.getAttribute('data-state') === 'open';
+          const hasValidParent = dialog.parentElement !== null;
+          
+          if (!hasValidParent && isVisible) {
+            console.log('Detected dialog with invalid parent - triggering reset');
+            setTimeout(() => resetModalState(), 10);
+          }
+        } catch (e) {
+          // If accessing properties throws, there's definitely a reference issue
+          console.log('Dialog reference error detected - triggering reset');
+          setTimeout(() => resetModalState(), 10);
+        }
+      });
+    };
+    
+    const interval = setInterval(preventDomReferenceLoss, 1000);
+    return () => clearInterval(interval);
   }, [resetModalState]);
 
   return null;

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ const CompaniesPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const dialogOperationInProgress = useRef(false);
   
   // Reset form state when dialog closes
   useEffect(() => {
@@ -65,20 +66,38 @@ const CompaniesPage = () => {
     }
   }, [isDeleteDialogOpen]);
   
-  // Confirm delete company with safety check
+  // Confirm delete company with enhanced safety checks
   const confirmDeleteCompany = useCallback((companyId: string) => {
+    // Prevent multiple operations from stacking
+    if (dialogOperationInProgress.current) {
+      console.log('Operation already in progress, ignoring request');
+      return;
+    }
+    
+    dialogOperationInProgress.current = true;
+    
     // First make sure any previous dialogs are properly closed
     resetModalState();
-    // Then open the delete confirmation dialog
+    
+    // Then open the delete confirmation dialog with a safety delay
     setTimeout(() => {
       setCompanyToDelete(companyId);
       setIsDeleteDialogOpen(true);
-    }, 50);
+      dialogOperationInProgress.current = false;
+    }, 100);
   }, [resetModalState]);
   
   // Handle company deletion with enhanced safety
   const handleDeleteCompany = useCallback(async () => {
     if (!companyToDelete) return;
+    
+    // Prevent multiple operations from stacking
+    if (dialogOperationInProgress.current) {
+      console.log('Delete operation already in progress, ignoring request');
+      return;
+    }
+    
+    dialogOperationInProgress.current = true;
     
     try {
       setLoading(true);
@@ -94,7 +113,7 @@ const CompaniesPage = () => {
       setCompanyToDelete(null);
       
       // Small delay to allow UI to update
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Then delete the company
       await deleteCompany(deletedId);
@@ -108,7 +127,8 @@ const CompaniesPage = () => {
       // Reset all modal state with delay for safety
       setTimeout(() => {
         resetModalState();
-      }, 100);
+        dialogOperationInProgress.current = false;
+      }, 300);
     } catch (error: any) {
       console.error('Error deleting company:', error.message);
       toast({
@@ -116,6 +136,7 @@ const CompaniesPage = () => {
         description: "Failed to delete company",
         variant: "destructive",
       });
+      dialogOperationInProgress.current = false;
     } finally {
       setLoading(false);
       setIsLoading(false);
@@ -123,6 +144,7 @@ const CompaniesPage = () => {
       // Final safety reset
       setTimeout(() => {
         resetModalState();
+        dialogOperationInProgress.current = false;
       }, 300);
     }
   }, [companyToDelete, deleteCompany, toast, setIsLoading, resetModalState]);
@@ -139,6 +161,14 @@ const CompaniesPage = () => {
       });
       return;
     }
+    
+    // Prevent multiple operations from stacking
+    if (dialogOperationInProgress.current) {
+      console.log('Add operation already in progress, ignoring request');
+      return;
+    }
+    
+    dialogOperationInProgress.current = true;
     
     try {
       setLoading(true);
@@ -168,6 +198,7 @@ const CompaniesPage = () => {
       // Reset modal state with delay for safety
       setTimeout(() => {
         resetModalState();
+        dialogOperationInProgress.current = false;
       }, 300);
     } catch (error: any) {
       console.error('Error creating company:', error.message);
@@ -176,6 +207,7 @@ const CompaniesPage = () => {
         description: "Failed to create company",
         variant: "destructive",
       });
+      dialogOperationInProgress.current = false;
     } finally {
       setLoading(false);
       setIsLoading(false);
@@ -183,6 +215,7 @@ const CompaniesPage = () => {
       // Final safety reset
       setTimeout(() => {
         resetModalState();
+        dialogOperationInProgress.current = false;
       }, 300);
     }
   }, [companyName, companyLogo, addCompany, toast, setIsLoading, resetModalState]);
@@ -227,15 +260,51 @@ const CompaniesPage = () => {
     );
   }
   
-  // Safe dialog opening function
+  // Safe dialog opening function with debounce protection
   const openAddDialog = () => {
+    // Prevent multiple operations from stacking
+    if (dialogOperationInProgress.current) {
+      console.log('Dialog operation already in progress, ignoring request');
+      return;
+    }
+    
+    dialogOperationInProgress.current = true;
+    
     // First clean up any lingering modal state
     resetModalState();
     
     // Then set the dialog to open with slight delay
     setTimeout(() => {
       setIsDialogOpen(true);
-    }, 50);
+      dialogOperationInProgress.current = false;
+    }, 100);
+  };
+  
+  // Safe dialog closing method with proper cleanup
+  const handleCloseDialog = () => {
+    if (dialogOperationInProgress.current) return;
+    
+    dialogOperationInProgress.current = true;
+    setIsDialogOpen(false);
+    
+    setTimeout(() => {
+      resetModalState();
+      dialogOperationInProgress.current = false;
+    }, 300);
+  };
+  
+  // Safe alert dialog closing method with proper cleanup
+  const handleCloseAlertDialog = () => {
+    if (dialogOperationInProgress.current) return;
+    
+    dialogOperationInProgress.current = true;
+    setIsDeleteDialogOpen(false);
+    
+    setTimeout(() => {
+      setCompanyToDelete(null);
+      resetModalState();
+      dialogOperationInProgress.current = false;
+    }, 300);
   };
   
   return (
@@ -245,7 +314,7 @@ const CompaniesPage = () => {
         {currentUser.role === 'consultant' && (
           <Button 
             onClick={openAddDialog}
-            disabled={loading}
+            disabled={loading || dialogOperationInProgress.current}
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Company
@@ -278,7 +347,7 @@ const CompaniesPage = () => {
                   {currentUser.role === 'consultant' && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={loading}>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={loading || dialogOperationInProgress.current}>
                           <span className="sr-only">Open menu</span>
                           <MoreVertical className="h-4 w-4" />
                         </Button>
@@ -287,7 +356,7 @@ const CompaniesPage = () => {
                         <DropdownMenuItem
                           onClick={() => confirmDeleteCompany(company.id)}
                           className="text-red-600 cursor-pointer"
-                          disabled={loading}
+                          disabled={loading || dialogOperationInProgress.current}
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete Company
@@ -356,10 +425,10 @@ const CompaniesPage = () => {
       <Dialog 
         open={isDialogOpen} 
         onOpenChange={(open) => {
-          setIsDialogOpen(open);
+          if (dialogOperationInProgress.current) return;
+          
           if (!open) {
-            // Clean up when dialog closes
-            setTimeout(() => resetModalState(), 300);
+            handleCloseDialog();
           }
         }}
       >
@@ -396,15 +465,15 @@ const CompaniesPage = () => {
               <Button 
                 type="button" 
                 variant="outline" 
-                onClick={() => {
-                  setIsDialogOpen(false);
-                  setTimeout(() => resetModalState(), 300);
-                }}
-                disabled={loading}
+                onClick={handleCloseDialog}
+                disabled={loading || dialogOperationInProgress.current}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button 
+                type="submit" 
+                disabled={loading || dialogOperationInProgress.current}
+              >
                 {loading ? 'Creating...' : 'Create Company'}
               </Button>
             </DialogFooter>
@@ -416,11 +485,10 @@ const CompaniesPage = () => {
       <AlertDialog 
         open={isDeleteDialogOpen} 
         onOpenChange={(open) => {
-          setIsDeleteDialogOpen(open);
+          if (dialogOperationInProgress.current) return;
+          
           if (!open) {
-            setCompanyToDelete(null);
-            // Cleanup when dialog closes
-            setTimeout(() => resetModalState(), 300);
+            handleCloseAlertDialog();
           }
         }}
       >
@@ -433,16 +501,20 @@ const CompaniesPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={loading} onClick={() => {
-              // Extra safety reset when cancel is clicked
-              setTimeout(() => resetModalState(), 300);
-            }}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel 
+              disabled={loading || dialogOperationInProgress.current} 
+              onClick={() => {
+                handleCloseAlertDialog();
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction 
               onClick={(e) => {
                 e.preventDefault(); // Prevent default to handle cleanup manually
                 handleDeleteCompany();
               }}
-              disabled={loading}
+              disabled={loading || dialogOperationInProgress.current}
               className="bg-red-600 hover:bg-red-700"
             >
               {loading ? 'Deleting...' : 'Delete Company'}
