@@ -3,51 +3,8 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
-import { useModal } from "@/components/ui/modal-provider"
 
-const AlertDialog = ({ 
-  open, 
-  onOpenChange,
-  ...props 
-}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) => {
-  const { setIsModalOpen, resetModalState } = useModal();
-  
-  // Update modal state when alert dialog opens/closes with enhanced cleanup
-  React.useEffect(() => {
-    if (open) {
-      setIsModalOpen(true);
-    } else {
-      // Important: Update when closing with a delay for animation and proper cleanup
-      const timer = setTimeout(() => {
-        setIsModalOpen(false);
-        // Force overlay cleanup when alert dialog fully closes
-        if (!open) resetModalState();
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [open, setIsModalOpen, resetModalState]);
-  
-  // Handle open change with improved cleanup
-  const handleOpenChange = React.useCallback((newOpen: boolean) => {
-    if (onOpenChange) onOpenChange(newOpen);
-    
-    // Always ensure cleanup when dialog closes
-    if (!newOpen) {
-      setTimeout(() => {
-        resetModalState();
-      }, 300);
-    }
-  }, [onOpenChange, resetModalState]);
-  
-  return (
-    <AlertDialogPrimitive.Root
-      open={open}
-      onOpenChange={handleOpenChange}
-      {...props}
-    />
-  );
-}
+const AlertDialog = AlertDialogPrimitive.Root
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger
 
@@ -58,12 +15,12 @@ const AlertDialogOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
-    ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
+    ref={ref}
   />
 ))
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
@@ -71,44 +28,19 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => {
-  const { resetModalState } = useModal();
-
-  return (
-    <AlertDialogPortal>
-      <AlertDialogOverlay />
-      <AlertDialogPrimitive.Content
-        ref={ref}
-        onEscapeKeyDown={(event) => {
-          // Prevent default behavior if loading
-          if (document.body.getAttribute('data-loading') === 'true') {
-            event.preventDefault();
-          } else if (props.onEscapeKeyDown) {
-            props.onEscapeKeyDown(event);
-          }
-          
-          // Ensure cleanup after ESC key
-          setTimeout(() => {
-            resetModalState();
-          }, 300);
-        }}
-        onCloseAutoFocus={(event) => {
-          // Reset modal state when closed
-          resetModalState();
-          
-          if (props.onCloseAutoFocus) {
-            props.onCloseAutoFocus(event);
-          }
-        }}
-        className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-          className
-        )}
-        {...props}
-      />
-    </AlertDialogPortal>
-  );
-})
+>(({ className, ...props }, ref) => (
+  <AlertDialogPortal>
+    <AlertDialogOverlay />
+    <AlertDialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        className
+      )}
+      {...props}
+    />
+  </AlertDialogPortal>
+))
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
 const AlertDialogHeader = ({
@@ -167,83 +99,29 @@ AlertDialogDescription.displayName =
 const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, onClick, ...props }, ref) => {
-  const { resetModalState } = useModal();
-  
-  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    // First call original handler
-    if (onClick) {
-      onClick(e);
-    }
-    
-    // Always ensure thorough cleanup
-    resetModalState();
-    
-    // Extra safety cleanup after animation
-    setTimeout(() => {
-      const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
-      if (overlays.length > 0) {
-        overlays.forEach(overlay => {
-          if (overlay.parentNode) {
-            overlay.parentNode.removeChild(overlay);
-          }
-        });
-      }
-    }, 300);
-  }, [onClick, resetModalState]);
-  
-  return (
-    <AlertDialogPrimitive.Action
-      ref={ref}
-      className={cn(buttonVariants(), className)}
-      onClick={handleClick}
-      {...props}
-    />
-  );
-})
+>(({ className, ...props }, ref) => (
+  <AlertDialogPrimitive.Action
+    ref={ref}
+    className={cn(buttonVariants(), className)}
+    {...props}
+  />
+))
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName
 
 const AlertDialogCancel = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
->(({ className, onClick, ...props }, ref) => {
-  const { resetModalState } = useModal();
-  
-  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    // First call original handler
-    if (onClick) {
-      onClick(e);
-    }
-    
-    // Always ensure thorough cleanup
-    resetModalState();
-    
-    // Extra safety cleanup after animation
-    setTimeout(() => {
-      const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
-      if (overlays.length > 0) {
-        overlays.forEach(overlay => {
-          if (overlay.parentNode) {
-            overlay.parentNode.removeChild(overlay);
-          }
-        });
-      }
-    }, 300);
-  }, [onClick, resetModalState]);
-  
-  return (
-    <AlertDialogPrimitive.Cancel
-      ref={ref}
-      className={cn(
-        buttonVariants({ variant: "outline" }),
-        "mt-2 sm:mt-0",
-        className
-      )}
-      onClick={handleClick}
-      {...props}
-    />
-  );
-})
+>(({ className, ...props }, ref) => (
+  <AlertDialogPrimitive.Cancel
+    ref={ref}
+    className={cn(
+      buttonVariants({ variant: "outline" }),
+      "mt-2 sm:mt-0",
+      className
+    )}
+    {...props}
+  />
+))
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName
 
 export {

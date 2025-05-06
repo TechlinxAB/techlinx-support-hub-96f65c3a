@@ -68,40 +68,14 @@ const UserManagementPage = () => {
   const [password, setPassword] = useState('');
   const [userStatus, setUserStatus] = useState('active');
   
-  // The early return was causing hook order issues - we'll move it after all hooks
-  const isConsultant = currentUser?.role === 'consultant';
-  
-  // Reset state when dialog is closed
-  useEffect(() => {
-    if (!isDialogOpen) {
-      // Use a timeout to ensure state resets after animations complete
-      const timer = setTimeout(() => {
-        setSelectedUser(null);
-        setName('');
-        setEmail('');
-        setPhone('');
-        setCompanyId('');
-        setRole('user');
-        setPreferredLanguage('en');
-        setPassword('');
-        setUserStatus('active');
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isDialogOpen]);
-
-  // Reset state when delete dialog is closed
-  useEffect(() => {
-    if (!isDeleteDialogOpen) {
-      // Use a timeout to ensure state resets after animations complete
-      const timer = setTimeout(() => {
-        setUserToDelete(null);
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isDeleteDialogOpen]);
+  // Only consultants can access this page
+  if (currentUser?.role !== 'consultant') {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <p className="text-lg text-muted-foreground">You don't have permission to access this page.</p>
+      </div>
+    );
+  }
   
   const handleOpenDialog = (mode: 'create' | 'edit' | 'reset', userId?: string) => {
     setDialogMode(mode);
@@ -146,9 +120,6 @@ const UserManagementPage = () => {
     
     setLoading(true);
     try {
-      // Close the delete dialog first
-      setIsDeleteDialogOpen(false);
-      
       // In a real implementation, we would delete the user from auth and profiles
       // Deleting from profiles should cascade to auth due to foreign key constraints
       const { error } = await supabase
@@ -158,11 +129,6 @@ const UserManagementPage = () => {
       
       if (error) throw error;
       
-      // First set the user to delete to null before showing toast
-      const deletedUserId = userToDelete;
-      setUserToDelete(null);
-      
-      // Show toast after UI state is updated
       toast({
         title: "User Deleted",
         description: "The user has been successfully removed",
@@ -171,9 +137,6 @@ const UserManagementPage = () => {
       // Refresh the users list
       await refetchUsers();
     } catch (error: any) {
-      // Make sure we cleanup state even on error
-      setUserToDelete(null);
-      
       toast({
         title: "Error Deleting User",
         description: error.message,
@@ -182,6 +145,8 @@ const UserManagementPage = () => {
       console.error('Error deleting user:', error);
     } finally {
       setLoading(false);
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
     }
   };
   
@@ -218,16 +183,10 @@ const UserManagementPage = () => {
           if (profileError) throw profileError;
         }
         
-        // Close the dialog before showing toast
-        setIsDialogOpen(false);
-        
-        // Add a small delay before showing toast to ensure dialog is closed
-        setTimeout(() => {
-          toast({
-            title: "User Created",
-            description: "New user has been successfully created",
-          });
-        }, 300);
+        toast({
+          title: "User Created",
+          description: "New user has been successfully created",
+        });
       } else if (dialogMode === 'edit' && selectedUser) {
         // Update existing user
         const { error } = await supabase
@@ -244,16 +203,10 @@ const UserManagementPage = () => {
         
         if (error) throw error;
         
-        // Close the dialog before showing toast
-        setIsDialogOpen(false);
-        
-        // Add a small delay before showing toast to ensure dialog is closed
-        setTimeout(() => {
-          toast({
-            title: "User Updated",
-            description: "User information has been successfully updated",
-          });
-        }, 300);
+        toast({
+          title: "User Updated",
+          description: "User information has been successfully updated",
+        });
       } else if (dialogMode === 'reset' && selectedUser) {
         // Reset password
         const { error } = await supabase.auth.admin.updateUserById(
@@ -263,20 +216,17 @@ const UserManagementPage = () => {
         
         if (error) throw error;
         
-        // Close the dialog before showing toast
-        setIsDialogOpen(false);
-        
-        // Add a small delay before showing toast to ensure dialog is closed
-        setTimeout(() => {
-          toast({
-            title: "Password Reset",
-            description: "User password has been successfully reset",
-          });
-        }, 300);
+        toast({
+          title: "Password Reset",
+          description: "User password has been successfully reset",
+        });
       }
       
       // Refresh the users list
       await refetchUsers();
+      
+      // Close the dialog
+      setIsDialogOpen(false);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -284,8 +234,6 @@ const UserManagementPage = () => {
         variant: "destructive",
       });
       console.error('Error submitting form:', error);
-      
-      // Don't close dialog on error so user can try again
     } finally {
       setLoading(false);
     }
@@ -558,15 +506,6 @@ const UserManagementPage = () => {
     }
   };
 
-  // Now render UI based on permission check
-  if (!isConsultant) {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <p className="text-lg text-muted-foreground">You don't have permission to access this page.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -645,26 +584,13 @@ const UserManagementPage = () => {
         </Table>
       </div>
       
-      <Dialog open={isDialogOpen} onOpenChange={(open) => {
-        // Only allow closing if not currently loading
-        if (!loading || !open) {
-          setIsDialogOpen(open);
-        }
-      }}>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           {getDialogContent()}
         </DialogContent>
       </Dialog>
 
-      <AlertDialog 
-        open={isDeleteDialogOpen} 
-        onOpenChange={(open) => {
-          // Only allow closing if not currently loading
-          if (!loading || !open) {
-            setIsDeleteDialogOpen(open);
-          }
-        }}
-      >
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -674,7 +600,7 @@ const UserManagementPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteUser}
               disabled={loading}
