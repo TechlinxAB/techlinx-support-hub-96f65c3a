@@ -61,25 +61,6 @@ const SheetContent = React.forwardRef<
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
-      // Completely bypassing focus management on close
-      onCloseAutoFocus={(e) => {
-        e.preventDefault();
-        // Release any trapped focus
-        setTimeout(() => {
-          document.body.focus();
-        }, 0);
-      }}
-      // Handle escape key directly
-      onEscapeKeyDown={(e) => {
-        // Let the sheet close even during loading states
-        if (props.onEscapeKeyDown) {
-          props.onEscapeKeyDown(e);
-        } else {
-          // Default behavior - close the sheet
-          const closeEvent = new CustomEvent('close-sheet');
-          window.dispatchEvent(closeEvent);
-        }
-      }}
       {...props}
     >
       {children}

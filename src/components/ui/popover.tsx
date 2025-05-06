@@ -21,25 +21,6 @@ const PopoverContent = React.forwardRef<
         "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         className
       )}
-      // Completely bypassing focus management on close
-      onCloseAutoFocus={(e) => {
-        e.preventDefault();
-        // Release any trapped focus
-        setTimeout(() => {
-          document.body.focus();
-        }, 0);
-      }}
-      // Handle escape key directly
-      onEscapeKeyDown={(e) => {
-        // Let the popover close even during loading states
-        if (props.onEscapeKeyDown) {
-          props.onEscapeKeyDown(e);
-        } else {
-          // Default behavior - close the popover
-          const closeEvent = new CustomEvent('close-popover');
-          window.dispatchEvent(closeEvent);
-        }
-      }}
       {...props}
     />
   </PopoverPrimitive.Portal>
