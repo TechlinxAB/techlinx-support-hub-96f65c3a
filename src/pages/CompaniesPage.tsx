@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -426,18 +425,7 @@ const CompaniesPage = () => {
         open={isDeleteDialogOpen} 
         onOpenChange={handleDeleteDialogClose}
       >
-        <AlertDialogContent
-          onInteractOutside={(e) => {
-            if (loading) {
-              e.preventDefault();
-            }
-          }}
-          onEscapeKeyDown={(e) => {
-            if (loading) {
-              e.preventDefault();
-            }
-          }}
-        >
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
