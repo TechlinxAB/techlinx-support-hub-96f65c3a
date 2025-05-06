@@ -27,7 +27,15 @@ import SearchPage from "./pages/SearchPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 
-const queryClient = new QueryClient();
+// Create a new QueryClient instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false
+    }
+  }
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

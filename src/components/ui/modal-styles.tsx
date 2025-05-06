@@ -6,6 +6,10 @@ export const ModalStyles = () => {
   const { isModalOpen } = useModal();
 
   useEffect(() => {
+    // Track original body overflow to restore it properly
+    const originalOverflow = window.getComputedStyle(document.body).overflow;
+    const originalPosition = window.getComputedStyle(document.body).position;
+    
     // This function handles applying and removing body styles for modal display
     const handleBodyStyles = () => {
       if (isModalOpen) {
@@ -23,7 +27,7 @@ export const ModalStyles = () => {
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.width = '';
-        document.body.style.overflow = '';
+        document.body.style.overflow = originalOverflow;
         
         // Restore scroll position
         if (scrollY) {
@@ -37,10 +41,12 @@ export const ModalStyles = () => {
     
     return () => {
       // Ensure styles are cleared when component unmounts
-      document.body.style.position = '';
+      document.body.style.position = originalPosition;
       document.body.style.top = '';
       document.body.style.width = '';
-      document.body.style.overflow = '';
+      document.body.style.overflow = originalOverflow;
+      document.body.removeAttribute('data-modal-open');
+      document.body.removeAttribute('data-loading');
     };
   }, [isModalOpen]);
 

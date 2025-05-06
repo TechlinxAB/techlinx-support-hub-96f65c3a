@@ -3,6 +3,7 @@ import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
+import { useModal } from "@/components/ui/modal-provider"
 
 const Popover = PopoverPrimitive.Root
 
@@ -12,17 +13,14 @@ const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
-  // Track whether the popover is open
-  const [isOpen, setIsOpen] = React.useState(false);
-
+  const { forceResetModalState } = useModal();
+  
   // Force cleanup on unmount
   React.useEffect(() => {
     return () => {
-      // Clean up any lingering body attributes or styles
-      document.body.removeAttribute('data-loading');
-      document.body.style.overflow = '';
+      forceResetModalState();
     };
-  }, []);
+  }, [forceResetModalState]);
 
   return (
     <PopoverPrimitive.Portal>
@@ -31,22 +29,14 @@ const PopoverContent = React.forwardRef<
         align={align}
         sideOffset={sideOffset}
         onOpenAutoFocus={(event) => {
-          setIsOpen(true);
           // Let native autofocus happen unless explicitly overridden
           if (props.onOpenAutoFocus) {
             props.onOpenAutoFocus(event);
           }
         }}
         onCloseAutoFocus={(event) => {
-          setIsOpen(false);
-          
           // Clean up everything on close
-          document.body.removeAttribute('data-loading');
-          document.body.removeAttribute('data-modal-open');
-          document.body.style.position = '';
-          document.body.style.top = '';
-          document.body.style.width = '';
-          document.body.style.overflow = '';
+          forceResetModalState();
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
@@ -74,6 +64,13 @@ const PopoverContent = React.forwardRef<
           
           if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
+          }
+        }}
+        onAnimationEnd={(event) => {
+          // Additional cleanup on animation end
+          const target = event.target as HTMLElement;
+          if (target.getAttribute('data-state') === 'closed') {
+            forceResetModalState();
           }
         }}
         className={cn(

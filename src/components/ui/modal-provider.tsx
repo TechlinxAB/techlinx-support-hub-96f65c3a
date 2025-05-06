@@ -8,6 +8,7 @@ type ModalContextType = {
   isLoading: boolean
   setIsModalOpen: (open: boolean) => void
   setIsLoading: (loading: boolean) => void
+  forceResetModalState: () => void
 }
 
 // Create context with default values
@@ -15,7 +16,8 @@ const ModalContext = createContext<ModalContextType>({
   isModalOpen: false,
   isLoading: false,
   setIsModalOpen: () => {},
-  setIsLoading: () => {}
+  setIsLoading: () => {},
+  forceResetModalState: () => {}
 })
 
 // Custom hook to use the modal context
@@ -26,19 +28,26 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
+  // Force reset function to clear all modal state
+  const forceResetModalState = () => {
+    setIsModalOpen(false)
+    setIsLoading(false)
+    document.body.removeAttribute('data-modal-open')
+    document.body.removeAttribute('data-loading')
+    document.body.style.position = ''
+    document.body.style.top = ''
+    document.body.style.width = ''
+    document.body.style.overflow = ''
+  }
+
   // Update the body's data attributes when modal state changes
   useEffect(() => {
-    const handleModalStateChange = () => {
-      if (isModalOpen) {
-        document.body.setAttribute('data-modal-open', 'true')
-      } else {
-        // Remove attribute immediately
-        document.body.removeAttribute('data-modal-open')
-      }
+    if (isModalOpen) {
+      document.body.setAttribute('data-modal-open', 'true')
+    } else {
+      // Remove attribute and clean up styles immediately
+      document.body.removeAttribute('data-modal-open')
     }
-    
-    // Execute immediately
-    handleModalStateChange()
     
     return () => {
       // Safety cleanup
@@ -48,17 +57,12 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Update the body's data attributes when loading state changes
   useEffect(() => {
-    const handleLoadingStateChange = () => {
-      if (isLoading) {
-        document.body.setAttribute('data-loading', 'true')
-      } else {
-        // Remove attribute immediately
-        document.body.removeAttribute('data-loading')
-      }
+    if (isLoading) {
+      document.body.setAttribute('data-loading', 'true')
+    } else {
+      // Remove attribute immediately
+      document.body.removeAttribute('data-loading')
     }
-    
-    // Execute immediately
-    handleLoadingStateChange()
     
     return () => {
       // Safety cleanup
@@ -71,6 +75,7 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     if (isLoading) {
       const safetyTimer = setTimeout(() => {
         setIsLoading(false)
+        document.body.removeAttribute('data-loading')
       }, 10000) // 10 second safety timeout
 
       return () => {
@@ -79,11 +84,47 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isLoading])
 
+  // Global event listener to ensure cleanup on any user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      // If we're not in modal or loading state but the attributes exist, clean them
+      if (!isModalOpen && document.body.hasAttribute('data-modal-open')) {
+        document.body.removeAttribute('data-modal-open')
+      }
+      
+      if (!isLoading && document.body.hasAttribute('data-loading')) {
+        document.body.removeAttribute('data-loading')
+      }
+    }
+    
+    // Add event listeners for any user interaction
+    document.addEventListener('click', handleUserInteraction)
+    document.addEventListener('keydown', handleUserInteraction)
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
+    }
+  }, [isModalOpen, isLoading])
+
+  // Emergency cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.removeAttribute('data-modal-open')
+      document.body.removeAttribute('data-loading')
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      document.body.style.overflow = ''
+    }
+  }, [])
+
   const value = {
     isModalOpen,
     isLoading,
     setIsModalOpen,
-    setIsLoading
+    setIsLoading,
+    forceResetModalState
   }
 
   return <ModalContext.Provider value={value}>{children}</ModalContext.Provider>

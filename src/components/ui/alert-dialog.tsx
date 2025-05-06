@@ -1,8 +1,10 @@
+
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import { useModal } from "@/components/ui/modal-provider"
 
 const AlertDialog = AlertDialogPrimitive.Root
 
@@ -29,18 +31,14 @@ const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => {
-  // Keep track of animation state
-  const [isAnimating, setIsAnimating] = React.useState(false);
+  const { forceResetModalState } = useModal();
   
+  // Force cleanup on unmount
   React.useEffect(() => {
-    // Force cleanup of any stuck loading or modal states
     return () => {
-      document.body.removeAttribute('data-loading');
-      setTimeout(() => {
-        document.body.removeAttribute('data-modal-open');
-      }, 100);
-    };
-  }, []);
+      forceResetModalState();
+    }
+  }, [forceResetModalState]);
 
   return (
     <AlertDialogPortal>
@@ -63,8 +61,13 @@ const AlertDialogContent = React.forwardRef<
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           className
         )}
-        onAnimationStart={() => setIsAnimating(true)}
-        onAnimationEnd={() => setIsAnimating(false)}
+        onAnimationEnd={() => {
+          // Clean up when animation ends on closing
+          const modalState = document.body.getAttribute('data-[state]');
+          if (modalState === 'closed') {
+            forceResetModalState();
+          }
+        }}
         {...props}
       />
     </AlertDialogPortal>
@@ -128,71 +131,55 @@ AlertDialogDescription.displayName =
 const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Action
-    ref={ref}
-    className={cn(buttonVariants(), className)}
-    onClick={(e) => {
-      // Check if we should prevent action (e.g., during loading)
-      const loadingAttr = document.body.getAttribute('data-loading');
-      if (loadingAttr === 'true' && props.disabled !== true) {
-        e.preventDefault();
-        return;
-      }
-      
-      // Force cleanup document body on action
-      document.body.removeAttribute('data-loading');
-      document.body.removeAttribute('data-modal-open');
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflow = '';
-      
-      // Call the original onClick if it exists
-      if (props.onClick) {
-        props.onClick(e);
-      }
-    }}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  const { forceResetModalState } = useModal();
+  
+  return (
+    <AlertDialogPrimitive.Action
+      ref={ref}
+      className={cn(buttonVariants(), className)}
+      onClick={(e) => {
+        // Force cleanup document body on action
+        forceResetModalState();
+        
+        // Call the original onClick if it exists
+        if (props.onClick) {
+          props.onClick(e);
+        }
+      }}
+      {...props}
+    />
+  );
+})
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName
 
 const AlertDialogCancel = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
->(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Cancel
-    ref={ref}
-    className={cn(
-      buttonVariants({ variant: "outline" }),
-      "mt-2 sm:mt-0",
-      className
-    )}
-    onClick={(e) => {
-      // Check if we should prevent cancellation (e.g., during loading)
-      const loadingAttr = document.body.getAttribute('data-loading');
-      if (loadingAttr === 'true' && props.disabled !== true) {
-        e.preventDefault();
-        return;
-      }
-      
-      // Force cleanup document body on cancel
-      document.body.removeAttribute('data-loading');
-      document.body.removeAttribute('data-modal-open');
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflow = '';
-      
-      // Call the original onClick if it exists
-      if (props.onClick) {
-        props.onClick(e);
-      }
-    }}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  const { forceResetModalState } = useModal();
+  
+  return (
+    <AlertDialogPrimitive.Cancel
+      ref={ref}
+      className={cn(
+        buttonVariants({ variant: "outline" }),
+        "mt-2 sm:mt-0",
+        className
+      )}
+      onClick={(e) => {
+        // Force cleanup document body on cancel
+        forceResetModalState();
+        
+        // Call the original onClick if it exists
+        if (props.onClick) {
+          props.onClick(e);
+        }
+      }}
+      {...props}
+    />
+  );
+})
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName
 
 export {

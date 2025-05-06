@@ -3,6 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useModal } from "@/components/ui/modal-provider"
 
 const Dialog = DialogPrimitive.Root
 
@@ -31,22 +32,14 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  // Keep track of animation state
-  const [isAnimating, setIsAnimating] = React.useState(false);
+  const { forceResetModalState } = useModal();
   
+  // Force cleanup on unmount
   React.useEffect(() => {
-    // Force cleanup of any stuck states on component unmount
     return () => {
-      document.body.removeAttribute('data-loading');
-      setTimeout(() => {
-        document.body.removeAttribute('data-modal-open');
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        document.body.style.overflow = '';
-      }, 100);
-    };
-  }, []);
+      forceResetModalState();
+    }
+  }, [forceResetModalState]);
 
   return (
     <DialogPortal>
@@ -89,25 +82,23 @@ const DialogContent = React.forwardRef<
             props.onInteractOutside(event);
           }
         }}
-        onOpenAutoFocus={(event) => {
-          setIsAnimating(true);
-          if (props.onOpenAutoFocus) {
-            props.onOpenAutoFocus(event);
-          }
-        }}
         onCloseAutoFocus={(event) => {
-          setIsAnimating(false);
-          
           // Force cleanup on close
-          document.body.removeAttribute('data-loading');
-          document.body.removeAttribute('data-modal-open');
-          document.body.style.position = '';
-          document.body.style.top = '';
-          document.body.style.width = '';
-          document.body.style.overflow = '';
+          forceResetModalState();
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
+          }
+        }}
+        onAnimationEnd={(event) => {
+          // Additional cleanup on animation end
+          const state = (event.target as HTMLElement).getAttribute('data-state');
+          if (state === 'closed') {
+            forceResetModalState();
+          }
+          
+          if (props.onAnimationEnd) {
+            props.onAnimationEnd(event);
           }
         }}
         className={cn(
@@ -119,21 +110,9 @@ const DialogContent = React.forwardRef<
         {children}
         <DialogPrimitive.Close 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-          onClick={(e) => {
-            // Check if we should prevent closing (e.g., during loading)
-            const loadingAttr = document.body.getAttribute('data-loading');
-            if (loadingAttr === 'true') {
-              e.preventDefault();
-              return;
-            }
-            
+          onClick={() => {
             // Force cleanup on close click
-            document.body.removeAttribute('data-loading');
-            document.body.removeAttribute('data-modal-open');
-            document.body.style.position = '';
-            document.body.style.top = '';
-            document.body.style.width = '';
-            document.body.style.overflow = '';
+            forceResetModalState();
           }}
         >
           <X className="h-4 w-4" />

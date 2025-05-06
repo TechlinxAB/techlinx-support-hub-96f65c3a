@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -36,7 +37,7 @@ const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setIsModalOpen, setIsLoading } = useModal();
+  const { setIsModalOpen, setIsLoading, forceResetModalState } = useModal();
   const { withLoading } = useLoadingOperation();
   
   // All state declarations must be at the top level, not conditionally
@@ -47,6 +48,12 @@ const CompaniesPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Cleanup function to ensure UI remains responsive
+  const cleanupUIState = useCallback(() => {
+    forceResetModalState();
+    setLoading(false);
+  }, [forceResetModalState]);
   
   // Update global modal state when local dialog state changes
   useEffect(() => {
@@ -98,22 +105,29 @@ const CompaniesPage = () => {
     if (!loading) {
       setIsDialogOpen(false);
       setIsDeleteDialogOpen(false);
+      cleanupUIState();
     }
-  }, [loading]);
+  }, [loading, cleanupUIState]);
 
   const handleDialogClose = useCallback((open: boolean) => {
     // Only allow closing if not currently loading
     if (!loading || !open) {
       setIsDialogOpen(open);
+      if (!open) {
+        cleanupUIState();
+      }
     }
-  }, [loading]);
+  }, [loading, cleanupUIState]);
 
   const handleDeleteDialogClose = useCallback((open: boolean) => {
     // Only allow closing if not currently loading
     if (!loading || !open) {
       setIsDeleteDialogOpen(open);
+      if (!open) {
+        cleanupUIState();
+      }
     }
-  }, [loading]);
+  }, [loading, cleanupUIState]);
 
   const confirmDeleteCompany = useCallback((companyId: string) => {
     setCompanyToDelete(companyId);
@@ -152,11 +166,9 @@ const CompaniesPage = () => {
       });
     } finally {
       // Make sure to restore UI responsiveness
-      document.body.removeAttribute('data-loading');
-      document.body.removeAttribute('data-modal-open');
-      setLoading(false);
+      cleanupUIState();
     }
-  }, [companyToDelete, deleteCompany, toast]);
+  }, [companyToDelete, deleteCompany, toast, cleanupUIState]);
   
   // Handle adding company
   const handleAddCompany = useCallback(async (e: React.FormEvent) => {
@@ -200,11 +212,9 @@ const CompaniesPage = () => {
       });
     } finally {
       // Make sure to restore UI responsiveness
-      document.body.removeAttribute('data-loading');
-      document.body.removeAttribute('data-modal-open');
-      setLoading(false);
+      cleanupUIState();
     }
-  }, [companyName, companyLogo, addCompany, toast]);
+  }, [companyName, companyLogo, addCompany, toast, cleanupUIState]);
 
   // Navigation and initialization effects
   useEffect(() => {
@@ -253,6 +263,7 @@ const CompaniesPage = () => {
         )}
       </div>
       
+      {/* Companies grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {companies.map(company => {
           // Find cases for this company
@@ -362,11 +373,6 @@ const CompaniesPage = () => {
         onOpenChange={handleDialogClose}
       >
         <DialogContent 
-          onInteractOutside={(e) => {
-            if (loading) {
-              e.preventDefault();
-            }
-          }}
           onEscapeKeyDown={(e) => {
             if (loading) {
               e.preventDefault();
