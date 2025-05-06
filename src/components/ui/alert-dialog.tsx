@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
@@ -29,31 +28,48 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <AlertDialogPrimitive.Content
-      ref={ref}
-      onEscapeKeyDown={(event) => {
-        // Prevent default behavior if loading
-        const loadingAttr = document.body.getAttribute('data-loading');
-        if (loadingAttr === 'true') {
-          event.preventDefault();
-          return;
-        }
-        
-        if (props.onEscapeKeyDown) {
-          props.onEscapeKeyDown(event);
-        }
-      }}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-        className
-      )}
-      {...props}
-    />
-  </AlertDialogPortal>
-))
+>(({ className, ...props }, ref) => {
+  // Keep track of animation state
+  const [isAnimating, setIsAnimating] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Force cleanup of any stuck loading or modal states
+    return () => {
+      document.body.removeAttribute('data-loading');
+      setTimeout(() => {
+        document.body.removeAttribute('data-modal-open');
+      }, 100);
+    };
+  }, []);
+
+  return (
+    <AlertDialogPortal>
+      <AlertDialogOverlay />
+      <AlertDialogPrimitive.Content
+        ref={ref}
+        onEscapeKeyDown={(event) => {
+          // Prevent default behavior if loading
+          const loadingAttr = document.body.getAttribute('data-loading');
+          if (loadingAttr === 'true') {
+            event.preventDefault();
+            return;
+          }
+          
+          if (props.onEscapeKeyDown) {
+            props.onEscapeKeyDown(event);
+          }
+        }}
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+          className
+        )}
+        onAnimationStart={() => setIsAnimating(true)}
+        onAnimationEnd={() => setIsAnimating(false)}
+        {...props}
+      />
+    </AlertDialogPortal>
+  );
+})
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
 const AlertDialogHeader = ({
@@ -124,6 +140,14 @@ const AlertDialogAction = React.forwardRef<
         return;
       }
       
+      // Force cleanup document body on action
+      document.body.removeAttribute('data-loading');
+      document.body.removeAttribute('data-modal-open');
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      
       // Call the original onClick if it exists
       if (props.onClick) {
         props.onClick(e);
@@ -152,6 +176,14 @@ const AlertDialogCancel = React.forwardRef<
         e.preventDefault();
         return;
       }
+      
+      // Force cleanup document body on cancel
+      document.body.removeAttribute('data-loading');
+      document.body.removeAttribute('data-modal-open');
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
       
       // Call the original onClick if it exists
       if (props.onClick) {

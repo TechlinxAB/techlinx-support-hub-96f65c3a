@@ -6,39 +6,41 @@ export const ModalStyles = () => {
   const { isModalOpen } = useModal();
 
   useEffect(() => {
-    // Add a small delay to ensure modal animations complete
-    const applyStyles = () => {
+    // This function handles applying and removing body styles for modal display
+    const handleBodyStyles = () => {
       if (isModalOpen) {
         // Save the current scroll position
         const scrollY = window.scrollY;
-        
-        // Apply styles to prevent scrolling of background content
         document.body.style.position = 'fixed';
         document.body.style.top = `-${scrollY}px`;
         document.body.style.width = '100%';
+        document.body.style.overflow = 'hidden';
       } else {
-        // Restore scrolling and scroll position
+        // Get the saved scroll position
         const scrollY = document.body.style.top;
+        
+        // Clear all styles completely
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.width = '';
+        document.body.style.overflow = '';
         
+        // Restore scroll position
         if (scrollY) {
           window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
         }
       }
     };
     
-    // Apply with slight delay to avoid flicker
-    const timer = setTimeout(applyStyles, 50);
+    // Apply immediately rather than with a delay
+    handleBodyStyles();
     
     return () => {
-      clearTimeout(timer);
-      
-      // Safety cleanup when component unmounts
+      // Ensure styles are cleared when component unmounts
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.width = '';
+      document.body.style.overflow = '';
     };
   }, [isModalOpen]);
 

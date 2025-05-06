@@ -15,17 +15,14 @@ const PopoverContent = React.forwardRef<
   // Track whether the popover is open
   const [isOpen, setIsOpen] = React.useState(false);
 
-  // When popover opens, store state
+  // Force cleanup on unmount
   React.useEffect(() => {
-    if (isOpen) {
-      const prevBodyOverflow = document.body.style.overflow;
-      
-      return () => {
-        // Restore body overflow when popover closes
-        document.body.style.overflow = prevBodyOverflow;
-      };
-    }
-  }, [isOpen]);
+    return () => {
+      // Clean up any lingering body attributes or styles
+      document.body.removeAttribute('data-loading');
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   return (
     <PopoverPrimitive.Portal>
@@ -42,10 +39,14 @@ const PopoverContent = React.forwardRef<
         }}
         onCloseAutoFocus={(event) => {
           setIsOpen(false);
-          // Safety timeout to ensure UI is responsive after close
-          setTimeout(() => {
-            document.body.removeAttribute('data-loading');
-          }, 100);
+          
+          // Clean up everything on close
+          document.body.removeAttribute('data-loading');
+          document.body.removeAttribute('data-modal-open');
+          document.body.style.position = '';
+          document.body.style.top = '';
+          document.body.style.width = '';
+          document.body.style.overflow = '';
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
