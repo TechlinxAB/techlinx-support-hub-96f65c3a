@@ -82,7 +82,7 @@ const PopoverContent = React.forwardRef<
         let parent = node.parentElement;
         while (parent) {
           if (parent.hasAttribute('data-radix-portal')) {
-            portalRef.current = parent;
+            portalRef.current = parent as HTMLDivElement; // Cast to correct type
             break;
           }
           parent = parent.parentElement;
@@ -99,7 +99,7 @@ const PopoverContent = React.forwardRef<
       };
     } else if (ref) {
       const originalRef = ref.current;
-      handleContentRefChange(originalRef);
+      handleContentRefChange(originalRef as HTMLDivElement); // Cast to correct type
     }
     
     // Cleanup function
