@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 // Define types
 export type UserRole = 'user' | 'consultant';
-export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed';
+export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
 export type CasePriority = 'low' | 'medium' | 'high';
 export type Language = 'en' | 'sv';
 
