@@ -68,26 +68,15 @@ const DrawerContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => {
   const { resetModalState } = useModal();
   
-  // Ensure modal state is reset when drawer is closed
+  // Instead of trying to access the DOM element directly via ref
+  // we'll use the onOpenChange callback from the Drawer component
+  // This is cleaner and avoids ref-related TypeScript errors
   React.useEffect(() => {
-    const onClose = () => {
+    return () => {
+      // Reset modal state on unmount with a small delay
       setTimeout(resetModalState, 100);
     };
-    
-    // Safe ref handling that works with both callback refs and object refs
-    const drawerElement = typeof ref === 'function' 
-      ? null // Can't access DOM with callback refs
-      : ref?.current;
-    
-    if (drawerElement) {
-      drawerElement.addEventListener('close', onClose);
-      return () => {
-        drawerElement.removeEventListener('close', onClose);
-      };
-    }
-    
-    return undefined;
-  }, [ref, resetModalState]);
+  }, [resetModalState]);
 
   return (
     <DrawerPortal>
@@ -98,6 +87,35 @@ const DrawerContent = React.forwardRef<
           "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
           className
         )}
+        onInteractOutside={(event) => {
+          // Prevent interaction outside if loading
+          if (document.body.getAttribute('data-loading') === 'true') {
+            event.preventDefault();
+          }
+          // Let the existing handler run
+          if (props.onInteractOutside) {
+            props.onInteractOutside(event);
+          }
+        }}
+        onEscapeKeyDown={(event) => {
+          // Prevent escape if loading
+          if (document.body.getAttribute('data-loading') === 'true') {
+            event.preventDefault();
+          }
+          // Let the existing handler run
+          if (props.onEscapeKeyDown) {
+            props.onEscapeKeyDown(event);
+          }
+        }}
+        onCloseAutoFocus={(event) => {
+          // Reset modal state with delay
+          setTimeout(resetModalState, 100);
+          
+          // Let the existing handler run
+          if (props.onCloseAutoFocus) {
+            props.onCloseAutoFocus(event);
+          }
+        }}
         {...props}
       >
         <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
