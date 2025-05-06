@@ -113,6 +113,7 @@ const CompaniesPage = () => {
     setLoading(true);
     try {
       await deleteCompany(companyToDelete);
+      // Important: Close the dialog first before doing anything else
       setIsDeleteDialogOpen(false);
       setCompanyToDelete(null);
       toast({
@@ -127,6 +128,7 @@ const CompaniesPage = () => {
         variant: "destructive",
       });
     } finally {
+      // Make sure loading state is updated even if there's an error
       setLoading(false);
     }
   };
@@ -134,6 +136,23 @@ const CompaniesPage = () => {
   const confirmDeleteCompany = (companyId: string) => {
     setCompanyToDelete(companyId);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    // Make sure to reset all states when closing dialogs
+    setIsDialogOpen(false);
+    if (!loading) {
+      setCompanyName('');
+      setCompanyLogo('');
+    }
+  };
+
+  const handleDeleteDialogClose = () => {
+    // Only allow closing if not currently in loading state
+    if (!loading) {
+      setIsDeleteDialogOpen(false);
+      setCompanyToDelete(null);
+    }
   };
   
   // Only show companies if the user is authorized to view them
@@ -256,8 +275,8 @@ const CompaniesPage = () => {
         })}
       </div>
       
-      {/* Add Company Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Add Company Dialog - Use the new close handler */}
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Company</DialogTitle>
@@ -288,7 +307,7 @@ const CompaniesPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={handleDialogClose} disabled={loading}>
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>
@@ -299,8 +318,11 @@ const CompaniesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Company Confirmation */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      {/* Delete Company Confirmation - Use the improved close handler and force focus management */}
+      <AlertDialog 
+        open={isDeleteDialogOpen} 
+        onOpenChange={handleDeleteDialogClose}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -310,7 +332,7 @@ const CompaniesPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={handleDeleteDialogClose} disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteCompany}
               disabled={loading}
