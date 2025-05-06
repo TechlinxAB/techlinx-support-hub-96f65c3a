@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -7,7 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ArrowLeft, Pencil, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Pencil, CheckCircle, Send } from 'lucide-react';
 import CaseDiscussion from '@/components/cases/CaseDiscussion';
 import { 
   Select, 
@@ -124,6 +123,7 @@ const CaseDetailPage = () => {
       case 'ongoing': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
       case 'resolved': return 'bg-green-100 text-green-800 hover:bg-green-200';
       case 'completed': return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+      case 'draft': return 'bg-purple-100 text-purple-800 hover:bg-purple-200';
       default: return '';
     }
   };
@@ -200,6 +200,7 @@ const CaseDetailPage = () => {
                     <SelectItem value="ongoing">Ongoing</SelectItem>
                     <SelectItem value="resolved">Resolved</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -255,6 +256,7 @@ const CaseDetailPage = () => {
                             <SelectItem value="ongoing">Ongoing</SelectItem>
                             <SelectItem value="resolved">Resolved</SelectItem>
                             <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="draft">Draft</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

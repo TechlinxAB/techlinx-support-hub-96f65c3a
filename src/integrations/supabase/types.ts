@@ -435,7 +435,7 @@ export type Database = {
     }
     Enums: {
       case_priority: "low" | "medium" | "high"
-      case_status: "new" | "ongoing" | "resolved" | "completed"
+      case_status: "new" | "ongoing" | "resolved" | "completed" | "draft"
       language_preference: "en" | "sv"
       user_role: "user" | "consultant"
     }
@@ -554,7 +554,7 @@ export const Constants = {
   public: {
     Enums: {
       case_priority: ["low", "medium", "high"],
-      case_status: ["new", "ongoing", "resolved", "completed"],
+      case_status: ["new", "ongoing", "resolved", "completed", "draft"],
       language_preference: ["en", "sv"],
       user_role: ["user", "consultant"],
     },

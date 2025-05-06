@@ -24,12 +24,13 @@ const CasesPage = () => {
       </div>
       
       <Tabs defaultValue="all" onValueChange={(value) => setActiveTab(value as CaseStatus | 'all')}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="all">All Cases</TabsTrigger>
           <TabsTrigger value="new">New</TabsTrigger>
           <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
           <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
+          <TabsTrigger value="draft">Drafts</TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-6">
           {loadingCases ? (
@@ -74,6 +75,15 @@ const CasesPage = () => {
             </div>
           ) : (
             <CaseList statusFilter="completed" />
+          )}
+        </TabsContent>
+        <TabsContent value="draft" className="mt-6">
+          {loadingCases ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <CaseList statusFilter="draft" />
           )}
         </TabsContent>
       </Tabs>

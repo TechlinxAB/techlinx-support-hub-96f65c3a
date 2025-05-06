@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -325,8 +324,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .insert({
           title: newCase.title,
           description: newCase.description,
-          status: newCase.status,
-          priority: newCase.priority,
+          status: newCase.status as "new" | "ongoing" | "resolved" | "completed" | "draft",
+          priority: newCase.priority as "low" | "medium" | "high",
           user_id: newCase.userId,
           company_id: newCase.companyId,
           category_id: newCase.categoryId,
@@ -362,8 +361,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       if (updates.title !== undefined) dbUpdates.title = updates.title;
       if (updates.description !== undefined) dbUpdates.description = updates.description;
-      if (updates.status !== undefined) dbUpdates.status = updates.status;
-      if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+      if (updates.status !== undefined) dbUpdates.status = updates.status as "new" | "ongoing" | "resolved" | "completed" | "draft";
+      if (updates.priority !== undefined) dbUpdates.priority = updates.priority as "low" | "medium" | "high";
       if (updates.userId !== undefined) dbUpdates.user_id = updates.userId;
       if (updates.companyId !== undefined) dbUpdates.company_id = updates.companyId;
       if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
