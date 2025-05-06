@@ -17,6 +17,8 @@ import CasesPage from "./pages/CasesPage";
 import CaseDetailPage from "./pages/CaseDetailPage";
 import NewCasePage from "./pages/NewCasePage";
 import CompaniesPage from "./pages/CompaniesPage";
+import CompanyDashboardPage from "./pages/CompanyDashboardPage";
+import CompanyDashboardBuilderPage from "./pages/CompanyDashboardBuilderPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import SettingsPage from "./pages/SettingsPage";
 import SearchPage from "./pages/SearchPage";
@@ -44,6 +46,8 @@ const App = () => (
                   <Route path="cases/:id" element={<CaseDetailPage />} />
                   <Route path="companies" element={<CompaniesPage />} />
                   <Route path="companies/:id" element={<CompaniesPage />} />
+                  <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+                  <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
                   <Route path="users" element={<UserManagementPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="search" element={<SearchPage />} />

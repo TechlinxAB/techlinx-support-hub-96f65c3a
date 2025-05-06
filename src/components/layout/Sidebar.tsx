@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MessageCircle, Users, Search, Settings, Clock, UserPlus } from 'lucide-react';
+import { LayoutDashboard, MessageCircle, Users, Search, Settings, Clock, UserPlus, Building } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -32,7 +32,14 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
       label: "Companies",
       icon: <Users className="sidebar-icon" />,
       isActive: location.pathname.startsWith('/companies'),
-      showOnlyForConsultant: !isConsultant
+      showOnlyForConsultant: true
+    },
+    {
+      to: "/company-dashboard",
+      label: "Company Dashboard",
+      icon: <Building className="sidebar-icon" />,
+      isActive: location.pathname.startsWith('/company-dashboard'),
+      showOnlyForUser: true
     },
     {
       to: "/search",
@@ -78,8 +85,14 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
           </div>
           <nav>
             <ul className="space-y-1">
-              {menuItems.map((item) => (
-                (!item.showOnlyForConsultant) && (
+              {menuItems.map((item) => {
+                // Check if item should be shown (based on user role)
+                const shouldShow = 
+                  (item.showOnlyForConsultant && isConsultant) || 
+                  (item.showOnlyForUser && !isConsultant) || 
+                  (!item.showOnlyForConsultant && !item.showOnlyForUser);
+                
+                return shouldShow && (
                   <li key={item.to}>
                     <Link
                       to={item.to}
@@ -92,8 +105,8 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
                       <span>{item.label}</span>
                     </Link>
                   </li>
-                )
-              ))}
+                );
+              })}
             </ul>
           </nav>
         </div>
