@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogClose
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,6 +70,15 @@ const CompaniesPage = () => {
     );
   }
   
+  // Fully separate dialog management from data operations
+  const resetDialogStates = useCallback(() => {
+    setIsDialogOpen(false);
+    setIsDeleteDialogOpen(false);
+    setCompanyToDelete(null);
+    setCompanyName('');
+    setCompanyLogo('');
+  }, []);
+  
   // Functions for managing companies
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,9 +98,9 @@ const CompaniesPage = () => {
         logo: companyLogo || undefined
       });
       
-      setIsDialogOpen(false);
-      setCompanyName('');
-      setCompanyLogo('');
+      // Close dialog AFTER successful operation
+      resetDialogStates();
+      
       toast({
         title: "Success",
         description: "Company created successfully",
@@ -107,30 +117,38 @@ const CompaniesPage = () => {
     }
   };
 
+  // Completely separate deletion process from UI state management
   const handleDeleteCompany = async () => {
     if (!companyToDelete) return;
     
+    // First close the modal UI completely to prevent any UI freezing
+    // This allows the UI to update before we start the async operation
+    setIsDeleteDialogOpen(false);
+    
     setLoading(true);
-    try {
-      await deleteCompany(companyToDelete);
-      // Important: Close the dialog first before doing anything else
-      setIsDeleteDialogOpen(false);
-      setCompanyToDelete(null);
-      toast({
-        title: "Success",
-        description: "Company deleted successfully",
-      });
-    } catch (error) {
-      console.error('Error deleting company:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete company",
-        variant: "destructive",
-      });
-    } finally {
-      // Make sure loading state is updated even if there's an error
-      setLoading(false);
-    }
+    
+    // Small timeout to ensure dialog is fully closed first
+    setTimeout(async () => {
+      try {
+        await deleteCompany(companyToDelete);
+        // Clear deletion state after operation completes
+        setCompanyToDelete(null);
+        
+        toast({
+          title: "Success",
+          description: "Company deleted successfully",
+        });
+      } catch (error) {
+        console.error('Error deleting company:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete company",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }, 100);
   };
   
   const confirmDeleteCompany = (companyId: string) => {
@@ -139,16 +157,13 @@ const CompaniesPage = () => {
   };
 
   const handleDialogClose = () => {
-    // Make sure to reset all states when closing dialogs
-    setIsDialogOpen(false);
+    // Only reset if not currently loading
     if (!loading) {
-      setCompanyName('');
-      setCompanyLogo('');
+      resetDialogStates();
     }
   };
 
-  const handleDeleteDialogClose = () => {
-    // Only allow closing if not currently in loading state
+  const handleCancelDelete = () => {
     if (!loading) {
       setIsDeleteDialogOpen(false);
       setCompanyToDelete(null);
@@ -169,7 +184,10 @@ const CompaniesPage = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Companies</h1>
         {currentUser.role === 'consultant' && (
-          <Button onClick={() => setIsDialogOpen(true)}>
+          <Button 
+            onClick={() => setIsDialogOpen(true)}
+            disabled={loading}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Company
           </Button>
@@ -200,7 +218,7 @@ const CompaniesPage = () => {
                   {currentUser.role === 'consultant' && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={loading}>
                           <span className="sr-only">Open menu</span>
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-more-vertical">
                             <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
@@ -211,6 +229,7 @@ const CompaniesPage = () => {
                         <DropdownMenuItem
                           onClick={() => confirmDeleteCompany(company.id)}
                           className="text-red-600 cursor-pointer"
+                          disabled={loading}
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete Company
@@ -275,9 +294,12 @@ const CompaniesPage = () => {
         })}
       </div>
       
-      {/* Add Company Dialog - Use the new close handler */}
-      <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-        <DialogContent>
+      {/* Add Company Dialog - with explicit DialogClose component */}
+      <Dialog 
+        open={isDialogOpen} 
+        onOpenChange={handleDialogClose}
+      >
+        <DialogContent onEscapeKeyDown={handleDialogClose} onPointerDownOutside={handleDialogClose}>
           <DialogHeader>
             <DialogTitle>Add New Company</DialogTitle>
             <DialogDescription>
@@ -307,9 +329,11 @@ const CompaniesPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleDialogClose} disabled={loading}>
-                Cancel
-              </Button>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={loading}>
+                  Cancel
+                </Button>
+              </DialogClose>
               <Button type="submit" disabled={loading}>
                 {loading ? 'Creating...' : 'Create Company'}
               </Button>
@@ -318,12 +342,17 @@ const CompaniesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Company Confirmation - Use the improved close handler and force focus management */}
+      {/* Delete Company Confirmation - with improved focus management */}
       <AlertDialog 
         open={isDeleteDialogOpen} 
-        onOpenChange={handleDeleteDialogClose}
+        onOpenChange={(open) => {
+          if (!loading && !open) {
+            setIsDeleteDialogOpen(false);
+            setCompanyToDelete(null);
+          }
+        }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent onEscapeKeyDown={handleCancelDelete}>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -332,7 +361,12 @@ const CompaniesPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleDeleteDialogClose} disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel 
+              onClick={handleCancelDelete} 
+              disabled={loading}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteCompany}
               disabled={loading}
