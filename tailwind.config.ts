@@ -45,13 +45,21 @@ const config: Config = {
           foreground: "hsl(var(--accent-foreground))",
         },
         popover: {
-          DEFAULT: "hsl(var(--background))",
-          foreground: "hsl(var(--foreground))",
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
         },
         card: {
-          DEFAULT: "hsl(var(--background))",
-          foreground: "hsl(var(--foreground))",
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
         },
+        sidebar: {
+          DEFAULT: "#387A3D", // Dark green for sidebar background
+          accent: "rgba(255, 255, 255, 0.1)", // Highlight for active items
+          "accent-foreground": "#FFFFFF",
+          foreground: "#FFFFFF", // White text
+          border: "rgba(255, 255, 255, 0.2)",
+          ring: "rgba(255, 255, 255, 0.3)",
+        }
       },
       borderRadius: {
         lg: "var(--radius)",

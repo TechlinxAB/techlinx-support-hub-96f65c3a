@@ -15,21 +15,23 @@ const Layout = () => {
   
   return (
     <div className="min-h-screen flex flex-col">
-      <Header toggleSidebar={toggleSidebar} />
       <div className="flex flex-1">
         <Sidebar isOpen={sidebarOpen} />
-        <main 
-          className="flex-1 p-4 md:p-6 pt-5 transition-all duration-300 md:ml-64"
-          onClick={() => {
-            if (isMobile && sidebarOpen) {
-              setSidebarOpen(false);
-            }
-          }}
-        >
-          <div className="max-w-7xl mx-auto">
-            <Outlet />
-          </div>
-        </main>
+        <div className="flex flex-col flex-1">
+          <Header toggleSidebar={toggleSidebar} />
+          <main 
+            className="flex-1 p-4 md:p-6 pt-5 transition-all duration-300 md:ml-64"
+            onClick={() => {
+              if (isMobile && sidebarOpen) {
+                setSidebarOpen(false);
+              }
+            }}
+          >
+            <div className="max-w-7xl mx-auto">
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@
   --foreground: 222.2 47.4% 11.2%;
 
   /* Update the primary color to be green based on the screenshot */
-  --primary: 142 76% 36%;
+  --primary: 120 35% 35%; /* green color */
   --primary-foreground: 355.7 100% 97.3%;
 
   --secondary: 210 40% 96.1%;
@@ -25,7 +25,7 @@
 
   --border: 214.3 31.8% 91.4%;
   --input: 214.3 31.8% 91.4%;
-  --ring: 142 76% 36%;
+  --ring: 120 35% 35%; /* green color */
 
   --radius: 0.5rem;
 }
@@ -34,7 +34,7 @@
   --background: 224 71% 4%;
   --foreground: 213 31% 91%;
 
-  --primary: 142 76% 36%;
+  --primary: 120 35% 35%; /* green color */
   --primary-foreground: 210 40% 98%;
 
   --secondary: 222.2 47.4% 11.2%;
@@ -51,7 +51,7 @@
 
   --border: 216 34% 17%;
   --input: 216 34% 17%;
-  --ring: 142 76% 36%;
+  --ring: 120 35% 35%; /* green color */
 }
 
 @layer base {
@@ -77,4 +77,21 @@
 /* Custom status badge classes */
 .status-badge {
   @apply text-xs py-1 px-2 rounded-full;
+}
+
+/* Sidebar styling */
+.sidebar-menu-item {
+  @apply flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md transition-colors;
+}
+
+.sidebar-menu-item.active {
+  @apply bg-sidebar-accent text-sidebar-accent-foreground;
+}
+
+.sidebar-menu-item:not(.active) {
+  @apply text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground;
+}
+
+.sidebar-icon {
+  @apply h-5 w-5;
 }
