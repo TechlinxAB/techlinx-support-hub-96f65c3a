@@ -53,10 +53,10 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
         sidebar: {
-          DEFAULT: "#387A3D", // Dark green for sidebar background
-          accent: "rgba(255, 255, 255, 0.1)", // Highlight for active items
+          DEFAULT: "#387A3D", /* Dark green for sidebar background */
+          accent: "rgba(255, 255, 255, 0.1)", /* Highlight for active items */
           "accent-foreground": "#FFFFFF",
-          foreground: "#FFFFFF", // White text
+          foreground: "#FFFFFF", /* White text */
           border: "rgba(255, 255, 255, 0.2)",
           ring: "rgba(255, 255, 255, 0.3)",
         }

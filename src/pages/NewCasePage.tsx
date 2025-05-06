@@ -13,7 +13,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Save } from 'lucide-react';
 
 const NewCasePage = () => {
   const navigate = useNavigate();
@@ -31,8 +31,10 @@ const NewCasePage = () => {
   const [priority, setPriority] = useState('medium');
   const [userId, setUserId] = useState(currentUser?.id || '');
   const [companyId, setCompanyId] = useState(currentUser?.companyId || '');
+  const [language, setLanguage] = useState('en');
+  const [files, setFiles] = useState<FileList | null>(null);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, isDraft: boolean = false) => {
     e.preventDefault();
     
     if (!title || !description || !categoryId || !priority || !userId || !companyId) {
@@ -42,7 +44,7 @@ const NewCasePage = () => {
     addCase({
       title,
       description,
-      status: 'new',
+      status: isDraft ? 'draft' : 'new',
       priority: priority as any,
       userId,
       companyId,
@@ -50,6 +52,12 @@ const NewCasePage = () => {
     });
     
     navigate('/cases');
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(e.target.files);
+    }
   };
   
   const isConsultant = currentUser?.role === 'consultant';
@@ -64,7 +72,7 @@ const NewCasePage = () => {
       </div>
       
       <Card>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => handleSubmit(e, false)}>
           <CardHeader>
             <h1 className="text-xl font-bold">Create New Case</h1>
           </CardHeader>
@@ -122,7 +130,7 @@ const NewCasePage = () => {
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Category</label>
                 <Select 
@@ -158,6 +166,22 @@ const NewCasePage = () => {
                   </SelectContent>
                 </Select>
               </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Language</label>
+                <Select 
+                  value={language} 
+                  onValueChange={setLanguage}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="sv">Swedish</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -171,11 +195,17 @@ const NewCasePage = () => {
               />
             </div>
             
-            {/* File upload feature to be implemented in future version */}
-            {/* <div className="space-y-2">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Attachments</label>
-              <Input type="file" />
-            </div> */}
+              <Input 
+                type="file" 
+                onChange={handleFileChange}
+                multiple
+              />
+              <p className="text-xs text-muted-foreground">
+                You can upload multiple files (max 5MB each)
+              </p>
+            </div>
           </CardContent>
           
           <CardFooter className="flex justify-end gap-2">
@@ -185,6 +215,15 @@ const NewCasePage = () => {
               onClick={() => navigate('/cases')}
             >
               Cancel
+            </Button>
+            <Button 
+              type="button" 
+              variant="outline"
+              onClick={(e) => handleSubmit(e, true)}
+              disabled={!title || !categoryId || !priority}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Draft
             </Button>
             <Button 
               type="submit"

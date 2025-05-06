@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Bell, Menu } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Bell, Menu, LogOut, User, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,7 +20,17 @@ interface HeaderProps {
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
   const { language, setLanguage } = useAppContext();
-  const today = new Date();
+  const { signOut, user, profile } = useAuth();
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Update time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    
+    return () => clearInterval(timer);
+  }, []);
   
   return (
     <header className="bg-white dark:bg-card border-b border-border h-16 px-4 flex items-center justify-between shadow-sm">
@@ -30,9 +41,9 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       </div>
       
       <div className="text-sm text-muted-foreground">
-        {format(today, 'EEEE, MMMM d, yyyy')}
+        {format(currentTime, 'EEEE, MMMM d, yyyy')}
         <span className="ml-2 text-xs">
-          {format(today, 'HH:mm')}
+          {format(currentTime, 'HH:mm')}
         </span>
       </div>
       
@@ -43,7 +54,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
           className="relative"
         >
           <Bell className="h-5 w-5" />
-          <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-[10px] text-white">
+          <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">
             2
           </span>
         </Button>
@@ -59,19 +70,28 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full w-8 h-8 bg-muted">
-              <span className="font-medium text-xs">TH</span>
+              <span className="font-medium text-xs">{profile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>
               My Account
-              <div className="text-xs text-muted-foreground">admin@techlinx.com</div>
+              <div className="text-xs text-muted-foreground">{profile?.email || user?.email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem>
+              <User className="mr-2 h-4 w-4" />
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => signOut()}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

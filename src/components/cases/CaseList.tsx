@@ -11,24 +11,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import CaseCard from './CaseCard';
-import { Plus, Filter, RefreshCw } from 'lucide-react';
+import { Plus, Filter, RefreshCw, LayoutGrid, LayoutList } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface CaseListProps {
   title?: string;
   showFilters?: boolean;
   limit?: number;
+  statusFilter?: CaseStatus | 'all';
 }
 
-const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListProps) => {
+const CaseList = ({ title = "All Cases", showFilters = true, limit, statusFilter = 'all' }: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -60,6 +73,11 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListPr
     filteredCases = filteredCases.filter(c => c.priority === priorityFilter);
   }
   
+  // Apply category filter
+  if (categoryFilter !== 'all') {
+    filteredCases = filteredCases.filter(c => c.categoryId === categoryFilter);
+  }
+  
   // Sort by most recently updated
   filteredCases = [...filteredCases].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -69,40 +87,79 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListPr
   if (limit) {
     filteredCases = filteredCases.slice(0, limit);
   }
+
+  const getStatusBadgeClass = (status: CaseStatus) => {
+    switch (status) {
+      case 'new': return 'status-new';
+      case 'ongoing': return 'status-ongoing';
+      case 'resolved': return 'status-resolved';
+      case 'completed': return 'status-completed';
+      default: return '';
+    }
+  };
+  
+  const getPriorityBadgeClass = (priority: CasePriority) => {
+    switch (priority) {
+      case 'low': return 'priority-low';
+      case 'medium': return 'priority-medium';
+      case 'high': return 'priority-high';
+      default: return '';
+    }
+  };
   
   return (
     <div>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-        <h2 className="text-xl font-bold">{title}</h2>
-        <div className="flex gap-2">
-          {showFilters && (
+      {title && (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <div className="flex gap-2">
+            {showFilters && (
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowFilterMenu(!showFilterMenu)}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filters
+                </Button>
+                <Button 
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="icon"
+                  className="w-8 h-8"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="icon"
+                  className="w-8 h-8"
+                  onClick={() => setViewMode('list')}
+                >
+                  <LayoutList className="h-4 w-4" />
+                </Button>
+              </>
+            )}
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => setShowFilterMenu(!showFilterMenu)}
+              onClick={handleRefresh}
+              disabled={refreshing}
             >
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>
-          )}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button 
-            size="sm" 
-            onClick={() => navigate('/cases/new')}
-            className="bg-primary hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Case
-          </Button>
+            <Button 
+              size="sm" 
+              onClick={() => navigate('/cases/new')}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Case
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
       
       {showFilters && showFilterMenu && (
         <div className="bg-muted/50 p-3 rounded-lg mb-4 animate-fade-in">
@@ -114,23 +171,6 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListPr
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="bg-background"
               />
-            </div>
-            <div>
-              <Select 
-                value={statusFilter} 
-                onValueChange={(value) => setStatusFilter(value as CaseStatus | 'all')}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="ongoing">Ongoing</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div>
               <Select 
@@ -148,6 +188,24 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListPr
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Select 
+                value={categoryFilter} 
+                onValueChange={setCategoryFilter}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map(category => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       )}
@@ -156,11 +214,57 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit }: CaseListPr
         <div className="text-center p-8 bg-muted/50 rounded-lg">
           <p className="text-muted-foreground">No cases found</p>
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCases.map((caseItem) => (
             <CaseCard key={caseItem.id} caseItem={caseItem} />
           ))}
+        </div>
+      ) : (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Company</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCases.map((caseItem) => {
+                const user = currentUser?.role === 'consultant'
+                  ? companies.find(c => c.id === caseItem.userId)?.name
+                  : null;
+                const company = companies.find(c => c.id === caseItem.companyId)?.name;
+                
+                return (
+                  <TableRow 
+                    key={caseItem.id}
+                    onClick={() => navigate(`/cases/${caseItem.id}`)}
+                    className="cursor-pointer hover:bg-muted"
+                  >
+                    <TableCell className="font-medium">{caseItem.title}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn("status-badge", getStatusBadgeClass(caseItem.status))}>
+                        {caseItem.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass(caseItem.priority))}>
+                        {caseItem.priority}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{user || currentUser?.name}</TableCell>
+                    <TableCell>{company}</TableCell>
+                    <TableCell>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

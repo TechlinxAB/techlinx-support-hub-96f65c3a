@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MessageCircle, Users, Search, Settings, Clock } from 'lucide-react';
+import { LayoutDashboard, MessageCircle, Users, Search, Settings, Clock, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -32,7 +32,7 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
       label: "Companies",
       icon: <Users className="sidebar-icon" />,
       isActive: location.pathname.startsWith('/companies'),
-      showOnlyForConsultant: true
+      showOnlyForConsultant: !isConsultant
     },
     {
       to: "/search",
@@ -43,6 +43,12 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
   ];
 
   const adminItems = [
+    {
+      to: "/users",
+      label: "User Management",
+      icon: <UserPlus className="sidebar-icon" />,
+      isActive: location.pathname === '/users'
+    },
     {
       to: "/settings",
       label: "Settings",
@@ -58,14 +64,14 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}
     >
-      <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
-        <Link to="/" className="flex items-center gap-2 font-bold text-xl text-sidebar-foreground">
+      <div className="flex items-center h-16 px-4 border-b border-sidebar-border bg-sidebar">
+        <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
           <Clock className="h-6 w-6" />
           <span>Techlinx</span>
         </Link>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 bg-sidebar">
         <div className="mb-6">
           <div className="mb-2 text-xs font-semibold uppercase text-sidebar-foreground/50">
             Main Menu
@@ -73,7 +79,7 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
           <nav>
             <ul className="space-y-1">
               {menuItems.map((item) => (
-                (!item.showOnlyForConsultant || (item.showOnlyForConsultant && isConsultant)) && (
+                (!item.showOnlyForConsultant) && (
                   <li key={item.to}>
                     <Link
                       to={item.to}
@@ -119,13 +125,13 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
         )}
       </div>
       
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4 border-t border-sidebar-border bg-sidebar">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center">
+          <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-white">
             {currentUser?.name?.charAt(0) || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">
+            <p className="text-sm font-medium text-white truncate">
               {currentUser?.name || 'User'}
             </p>
             <p className="text-xs text-sidebar-foreground/70 truncate">
