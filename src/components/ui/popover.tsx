@@ -22,10 +22,7 @@ const Popover = ({
         setIsModalOpen(false);
         // Force cleanup in case anything is stuck
         if (!open) {
-          const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
-          if (overlays.length > 0) {
-            resetModalState();
-          }
+          resetModalState();
         }
       }, 300);
       
@@ -55,6 +52,15 @@ const PopoverContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
   const { resetModalState } = useModal();
+
+  // Handle safe unmount with cleanup
+  const unmountRef = React.useRef<() => void>(() => {});
+  React.useEffect(() => {
+    return () => {
+      // Run cleanup function when component unmounts
+      unmountRef.current();
+    };
+  }, []);
 
   return (
     <PopoverPrimitive.Portal>
@@ -90,6 +96,16 @@ const PopoverContent = React.forwardRef<
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
+          }
+        }}
+        onOpenAutoFocus={(event) => {
+          // Store cleanup function for later
+          unmountRef.current = () => {
+            setTimeout(() => resetModalState(), 100);
+          };
+          
+          if (props.onOpenAutoFocus) {
+            props.onOpenAutoFocus(event);
           }
         }}
         className={cn(

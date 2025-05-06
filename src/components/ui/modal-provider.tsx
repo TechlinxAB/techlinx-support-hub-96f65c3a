@@ -48,32 +48,83 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     document.body.removeAttribute('data-modal-open');
     document.body.removeAttribute('data-loading');
     
-    // Force remove any overlay elements that might be stuck
+    // Force remove any overlay elements that might be stuck - WITH SAFETY CHECKS
     const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
     overlays.forEach(overlay => {
-      if (overlay.parentNode) {
-        overlay.parentNode.removeChild(overlay);
-        console.log('Forcefully removed overlay element during reset');
+      try {
+        if (overlay.isConnected && overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+          console.log('Forcefully removed overlay element during reset');
+        }
+      } catch (error) {
+        console.log('Error removing overlay in resetModalState:', error);
       }
     });
     
-    // Force remove any dialog elements that might be stuck
+    // Force remove any dialog elements that might be stuck - WITH SAFETY CHECKS
     const dialogs = document.querySelectorAll('[role="dialog"]');
     dialogs.forEach(dialog => {
-      // Check if the dialog has state="closed" but is still visible
-      if (dialog.getAttribute('data-state') === 'closed') {
-        if (dialog.parentNode) {
+      try {
+        // Check if the dialog has state="closed" but is still visible
+        if (dialog.getAttribute('data-state') === 'closed' && dialog.isConnected && dialog.parentNode) {
           dialog.parentNode.removeChild(dialog);
           console.log('Forcefully removed closed dialog element');
         }
+      } catch (error) {
+        console.log('Error removing dialog in resetModalState:', error);
       }
     });
     
-    // Force all popovers to close
+    // Force all popovers to close - WITH SAFETY CHECKS
     document.querySelectorAll('[data-radix-popover-content-wrapper]').forEach(element => {
-      if (element.parentNode) {
-        element.parentNode.removeChild(element);
-        console.log('Forcefully removed popover element');
+      try {
+        if (element.isConnected && element.parentNode) {
+          element.parentNode.removeChild(element);
+          console.log('Forcefully removed popover element');
+        }
+      } catch (error) {
+        console.log('Error removing popover in resetModalState:', error);
+      }
+    });
+    
+    // Fix any orphaned backdrop elements
+    document.querySelectorAll('[data-radix-portal]').forEach(portal => {
+      try {
+        // Check if the portal contains no visible content
+        const hasContent = portal.children.length > 0;
+        if (!hasContent && portal.isConnected && portal.parentNode) {
+          portal.parentNode.removeChild(portal);
+          console.log('Removed empty portal element');
+        }
+      } catch (error) {
+        console.log('Error removing portal in resetModalState:', error);
+      }
+    });
+    
+    // Fix any focus trap elements
+    document.querySelectorAll('[data-radix-focus-guard]').forEach(element => {
+      try {
+        if (element.isConnected && element.parentNode) {
+          element.parentNode.removeChild(element);
+          console.log('Removed focus guard element');
+        }
+      } catch (error) {
+        console.log('Error removing focus guard in resetModalState:', error);
+      }
+    });
+    
+    // Fix aria-hidden elements
+    document.querySelectorAll('[aria-hidden="true"]').forEach(element => {
+      // Only reset elements that would be part of modal hiding system
+      if (element instanceof HTMLElement && 
+          element.dataset.radixDialog !== 'true' && 
+          element.dataset.radixSheet !== 'true') {
+        try {
+          element.removeAttribute('aria-hidden');
+          console.log('Reset aria-hidden attribute');
+        } catch (error) {
+          console.log('Error resetting aria-hidden:', error);
+        }
       }
     });
     
@@ -112,20 +163,23 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Restore scroll position
       window.scrollTo(0, scrollPosition.current);
-      bodyWasLocked.current = false;
       
-      // Force cleanup of any zombie overlays
+      // Cleanup any leftover elements with a delay to allow animations
       setTimeout(() => {
-        const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
-        if (overlays.length > 0 && !isModalOpen) {
-          overlays.forEach(overlay => {
-            if (overlay.parentNode) {
-              overlay.parentNode.removeChild(overlay);
-              console.log('Delayed cleanup of overlay element');
+        if (!isModalOpen) {
+          // Safe DOM cleanup
+          document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80').forEach(overlay => {
+            try {
+              if (overlay.isConnected && overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+                console.log('Delayed cleanup of overlay element');
+              }
+            } catch (error) {
+              console.log('Error in delayed overlay cleanup:', error);
             }
           });
         }
-      }, 300);
+      }, 350);
     }
   }, [isModalOpen]);
 
@@ -199,6 +253,45 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
       window.removeEventListener('popstate', cleanupAfterNavigation);
     };
   }, [isModalOpen, resetModalState]);
+  
+  // Emergency click handler to reset UI if it gets stuck
+  useEffect(() => {
+    let clickCount = 0;
+    let clickTimer: number | null = null;
+    
+    const handleEmergencyReset = (e: MouseEvent) => {
+      // Count rapid clicks (5 clicks within 2 seconds)
+      clickCount++;
+      
+      if (clickTimer === null) {
+        clickTimer = window.setTimeout(() => {
+          clickCount = 0;
+          clickTimer = null;
+        }, 2000);
+      }
+      
+      // If we detect 5+ rapid clicks and the UI seems stuck
+      if (clickCount >= 5 && (isModalOpen || document.body.style.position === 'fixed')) {
+        resetModalState();
+        console.log('Emergency reset triggered by multiple rapid clicks');
+        clickCount = 0;
+        if (clickTimer !== null) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    
+    document.addEventListener('click', handleEmergencyReset, true);
+    return () => {
+      document.removeEventListener('click', handleEmergencyReset, true);
+      if (clickTimer !== null) {
+        clearTimeout(clickTimer);
+      }
+    };
+  }, [resetModalState, isModalOpen]);
 
   // Create context value
   const value = {
