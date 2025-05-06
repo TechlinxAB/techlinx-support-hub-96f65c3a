@@ -31,46 +31,25 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Company management state
+  // All state declarations must be at the top level, not conditionally
+  const [isLoaded, setIsLoaded] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
   
-  // Move the navigation logic to useEffect
-  useEffect(() => {
-    if (isLoaded && currentUser) {
-      if (currentUser.role !== 'consultant' && currentUser.companyId) {
-        navigate('/company-dashboard');
-      }
-    }
-    
-    // Mark component as loaded after initial rendering
-    if (!isLoaded) {
-      setIsLoaded(true);
-    }
-  }, [currentUser, navigate, isLoaded]);
+  // All hooks must be defined before any conditional returns
   
-  // Early return with loading state instead of null
-  if (!isLoaded || !currentUser) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-  
-  // Fully separate dialog management from data operations
+  // Define all callback functions outside of any conditionals
   const resetDialogStates = useCallback(() => {
     setIsDialogOpen(false);
     setIsDeleteDialogOpen(false);
@@ -78,9 +57,61 @@ const CompaniesPage = () => {
     setCompanyName('');
     setCompanyLogo('');
   }, []);
+
+  const handleDialogClose = useCallback(() => {
+    // Only reset if not currently loading
+    if (!loading) {
+      resetDialogStates();
+    }
+  }, [loading, resetDialogStates]);
+
+  const handleCancelDelete = useCallback(() => {
+    if (!loading) {
+      setIsDeleteDialogOpen(false);
+      setCompanyToDelete(null);
+    }
+  }, [loading]);
+
+  const confirmDeleteCompany = useCallback((companyId: string) => {
+    setCompanyToDelete(companyId);
+    setIsDeleteDialogOpen(true);
+  }, []);
   
-  // Functions for managing companies
-  const handleAddCompany = async (e: React.FormEvent) => {
+  // Handle company deletion
+  const handleDeleteCompany = useCallback(() => {
+    if (!companyToDelete) return;
+    
+    // First close the modal UI completely to prevent UI freezing
+    setIsDeleteDialogOpen(false);
+    
+    setLoading(true);
+    
+    // Small timeout to ensure dialog is fully closed first
+    setTimeout(async () => {
+      try {
+        await deleteCompany(companyToDelete);
+        // Clear deletion state after operation completes
+        setCompanyToDelete(null);
+        
+        toast({
+          title: "Success",
+          description: "Company deleted successfully",
+        });
+      } catch (error: any) {
+        console.error('Error deleting company:', error.message);
+        toast({
+          title: "Error",
+          description: "Failed to delete company",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }, 100);
+  }, [companyToDelete, deleteCompany, toast]);
+  
+  // Handle adding company
+  const handleAddCompany = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim()) {
       toast({
@@ -105,8 +136,8 @@ const CompaniesPage = () => {
         title: "Success",
         description: "Company created successfully",
       });
-    } catch (error) {
-      console.error('Error creating company:', error);
+    } catch (error: any) {
+      console.error('Error creating company:', error.message);
       toast({
         title: "Error",
         description: "Failed to create company",
@@ -115,62 +146,32 @@ const CompaniesPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyName, companyLogo, addCompany, resetDialogStates, toast]);
 
-  // Completely separate deletion process from UI state management
-  const handleDeleteCompany = async () => {
-    if (!companyToDelete) return;
-    
-    // First close the modal UI completely to prevent any UI freezing
-    // This allows the UI to update before we start the async operation
-    setIsDeleteDialogOpen(false);
-    
-    setLoading(true);
-    
-    // Small timeout to ensure dialog is fully closed first
-    setTimeout(async () => {
-      try {
-        await deleteCompany(companyToDelete);
-        // Clear deletion state after operation completes
-        setCompanyToDelete(null);
-        
-        toast({
-          title: "Success",
-          description: "Company deleted successfully",
-        });
-      } catch (error) {
-        console.error('Error deleting company:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete company",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
+  // Navigation and initialization effects
+  useEffect(() => {
+    if (isLoaded && currentUser) {
+      if (currentUser.role !== 'consultant' && currentUser.companyId) {
+        navigate('/company-dashboard');
       }
-    }, 100);
-  };
-  
-  const confirmDeleteCompany = (companyId: string) => {
-    setCompanyToDelete(companyId);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const handleDialogClose = () => {
-    // Only reset if not currently loading
-    if (!loading) {
-      resetDialogStates();
     }
-  };
-
-  const handleCancelDelete = () => {
-    if (!loading) {
-      setIsDeleteDialogOpen(false);
-      setCompanyToDelete(null);
+    
+    // Mark component as loaded after initial rendering
+    if (!isLoaded) {
+      setIsLoaded(true);
     }
-  };
+  }, [currentUser, navigate, isLoaded]);
   
-  // Only show companies if the user is authorized to view them
+  // Early return with loading state
+  if (!isLoaded || !currentUser) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+  
+  // Access check - this is fine after all hooks are used
   if (currentUser.role !== 'consultant' && !currentUser.companyId) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -299,7 +300,7 @@ const CompaniesPage = () => {
         open={isDialogOpen} 
         onOpenChange={handleDialogClose}
       >
-        <DialogContent onEscapeKeyDown={handleDialogClose} onPointerDownOutside={handleDialogClose}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Company</DialogTitle>
             <DialogDescription>
@@ -342,7 +343,7 @@ const CompaniesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Company Confirmation - with improved focus management */}
+      {/* Delete Company Confirmation Dialog */}
       <AlertDialog 
         open={isDeleteDialogOpen} 
         onOpenChange={(open) => {
@@ -352,7 +353,7 @@ const CompaniesPage = () => {
           }
         }}
       >
-        <AlertDialogContent onEscapeKeyDown={handleCancelDelete}>
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -362,7 +363,7 @@ const CompaniesPage = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel 
-              onClick={handleCancelDelete} 
+              onClick={handleCancelDelete}
               disabled={loading}
             >
               Cancel
