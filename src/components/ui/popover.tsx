@@ -5,7 +5,33 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { cn } from "@/lib/utils"
 import { useModal } from "@/components/ui/modal-provider"
 
-const Popover = PopoverPrimitive.Root
+const Popover = ({ 
+  open, 
+  onOpenChange,
+  ...props 
+}: React.ComponentProps<typeof PopoverPrimitive.Root>) => {
+  const { setIsModalOpen } = useModal();
+  
+  // Update modal state when popover opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setIsModalOpen(true);
+    } else {
+      // Important: Update when closing with a delay for animation
+      setTimeout(() => {
+        setIsModalOpen(false);
+      }, 300);
+    }
+  }, [open, setIsModalOpen]);
+  
+  return (
+    <PopoverPrimitive.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  );
+}
 
 const PopoverTrigger = PopoverPrimitive.Trigger
 
@@ -13,18 +39,7 @@ const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
-  const { setIsModalOpen, resetModalState } = useModal();
-  
-  // Set modal state when content mounts/unmounts
-  React.useEffect(() => {
-    setIsModalOpen(true);
-    return () => {
-      // Small delay to ensure animations complete
-      setTimeout(() => {
-        setIsModalOpen(false);
-      }, 100);
-    };
-  }, [setIsModalOpen]);
+  const { resetModalState } = useModal();
 
   return (
     <PopoverPrimitive.Portal>
@@ -50,7 +65,7 @@ const PopoverContent = React.forwardRef<
         }}
         onCloseAutoFocus={(event) => {
           // Reset modal state when popover closes
-          setTimeout(resetModalState, 100);
+          resetModalState();
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);

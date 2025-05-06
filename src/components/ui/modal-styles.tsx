@@ -1,5 +1,5 @@
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useModal } from './modal-provider';
 
 export const ModalStyles = () => {
@@ -22,10 +22,18 @@ export const ModalStyles = () => {
           console.log('UI automatically recovered by global safety system');
         }
       }
+      
+      // Check for zombie overlay elements
+      const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+      if (overlays.length > 0 && !isModalOpen) {
+        // Found overlay elements but no active modal - force cleanup
+        resetModalState();
+        console.log('Zombie overlay elements cleaned up');
+      }
     };
     
     // Run recovery checks on a timer
-    const recoveryInterval = setInterval(recoverUI, 2000);
+    const recoveryInterval = setInterval(recoverUI, 1000);
     
     // Also run recovery on user interactions
     const handleUserInteraction = () => {
@@ -40,7 +48,30 @@ export const ModalStyles = () => {
       document.removeEventListener('click', handleUserInteraction, true);
       document.removeEventListener('keydown', handleUserInteraction, true);
     };
-  }, [resetModalState]);
+  }, [resetModalState, isModalOpen]);
+  
+  // Regular check for zombie overlay elements
+  useEffect(() => {
+    const cleanupZombieOverlays = () => {
+      // If no dialogs are open, remove any stray overlay elements
+      if (!isModalOpen) {
+        const overlays = document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80');
+        if (overlays.length > 0) {
+          overlays.forEach(overlay => {
+            if (overlay.parentNode) {
+              overlay.parentNode.removeChild(overlay);
+              console.log('Removed zombie overlay element');
+            }
+          });
+        }
+      }
+    };
+    
+    // Check for overlays periodically
+    const cleanupInterval = setInterval(cleanupZombieOverlays, 2000);
+    
+    return () => clearInterval(cleanupInterval);
+  }, [isModalOpen]);
 
   return null;
 };

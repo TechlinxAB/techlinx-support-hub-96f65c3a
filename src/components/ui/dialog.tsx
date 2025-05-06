@@ -6,13 +6,50 @@ import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useModal } from "./modal-provider"
 
-const Dialog = DialogPrimitive.Root
+const Dialog = ({ 
+  open, 
+  onOpenChange,
+  ...props 
+}: React.ComponentProps<typeof DialogPrimitive.Root>) => {
+  const { setIsModalOpen } = useModal();
+  
+  // Update modal state when dialog opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setIsModalOpen(true);
+    } else {
+      // Important: Update when closing with a delay for animation
+      setTimeout(() => {
+        setIsModalOpen(false);
+      }, 300);
+    }
+  }, [open, setIsModalOpen]);
+  
+  return (
+    <DialogPrimitive.Root 
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props} 
+    />
+  );
+}
 
 const DialogTrigger = DialogPrimitive.Trigger
 
 const DialogPortal = DialogPrimitive.Portal
 
-const DialogClose = DialogPrimitive.Close
+const DialogClose = ({ onClick, ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) => {
+  const { resetModalState } = useModal();
+  
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    resetModalState();
+    if (onClick) {
+      onClick(e);
+    }
+  }, [onClick, resetModalState]);
+  
+  return <DialogPrimitive.Close onClick={handleClick} {...props} />;
+};
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -33,18 +70,7 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  const { setIsModalOpen, resetModalState } = useModal();
-  
-  // Set modal state when content mounts/unmounts
-  React.useEffect(() => {
-    setIsModalOpen(true);
-    return () => {
-      // Small delay to ensure animations complete
-      setTimeout(() => {
-        setIsModalOpen(false);
-      }, 100);
-    };
-  }, [setIsModalOpen]);
+  const { resetModalState } = useModal();
   
   return (
     <DialogPortal>
@@ -80,7 +106,7 @@ const DialogContent = React.forwardRef<
           }
           
           // Ensure UI is reset when dialog closes
-          setTimeout(resetModalState, 100);
+          resetModalState();
         }}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",

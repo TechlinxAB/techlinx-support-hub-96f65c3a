@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
@@ -6,7 +5,33 @@ import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import { useModal } from "@/components/ui/modal-provider"
 
-const AlertDialog = AlertDialogPrimitive.Root
+const AlertDialog = ({ 
+  open, 
+  onOpenChange,
+  ...props 
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) => {
+  const { setIsModalOpen } = useModal();
+  
+  // Update modal state when alert dialog opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setIsModalOpen(true);
+    } else {
+      // Important: Update when closing with a delay for animation
+      setTimeout(() => {
+        setIsModalOpen(false);
+      }, 300);
+    }
+  }, [open, setIsModalOpen]);
+  
+  return (
+    <AlertDialogPrimitive.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  );
+}
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger
 
@@ -17,12 +42,12 @@ const AlertDialogOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
+    ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
-    ref={ref}
   />
 ))
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
@@ -31,18 +56,7 @@ const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => {
-  const { setIsModalOpen, resetModalState } = useModal();
-  
-  // Set modal state when content mounts/unmounts
-  React.useEffect(() => {
-    setIsModalOpen(true);
-    return () => {
-      // Small delay to ensure animations complete
-      setTimeout(() => {
-        setIsModalOpen(false);
-      }, 100);
-    };
-  }, [setIsModalOpen]);
+  const { resetModalState } = useModal();
 
   return (
     <AlertDialogPortal>
@@ -59,7 +73,7 @@ const AlertDialogContent = React.forwardRef<
         }}
         onCloseAutoFocus={(event) => {
           // Reset modal state when closed
-          setTimeout(resetModalState, 100);
+          resetModalState();
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
@@ -132,22 +146,21 @@ AlertDialogDescription.displayName =
 const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, ...props }, ref) => {
+>(({ className, onClick, ...props }, ref) => {
   const { resetModalState } = useModal();
+  
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    resetModalState();
+    if (onClick) {
+      onClick(e);
+    }
+  }, [onClick, resetModalState]);
   
   return (
     <AlertDialogPrimitive.Action
       ref={ref}
       className={cn(buttonVariants(), className)}
-      onClick={(e) => {
-        // Reset modal state on action
-        setTimeout(resetModalState, 100);
-        
-        // Call the original onClick if it exists
-        if (props.onClick) {
-          props.onClick(e);
-        }
-      }}
+      onClick={handleClick}
       {...props}
     />
   );
@@ -157,8 +170,15 @@ AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName
 const AlertDialogCancel = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
->(({ className, ...props }, ref) => {
+>(({ className, onClick, ...props }, ref) => {
   const { resetModalState } = useModal();
+  
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    resetModalState();
+    if (onClick) {
+      onClick(e);
+    }
+  }, [onClick, resetModalState]);
   
   return (
     <AlertDialogPrimitive.Cancel
@@ -168,15 +188,7 @@ const AlertDialogCancel = React.forwardRef<
         "mt-2 sm:mt-0",
         className
       )}
-      onClick={(e) => {
-        // Reset modal state on cancel
-        setTimeout(resetModalState, 100);
-        
-        // Call the original onClick if it exists
-        if (props.onClick) {
-          props.onClick(e);
-        }
-      }}
+      onClick={handleClick}
       {...props}
     />
   );

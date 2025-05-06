@@ -7,11 +7,48 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { useModal } from "@/components/ui/modal-provider"
 
-const Sheet = SheetPrimitive.Root
+const Sheet = ({ 
+  open, 
+  onOpenChange,
+  ...props 
+}: React.ComponentProps<typeof SheetPrimitive.Root>) => {
+  const { setIsModalOpen } = useModal();
+  
+  // Update modal state when sheet opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setIsModalOpen(true);
+    } else {
+      // Important: Update when closing with a delay for animation
+      setTimeout(() => {
+        setIsModalOpen(false);
+      }, 300);
+    }
+  }, [open, setIsModalOpen]);
+  
+  return (
+    <SheetPrimitive.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  );
+}
 
 const SheetTrigger = SheetPrimitive.Trigger
 
-const SheetClose = SheetPrimitive.Close
+const SheetClose = ({ onClick, ...props }: React.ComponentProps<typeof SheetPrimitive.Close>) => {
+  const { resetModalState } = useModal();
+  
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    resetModalState();
+    if (onClick) {
+      onClick(e);
+    }
+  }, [onClick, resetModalState]);
+  
+  return <SheetPrimitive.Close onClick={handleClick} {...props} />;
+};
 
 const SheetPortal = SheetPrimitive.Portal
 
@@ -57,19 +94,8 @@ const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
 >(({ side = "right", className, children, ...props }, ref) => {
-  const { setIsModalOpen, resetModalState } = useModal();
-  
-  // Set modal state when content mounts/unmounts
-  React.useEffect(() => {
-    setIsModalOpen(true);
-    return () => {
-      // Small delay to ensure animations complete
-      setTimeout(() => {
-        setIsModalOpen(false);
-      }, 100);
-    };
-  }, [setIsModalOpen]);
-  
+  const { resetModalState } = useModal();
+
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -94,7 +120,7 @@ const SheetContent = React.forwardRef<
         }}
         onCloseAutoFocus={(event) => {
           // Reset modal state when sheet is closed
-          setTimeout(resetModalState, 100);
+          resetModalState();
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);

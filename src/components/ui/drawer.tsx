@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 import { useModal } from "@/components/ui/modal-provider"
@@ -15,13 +14,12 @@ const Drawer = ({
   React.useEffect(() => {
     if (props.open) {
       setIsModalOpen(true);
-    }
-    
-    return () => {
-      if (props.open) {
+    } else {
+      // Important: Also update when closing
+      setTimeout(() => {
         setIsModalOpen(false);
-      }
-    };
+      }, 300); // Wait for animation to complete
+    }
   }, [props.open, setIsModalOpen]);
   
   return (
@@ -67,16 +65,6 @@ const DrawerContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
   const { resetModalState } = useModal();
-  
-  // Instead of trying to access the DOM element directly via ref
-  // we'll use the onOpenChange callback from the Drawer component
-  // This is cleaner and avoids ref-related TypeScript errors
-  React.useEffect(() => {
-    return () => {
-      // Reset modal state on unmount with a small delay
-      setTimeout(resetModalState, 100);
-    };
-  }, [resetModalState]);
 
   return (
     <DrawerPortal>
@@ -108,8 +96,8 @@ const DrawerContent = React.forwardRef<
           }
         }}
         onCloseAutoFocus={(event) => {
-          // Reset modal state with delay
-          setTimeout(resetModalState, 100);
+          // Ensure modal state is properly reset
+          resetModalState();
           
           // Let the existing handler run
           if (props.onCloseAutoFocus) {

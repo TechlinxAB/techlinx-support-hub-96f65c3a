@@ -29,6 +29,11 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollPosition = useRef(0);
   const bodyWasLocked = useRef(false);
+  
+  // Track modal open/close for debugging
+  useEffect(() => {
+    console.log(`Modal state: ${isModalOpen ? 'open' : 'closed'}`);
+  }, [isModalOpen]);
 
   // Simple function to reset all modal state
   const resetModalState = useCallback(() => {
@@ -93,11 +98,25 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     if (isLoading) {
       const safetyTimeout = setTimeout(() => {
         setIsLoading(false);
+        console.log('Loading state auto-reset after timeout');
       }, 10000); // 10 second timeout
       
       return () => clearTimeout(safetyTimeout);
     }
   }, [isLoading]);
+  
+  // Safety cleanup for when component unmounts
+  useEffect(() => {
+    return () => {
+      // Reset body styles on unmount
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      document.body.removeAttribute('data-modal-open');
+      document.body.removeAttribute('data-loading');
+    };
+  }, []);
 
   // Double ESC key press for emergency reset
   useEffect(() => {
@@ -108,6 +127,7 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
         const now = Date.now();
         if (now - lastEscTime < 500) { // Double-press within 500ms
           resetModalState();
+          console.log('Emergency modal reset triggered by double ESC');
         }
         lastEscTime = now;
       }
@@ -116,6 +136,24 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [resetModalState]);
+  
+  // Forced cleanup after navigation events (hash changes, etc.)
+  useEffect(() => {
+    const cleanupAfterNavigation = () => {
+      if (isModalOpen) {
+        resetModalState();
+        console.log('Modal state reset after navigation');
+      }
+    };
+    
+    window.addEventListener('hashchange', cleanupAfterNavigation);
+    window.addEventListener('popstate', cleanupAfterNavigation);
+    
+    return () => {
+      window.removeEventListener('hashchange', cleanupAfterNavigation);
+      window.removeEventListener('popstate', cleanupAfterNavigation);
+    };
+  }, [isModalOpen, resetModalState]);
 
   // Create context value
   const value = {
