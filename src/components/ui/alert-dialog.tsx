@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
@@ -16,6 +15,13 @@ export const AlertDialogContext = React.createContext<{
 
 const AlertDialog = ({ children, ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) => {
   const [isOpen, setIsOpen] = React.useState(props.open || false);
+  
+  // Handle external open change (from props)
+  React.useEffect(() => {
+    if (props.open !== undefined) {
+      setIsOpen(props.open);
+    }
+  }, [props.open]);
   
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -42,30 +48,7 @@ const AlertDialogTrigger = React.forwardRef<
 AlertDialogTrigger.displayName = AlertDialogPrimitive.Trigger.displayName;
 
 const AlertDialogPortal = ({ ...props }: AlertDialogPrimitive.AlertDialogPortalProps) => {
-  const { isOpen } = React.useContext(AlertDialogContext);
-  
-  // Clean up portal element when dialog closes
-  React.useEffect(() => {
-    return () => {
-      // Safety cleanup for portal elements
-      const portals = document.querySelectorAll('[data-radix-portal]');
-      portals.forEach(portal => {
-        if (portal.childElementCount === 0) {
-          try {
-            if (portal.parentNode) {
-              portal.parentNode.removeChild(portal);
-            }
-          } catch (e) {
-            console.error("Failed to clean up alert dialog portal:", e);
-          }
-        }
-      });
-    };
-  }, []);
-  
-  // Only render when dialog is open
-  if (!isOpen) return null;
-
+  // Important: Remove conditional rendering to ensure portal always renders
   return <AlertDialogPrimitive.Portal {...props} />;
 };
 AlertDialogPortal.displayName = AlertDialogPrimitive.Portal.displayName;
@@ -92,69 +75,37 @@ const AlertDialogContent = React.forwardRef<
   const { setIsOpen } = React.useContext(AlertDialogContext);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   
-  // Handle safe unmounting
-  React.useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        
-        // Delay the state update to allow animations to complete
-        setTimeout(() => {
-          setIsOpen(false);
-        }, 100);
+  // Use a combined ref to track both the forwarded ref and our internal ref
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      // Set internal ref
+      contentRef.current = node;
+      
+      // Forward ref
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
       }
-    };
-
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [setIsOpen]);
-  
-  // Handle safe content cleanup
-  React.useEffect(() => {
-    return () => {
-      if (contentRef.current) {
-        // Ensure we're cleaning up React-managed DOM correctly
-        contentRef.current.classList.add("dialog-removing");
-        
-        // Allow animations to finish before actual DOM removal
-        setTimeout(() => {
-          const dialogContainers = document.querySelectorAll('[role="alertdialog"]');
-          dialogContainers.forEach(container => {
-            if (container.classList.contains("dialog-removing")) {
-              try {
-                if (container.parentNode) {
-                  container.parentNode.removeChild(container);
-                }
-              } catch (e) {
-                console.error("Failed to clean up alert dialog content:", e);
-              }
-            }
-          });
-        }, 300); // Match animation duration
+      
+      // Debug logging
+      if (node) {
+        console.log("AlertDialog content mounted:", node);
       }
-    };
-  }, []);
-
-  const handleContentRef = (node: HTMLDivElement | null) => {
-    // Merge refs
-    if (typeof ref === 'function') ref(node);
-    else if (ref) ref.current = node;
-    contentRef.current = node;
-  };
+    },
+    [ref]
+  );
 
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Content
-        ref={handleContentRef}
+        ref={setRefs}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           className
         )}
         onEscapeKeyDown={(e) => {
-          // Safe close on escape
           e.preventDefault();
           setTimeout(() => {
             setIsOpen(false);

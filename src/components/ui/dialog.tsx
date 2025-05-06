@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
@@ -16,6 +15,13 @@ export const DialogContext = React.createContext<{
 
 const Dialog = ({ children, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) => {
   const [isOpen, setIsOpen] = React.useState(props.open || false);
+  
+  // Handle external open change (from props)
+  React.useEffect(() => {
+    if (props.open !== undefined) {
+      setIsOpen(props.open);
+    }
+  }, [props.open]);
   
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -42,30 +48,7 @@ const DialogTrigger = React.forwardRef<
 DialogTrigger.displayName = DialogPrimitive.Trigger.displayName;
 
 const DialogPortal = ({ ...props }: DialogPrimitive.DialogPortalProps) => {
-  const { isOpen } = React.useContext(DialogContext);
-  
-  // Clean up the portal element when dialog closes
-  React.useEffect(() => {
-    return () => {
-      // Safety cleanup for portal elements
-      const portals = document.querySelectorAll('[data-radix-portal]');
-      portals.forEach(portal => {
-        if (portal.childElementCount === 0) {
-          try {
-            if (portal.parentNode) {
-              portal.parentNode.removeChild(portal);
-            }
-          } catch (e) {
-            console.error("Failed to clean up dialog portal:", e);
-          }
-        }
-      });
-    };
-  }, []);
-  
-  // Only render when dialog is open
-  if (!isOpen) return null;
-
+  // Important: Remove conditional rendering to ensure portal always renders
   return <DialogPrimitive.Portal {...props} />;
 };
 DialogPortal.displayName = DialogPrimitive.Portal.displayName;
@@ -94,103 +77,75 @@ const DialogContent = React.forwardRef<
   const { setIsOpen } = React.useContext(DialogContext);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   
-  // Handle safe unmounting
+  // Use a combined ref to track both the forwarded ref and our internal ref
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      // Set internal ref
+      contentRef.current = node;
+      
+      // Forward ref
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+      
+      // Debug logging
+      if (node) {
+        console.log("Dialog content mounted:", node);
+      }
+    },
+    [ref]
+  );
+
+  // Handle keyboard events for ESC key safety
   React.useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        
-        // Delay the state update to allow animations to complete
-        setTimeout(() => {
-          setIsOpen(false);
-        }, 100);
+        e.stopPropagation();
+        // Safely close the dialog
+        setTimeout(() => setIsOpen(false), 0);
       }
     };
 
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [setIsOpen]);
-  
-  // Handle safe content cleanup
-  React.useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.addEventListener("keydown", handleKeyDown);
+    }
+    
     return () => {
       if (contentRef.current) {
-        // Ensure we're cleaning up React-managed DOM correctly
-        contentRef.current.classList.add("dialog-removing");
-        
-        // Allow animations to finish before actual DOM removal
-        setTimeout(() => {
-          const dialogContainers = document.querySelectorAll('[role="dialog"]');
-          dialogContainers.forEach(container => {
-            if (container.classList.contains("dialog-removing")) {
-              try {
-                if (container.parentNode) {
-                  container.parentNode.removeChild(container);
-                }
-              } catch (e) {
-                console.error("Failed to clean up dialog content:", e);
-              }
-            }
-          });
-        }, 300); // Match animation duration
+        contentRef.current.removeEventListener("keydown", handleKeyDown);
       }
     };
-  }, []);
-
-  // Merge the forwarded ref with our internal ref
-  const handleContentRef = React.useCallback((node: HTMLDivElement | null) => {
-    // Pass the node to the forwarded ref
-    if (typeof ref === 'function') {
-      ref(node);
-    } else if (ref) {
-      ref.current = node;
-    }
-    
-    // Store in our internal ref
-    contentRef.current = node;
-    
-    // If the node exists, find its parent portal
-    if (node) {
-      const portal = node.closest('[data-radix-portal]');
-      console.log("Dialog portal found:", portal);
-    }
-  }, [ref]);
+  }, [setIsOpen]);
 
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={handleContentRef}
+        ref={setRefs}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           className
         )}
         onPointerDownOutside={(e) => {
-          // Safe close on outside click
           e.preventDefault();
-          setTimeout(() => {
-            setIsOpen(false);
-          }, 50);
+          setTimeout(() => setIsOpen(false), 50);
         }}
         onEscapeKeyDown={(e) => {
-          // Safe close on escape
           e.preventDefault();
-          setTimeout(() => {
-            setIsOpen(false);
-          }, 50);
+          setTimeout(() => setIsOpen(false), 50);
         }}
         {...props}
       >
         {children}
         <DialogPrimitive.Close 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-          onClick={() => {
-            // Ensure state is properly updated when close button is clicked
-            setTimeout(() => {
-              setIsOpen(false);
-            }, 50);
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setTimeout(() => setIsOpen(false), 50);
           }}
         >
           <X className="h-4 w-4" />

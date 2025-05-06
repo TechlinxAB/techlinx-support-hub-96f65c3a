@@ -12,19 +12,34 @@ const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
-  // Track mount status to prevent unmounting issues
-  const [isMounted, setIsMounted] = React.useState(false);
+  // Use a single ref to track the content element
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   
-  React.useEffect(() => {
-    setIsMounted(true);
-    return () => setIsMounted(false);
-  }, []);
+  // Use a combined ref to track both the forwarded ref and our internal ref
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      // Set internal ref
+      contentRef.current = node;
+      
+      // Forward ref
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+      
+      // Debug logging
+      if (node) {
+        console.log("Popover content mounted:", node);
+      }
+    },
+    [ref]
+  );
 
-  // Handle safe cleanup on unmount
+  // Add effect to handle popover cleanup
   React.useEffect(() => {
     return () => {
-      // Clean up any orphaned portal elements
+      // Clean up any orphaned portal elements on unmount
       const portals = document.querySelectorAll('[data-radix-portal]');
       portals.forEach(portal => {
         if (portal.childElementCount === 0) {
@@ -40,31 +55,10 @@ const PopoverContent = React.forwardRef<
     };
   }, []);
 
-  // Merge the forwarded ref with our internal ref
-  const handleContentRef = React.useCallback((node: HTMLDivElement | null) => {
-    // Pass the node to the forwarded ref
-    if (typeof ref === 'function') {
-      ref(node);
-    } else if (ref) {
-      ref.current = node;
-    }
-    
-    // Store in our internal ref
-    contentRef.current = node;
-    
-    // If the node exists, find its parent portal
-    if (node) {
-      const portal = node.closest('[data-radix-portal]');
-      console.log("Popover portal found:", portal);
-    }
-  }, [ref]);
-
-  if (!isMounted) return null;
-
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
-        ref={handleContentRef}
+        ref={setRefs}
         align={align}
         sideOffset={sideOffset}
         className={cn(
@@ -76,11 +70,7 @@ const PopoverContent = React.forwardRef<
           e.stopPropagation();
         }}
         onPointerDownOutside={(e) => {
-          // Prevent clicking outside from causing issues
-          e.preventDefault();
-        }}
-        onOpenAutoFocus={(e) => {
-          // Allow focus but prevent scrolling issues
+          // Prevent rapid closing that could cause issues
           e.preventDefault();
         }}
         {...props}
