@@ -7,7 +7,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 5000 // Changed from 1000000 to 5000ms (5 seconds)
+const TOAST_REMOVE_DELAY = 5000 // 5 seconds toast duration
 
 type ToasterToast = ToastProps & {
   id: string
@@ -54,13 +54,17 @@ interface State {
   toasts: ToasterToast[]
 }
 
+// Clear existing timeouts when creating a new one for the same toast
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 const addToRemoveQueue = (toastId: string) => {
+  // Clear any existing timeout for this toast
   if (toastTimeouts.has(toastId)) {
-    return
+    clearTimeout(toastTimeouts.get(toastId));
+    toastTimeouts.delete(toastId);
   }
 
+  // Create a new timeout
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId)
     dispatch({
@@ -91,8 +95,7 @@ export const reducer = (state: State, action: Action): State => {
     case "DISMISS_TOAST": {
       const { toastId } = action
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
+      // Side effects - Add to remove queue
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {
@@ -127,6 +130,14 @@ export const reducer = (state: State, action: Action): State => {
   }
 }
 
+// Clean up any pending timeouts when window unloads
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    toastTimeouts.forEach(timeout => clearTimeout(timeout));
+    toastTimeouts.clear();
+  });
+}
+
 const listeners: Array<(state: State) => void> = []
 
 let memoryState: State = { toasts: [] }
@@ -148,6 +159,7 @@ function toast({ ...props }: Toast) {
       type: "UPDATE_TOAST",
       toast: { ...props, id },
     })
+    
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
   dispatch({

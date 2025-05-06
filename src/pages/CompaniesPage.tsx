@@ -47,28 +47,50 @@ const CompaniesPage = () => {
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   
-  // All hooks must be defined before any conditional returns
+  // Reset form state when dialog closes
+  useEffect(() => {
+    if (!isDialogOpen) {
+      // Use a timeout to ensure state resets after animations complete
+      const timer = setTimeout(() => {
+        setCompanyName('');
+        setCompanyLogo('');
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isDialogOpen]);
+
+  // Reset delete state when delete dialog closes
+  useEffect(() => {
+    if (!isDeleteDialogOpen) {
+      // Use a timeout to ensure state resets after animations complete
+      const timer = setTimeout(() => {
+        setCompanyToDelete(null);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isDeleteDialogOpen]);
   
   // Define all callback functions outside of any conditionals
   const resetDialogStates = useCallback(() => {
-    setIsDialogOpen(false);
-    setIsDeleteDialogOpen(false);
-    setCompanyToDelete(null);
-    setCompanyName('');
-    setCompanyLogo('');
-  }, []);
-
-  const handleDialogClose = useCallback(() => {
-    // Only reset if not currently loading
     if (!loading) {
-      resetDialogStates();
-    }
-  }, [loading, resetDialogStates]);
-
-  const handleCancelDelete = useCallback(() => {
-    if (!loading) {
+      setIsDialogOpen(false);
       setIsDeleteDialogOpen(false);
-      setCompanyToDelete(null);
+    }
+  }, [loading]);
+
+  const handleDialogClose = useCallback((open: boolean) => {
+    // Only allow closing if not currently loading
+    if (!loading || !open) {
+      setIsDialogOpen(open);
+    }
+  }, [loading]);
+
+  const handleDeleteDialogClose = useCallback((open: boolean) => {
+    // Only allow closing if not currently loading
+    if (!loading || !open) {
+      setIsDeleteDialogOpen(open);
     }
   }, [loading]);
 
@@ -78,41 +100,44 @@ const CompaniesPage = () => {
   }, []);
   
   // Handle company deletion
-  const handleDeleteCompany = useCallback(() => {
+  const handleDeleteCompany = useCallback(async () => {
     if (!companyToDelete) return;
     
-    // First close the modal UI completely to prevent UI freezing
-    setIsDeleteDialogOpen(false);
-    
     setLoading(true);
-    
-    // Small timeout to ensure dialog is fully closed first
-    setTimeout(async () => {
-      try {
-        await deleteCompany(companyToDelete);
-        // Clear deletion state after operation completes
-        setCompanyToDelete(null);
-        
+    try {
+      // First close the dialog completely
+      setIsDeleteDialogOpen(false);
+      
+      // Store the ID before clearing it
+      const deletedId = companyToDelete;
+      setCompanyToDelete(null);
+      
+      // Then delete the company
+      await deleteCompany(deletedId);
+      
+      // Show toast after a slight delay to ensure UI updates first
+      setTimeout(() => {
         toast({
           title: "Success",
           description: "Company deleted successfully",
         });
-      } catch (error: any) {
-        console.error('Error deleting company:', error.message);
-        toast({
-          title: "Error",
-          description: "Failed to delete company",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    }, 100);
+      }, 300);
+    } catch (error: any) {
+      console.error('Error deleting company:', error.message);
+      toast({
+        title: "Error",
+        description: "Failed to delete company",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   }, [companyToDelete, deleteCompany, toast]);
   
   // Handle adding company
   const handleAddCompany = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!companyName.trim()) {
       toast({
         title: "Error",
@@ -130,12 +155,18 @@ const CompaniesPage = () => {
       });
       
       // Close dialog AFTER successful operation
-      resetDialogStates();
+      setIsDialogOpen(false);
       
-      toast({
-        title: "Success",
-        description: "Company created successfully",
-      });
+      // Reset form with a delay to ensure dialog closes first
+      setTimeout(() => {
+        setCompanyName('');
+        setCompanyLogo('');
+        
+        toast({
+          title: "Success",
+          description: "Company created successfully",
+        });
+      }, 300);
     } catch (error: any) {
       console.error('Error creating company:', error.message);
       toast({
@@ -146,7 +177,7 @@ const CompaniesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [companyName, companyLogo, addCompany, resetDialogStates, toast]);
+  }, [companyName, companyLogo, addCompany, toast]);
 
   // Navigation and initialization effects
   useEffect(() => {
@@ -260,6 +291,7 @@ const CompaniesPage = () => {
                       size="sm"
                       className="flex gap-1 items-center justify-center"
                       onClick={() => navigate(`/companies/${company.id}`)}
+                      disabled={loading}
                     >
                       <FileText className="h-4 w-4" />
                       Documentation
@@ -270,6 +302,7 @@ const CompaniesPage = () => {
                       size="sm"
                       className="flex gap-1 items-center justify-center"
                       onClick={() => navigate(`/company-dashboard-builder/${company.id}`)}
+                      disabled={loading}
                     >
                       <LayoutDashboard className="h-4 w-4" />
                       Dashboard
@@ -283,6 +316,7 @@ const CompaniesPage = () => {
                         navigate('/cases');
                         // Here we would implement filtering by company
                       }}
+                      disabled={loading}
                     >
                       <MessageCircle className="h-4 w-4" />
                       Cases
@@ -330,11 +364,16 @@ const CompaniesPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={loading}>
-                  Cancel
-                </Button>
-              </DialogClose>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  if (!loading) setIsDialogOpen(false);
+                }}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
               <Button type="submit" disabled={loading}>
                 {loading ? 'Creating...' : 'Create Company'}
               </Button>
@@ -346,12 +385,7 @@ const CompaniesPage = () => {
       {/* Delete Company Confirmation Dialog */}
       <AlertDialog 
         open={isDeleteDialogOpen} 
-        onOpenChange={(open) => {
-          if (!loading && !open) {
-            setIsDeleteDialogOpen(false);
-            setCompanyToDelete(null);
-          }
-        }}
+        onOpenChange={handleDeleteDialogClose}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -362,12 +396,7 @@ const CompaniesPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel 
-              onClick={handleCancelDelete}
-              disabled={loading}
-            >
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteCompany}
               disabled={loading}

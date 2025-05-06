@@ -55,14 +55,26 @@ const CompanyManagementPage = () => {
   // Reset form state when dialog closes
   useEffect(() => {
     if (!isDialogOpen) {
-      setSelectedCompany(null);
+      // Use a timeout to ensure state resets after animations complete
+      const timer = setTimeout(() => {
+        setSelectedCompany(null);
+        setName('');
+        setLogo('');
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
   }, [isDialogOpen]);
 
   // Reset delete state when delete dialog closes
   useEffect(() => {
     if (!isDeleteDialogOpen) {
-      setCompanyToDelete(null);
+      // Use a timeout to ensure state resets after animations complete
+      const timer = setTimeout(() => {
+        setCompanyToDelete(null);
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
   }, [isDeleteDialogOpen]);
   
@@ -110,14 +122,21 @@ const CompanyManagementPage = () => {
       
       await deleteCompany(companyToDelete);
       
-      toast({
-        title: "Company Deleted",
-        description: "The company has been successfully removed",
-      });
-      
-      // Clear company being deleted
+      // First set the company to delete to null before showing toast
+      const deletedCompanyId = companyToDelete;
       setCompanyToDelete(null);
+      
+      // Show toast after UI state is updated
+      setTimeout(() => {
+        toast({
+          title: "Company Deleted",
+          description: "The company has been successfully removed",
+        });
+      }, 300);
     } catch (error: any) {
+      // Make sure we clean up state even on error
+      setCompanyToDelete(null);
+      
       toast({
         title: "Error",
         description: error.message || "Failed to delete company",
@@ -140,24 +159,33 @@ const CompanyManagementPage = () => {
           logo: logo || undefined
         });
         
-        toast({
-          title: "Company Created",
-          description: "New company has been successfully created",
-        });
+        // Close the dialog before showing toast
+        setIsDialogOpen(false);
+        
+        // Add a small delay before showing toast to ensure dialog is closed
+        setTimeout(() => {
+          toast({
+            title: "Company Created",
+            description: "New company has been successfully created",
+          });
+        }, 300);
       } else if (dialogMode === 'edit' && selectedCompany) {
         await updateCompany(selectedCompany, {
           name,
           logo: logo || undefined
         });
         
-        toast({
-          title: "Company Updated",
-          description: "Company information has been successfully updated",
-        });
+        // Close the dialog before showing toast
+        setIsDialogOpen(false);
+        
+        // Add a small delay before showing toast to ensure dialog is closed
+        setTimeout(() => {
+          toast({
+            title: "Company Updated",
+            description: "Company information has been successfully updated",
+          });
+        }, 300);
       }
-      
-      // Close dialog before showing toast
-      setIsDialogOpen(false);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -165,6 +193,8 @@ const CompanyManagementPage = () => {
         variant: "destructive",
       });
       console.error('Error submitting form:', error);
+      
+      // Don't close dialog on error so user can try again
     } finally {
       setLoading(false);
     }
@@ -174,7 +204,7 @@ const CompanyManagementPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Company Management</h1>
-        <Button onClick={() => handleOpenDialog('create')}>
+        <Button onClick={() => handleOpenDialog('create')} disabled={loading}>
           <Plus className="h-4 w-4 mr-2" />
           Add New Company
         </Button>
@@ -198,7 +228,7 @@ const CompanyManagementPage = () => {
               <div className="flex justify-end mt-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" disabled={loading}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -224,7 +254,15 @@ const CompanyManagementPage = () => {
         ))}
       </div>
       
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog 
+        open={isDialogOpen} 
+        onOpenChange={(open) => {
+          // Only allow closing if not currently loading
+          if (!loading || !open) {
+            setIsDialogOpen(open);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{dialogMode === 'create' ? 'Add New Company' : 'Edit Company'}</DialogTitle>
@@ -257,7 +295,14 @@ const CompanyManagementPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  if (!loading) setIsDialogOpen(false);
+                }}
+                disabled={loading}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>
@@ -269,7 +314,15 @@ const CompanyManagementPage = () => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog 
+        open={isDeleteDialogOpen} 
+        onOpenChange={(open) => {
+          // Only allow closing if not currently loading
+          if (!loading || !open) {
+            setIsDeleteDialogOpen(open);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -279,7 +332,7 @@ const CompanyManagementPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteCompany}
               disabled={loading}

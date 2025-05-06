@@ -80,22 +80,32 @@ const UserManagementPage = () => {
   // Reset state when dialog is closed
   useEffect(() => {
     if (!isDialogOpen) {
-      setSelectedUser(null);
-      setName('');
-      setEmail('');
-      setPhone('');
-      setCompanyId('');
-      setRole('user');
-      setPreferredLanguage('en');
-      setPassword('');
-      setUserStatus('active');
+      // Use a timeout to ensure state resets after animations complete
+      const timer = setTimeout(() => {
+        setSelectedUser(null);
+        setName('');
+        setEmail('');
+        setPhone('');
+        setCompanyId('');
+        setRole('user');
+        setPreferredLanguage('en');
+        setPassword('');
+        setUserStatus('active');
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
   }, [isDialogOpen]);
 
   // Reset state when delete dialog is closed
   useEffect(() => {
     if (!isDeleteDialogOpen) {
-      setUserToDelete(null);
+      // Use a timeout to ensure state resets after animations complete
+      const timer = setTimeout(() => {
+        setUserToDelete(null);
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
   }, [isDeleteDialogOpen]);
   
@@ -154,17 +164,22 @@ const UserManagementPage = () => {
       
       if (error) throw error;
       
+      // First set the user to delete to null before showing toast
+      const deletedUserId = userToDelete;
+      setUserToDelete(null);
+      
+      // Show toast after UI state is updated
       toast({
         title: "User Deleted",
         description: "The user has been successfully removed",
       });
       
-      // Clear the user being deleted
-      setUserToDelete(null);
-      
       // Refresh the users list
       await refetchUsers();
     } catch (error: any) {
+      // Make sure we cleanup state even on error
+      setUserToDelete(null);
+      
       toast({
         title: "Error Deleting User",
         description: error.message,
@@ -209,10 +224,16 @@ const UserManagementPage = () => {
           if (profileError) throw profileError;
         }
         
-        toast({
-          title: "User Created",
-          description: "New user has been successfully created",
-        });
+        // Close the dialog before showing toast
+        setIsDialogOpen(false);
+        
+        // Add a small delay before showing toast to ensure dialog is closed
+        setTimeout(() => {
+          toast({
+            title: "User Created",
+            description: "New user has been successfully created",
+          });
+        }, 300);
       } else if (dialogMode === 'edit' && selectedUser) {
         // Update existing user
         const { error } = await supabase
@@ -229,10 +250,16 @@ const UserManagementPage = () => {
         
         if (error) throw error;
         
-        toast({
-          title: "User Updated",
-          description: "User information has been successfully updated",
-        });
+        // Close the dialog before showing toast
+        setIsDialogOpen(false);
+        
+        // Add a small delay before showing toast to ensure dialog is closed
+        setTimeout(() => {
+          toast({
+            title: "User Updated",
+            description: "User information has been successfully updated",
+          });
+        }, 300);
       } else if (dialogMode === 'reset' && selectedUser) {
         // Reset password
         const { error } = await supabase.auth.admin.updateUserById(
@@ -242,17 +269,20 @@ const UserManagementPage = () => {
         
         if (error) throw error;
         
-        toast({
-          title: "Password Reset",
-          description: "User password has been successfully reset",
-        });
+        // Close the dialog before showing toast
+        setIsDialogOpen(false);
+        
+        // Add a small delay before showing toast to ensure dialog is closed
+        setTimeout(() => {
+          toast({
+            title: "Password Reset",
+            description: "User password has been successfully reset",
+          });
+        }, 300);
       }
       
       // Refresh the users list
       await refetchUsers();
-      
-      // Close the dialog (do this before showing toast)
-      setIsDialogOpen(false);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -260,6 +290,8 @@ const UserManagementPage = () => {
         variant: "destructive",
       });
       console.error('Error submitting form:', error);
+      
+      // Don't close dialog on error so user can try again
     } finally {
       setLoading(false);
     }
@@ -610,13 +642,26 @@ const UserManagementPage = () => {
         </Table>
       </div>
       
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        // Only allow closing if not currently loading
+        if (!loading || !open) {
+          setIsDialogOpen(open);
+        }
+      }}>
         <DialogContent>
           {getDialogContent()}
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog 
+        open={isDeleteDialogOpen} 
+        onOpenChange={(open) => {
+          // Only allow closing if not currently loading
+          if (!loading || !open) {
+            setIsDeleteDialogOpen(open);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -626,7 +671,7 @@ const UserManagementPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteUser}
               disabled={loading}
