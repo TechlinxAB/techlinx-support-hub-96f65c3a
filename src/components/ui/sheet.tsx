@@ -1,3 +1,4 @@
+
 import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
@@ -60,6 +61,17 @@ const SheetContent = React.forwardRef<
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
+      onCloseAutoFocus={(event) => {
+        // Prevent focus issues when sheet closes
+        event.preventDefault();
+      }}
+      onEscapeKeyDown={(event) => {
+        // Let the escape key work even during loading states
+        event.preventDefault();
+        if (props.onEscapeKeyDown) {
+          props.onEscapeKeyDown(event);
+        }
+      }}
       {...props}
     >
       {children}
@@ -128,4 +140,3 @@ export {
   Sheet, SheetClose,
   SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger
 }
-
