@@ -43,7 +43,6 @@ DialogTrigger.displayName = DialogPrimitive.Trigger.displayName;
 
 const DialogPortal = ({ ...props }: DialogPrimitive.DialogPortalProps) => {
   const { isOpen } = React.useContext(DialogContext);
-  const portalRef = React.useRef<HTMLElement | null>(null);
   
   // Clean up the portal element when dialog closes
   React.useEffect(() => {
@@ -140,12 +139,24 @@ const DialogContent = React.forwardRef<
     };
   }, []);
 
-  const handleContentRef = (node: HTMLDivElement | null) => {
-    // Merge refs
-    if (typeof ref === 'function') ref(node);
-    else if (ref) ref.current = node;
+  // Merge the forwarded ref with our internal ref
+  const handleContentRef = React.useCallback((node: HTMLDivElement | null) => {
+    // Pass the node to the forwarded ref
+    if (typeof ref === 'function') {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
+    }
+    
+    // Store in our internal ref
     contentRef.current = node;
-  };
+    
+    // If the node exists, find its parent portal
+    if (node) {
+      const portal = node.closest('[data-radix-portal]');
+      console.log("Dialog portal found:", portal);
+    }
+  }, [ref]);
 
   return (
     <DialogPortal>

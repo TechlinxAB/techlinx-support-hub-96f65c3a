@@ -14,7 +14,7 @@ const PopoverContent = React.forwardRef<
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
   // Track mount status to prevent unmounting issues
   const [isMounted, setIsMounted] = React.useState(false);
-  const portalRef = React.useRef<HTMLElement | null>(null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
   
   React.useEffect(() => {
     setIsMounted(true);
@@ -40,19 +40,31 @@ const PopoverContent = React.forwardRef<
     };
   }, []);
 
-  // Safe portal with DOM tracking after render
-  const trackPortalElement = React.useCallback((node: HTMLElement | null) => {
-    if (node) {
-      portalRef.current = node.parentElement;
+  // Merge the forwarded ref with our internal ref
+  const handleContentRef = React.useCallback((node: HTMLDivElement | null) => {
+    // Pass the node to the forwarded ref
+    if (typeof ref === 'function') {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
     }
-  }, []);
+    
+    // Store in our internal ref
+    contentRef.current = node;
+    
+    // If the node exists, find its parent portal
+    if (node) {
+      const portal = node.closest('[data-radix-portal]');
+      console.log("Popover portal found:", portal);
+    }
+  }, [ref]);
 
   if (!isMounted) return null;
 
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
-        ref={ref}
+        ref={handleContentRef}
         align={align}
         sideOffset={sideOffset}
         className={cn(
@@ -71,7 +83,6 @@ const PopoverContent = React.forwardRef<
           // Allow focus but prevent scrolling issues
           e.preventDefault();
         }}
-        onRendered={trackPortalElement}
         {...props}
       />
     </PopoverPrimitive.Portal>
