@@ -1,9 +1,8 @@
-
 import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
-import { useModal } from "@/components/ui/modal-provider"
+import { useModal, useModalInstance } from "@/components/ui/modal-provider"
 
 const Popover = PopoverPrimitive.Root
 
@@ -15,12 +14,27 @@ const PopoverContent = React.forwardRef<
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
   const { forceResetModalState } = useModal();
   
+  // Register this popover instance with the modal system
+  useModalInstance('popover');
+  
+  // Keep track of animation state
+  const [isClosing, setIsClosing] = React.useState(false);
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Force cleanup on unmount
   React.useEffect(() => {
     return () => {
-      forceResetModalState();
+      // Clean up timer if component unmounts during close animation
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+      
+      // Ensure modal state is reset if unmounted unexpectedly
+      if (!isClosing) {
+        forceResetModalState();
+      }
     };
-  }, [forceResetModalState]);
+  }, [forceResetModalState, isClosing]);
 
   return (
     <PopoverPrimitive.Portal>
@@ -35,8 +49,11 @@ const PopoverContent = React.forwardRef<
           }
         }}
         onCloseAutoFocus={(event) => {
-          // Clean up everything on close
-          forceResetModalState();
+          // Clean up everything on close with a delay for animations
+          closeTimerRef.current = setTimeout(() => {
+            forceResetModalState();
+            setIsClosing(false);
+          }, 300);
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
@@ -50,6 +67,9 @@ const PopoverContent = React.forwardRef<
             return;
           }
           
+          // Mark as closing so we can track animation state
+          setIsClosing(true);
+          
           if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
           }
@@ -62,6 +82,9 @@ const PopoverContent = React.forwardRef<
             return;
           }
           
+          // Mark as closing so we can track animation state
+          setIsClosing(true);
+          
           if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
           }
@@ -71,6 +94,11 @@ const PopoverContent = React.forwardRef<
           const target = event.target as HTMLElement;
           if (target.getAttribute('data-state') === 'closed') {
             forceResetModalState();
+            setIsClosing(false);
+          }
+          
+          if (props.onAnimationEnd) {
+            props.onAnimationEnd(event);
           }
         }}
         className={cn(

@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useModal } from "@/components/ui/modal-provider"
+import { useModal, useModalInstance } from "@/components/ui/modal-provider"
 
 const Dialog = DialogPrimitive.Root
 
@@ -34,18 +34,39 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => {
   const { forceResetModalState } = useModal();
   
+  // Register this dialog instance with the modal system
+  useModalInstance('dialog');
+  
+  // Keep track of animation state
+  const [isClosing, setIsClosing] = React.useState(false);
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Force cleanup on unmount
   React.useEffect(() => {
     return () => {
-      forceResetModalState();
+      // Clean up timer if component unmounts during close animation
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+      
+      // Force reset if this was unmounted unexpectedly
+      if (!isClosing) {
+        forceResetModalState();
+      }
     }
-  }, [forceResetModalState]);
+  }, [forceResetModalState, isClosing]);
 
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
+        onOpenAutoFocus={(event) => {
+          // Handle focusing when dialog opens
+          if (props.onOpenAutoFocus) {
+            props.onOpenAutoFocus(event);
+          }
+        }}
         onEscapeKeyDown={(event) => {
           // Prevent default behavior only if loading
           const loadingAttr = document.body.getAttribute('data-loading');
@@ -53,6 +74,9 @@ const DialogContent = React.forwardRef<
             event.preventDefault();
             return;
           }
+          
+          // Mark as closing so we can track animation state
+          setIsClosing(true);
           
           if (props.onEscapeKeyDown) {
             props.onEscapeKeyDown(event);
@@ -65,6 +89,9 @@ const DialogContent = React.forwardRef<
             event.preventDefault();
             return;
           }
+          
+          // Mark as closing so we can track animation state
+          setIsClosing(true);
           
           if (props.onPointerDownOutside) {
             props.onPointerDownOutside(event);
@@ -83,8 +110,11 @@ const DialogContent = React.forwardRef<
           }
         }}
         onCloseAutoFocus={(event) => {
-          // Force cleanup on close
-          forceResetModalState();
+          // Force cleanup on close with a slight delay to ensure animations complete
+          closeTimerRef.current = setTimeout(() => {
+            forceResetModalState();
+            setIsClosing(false);
+          }, 300);
           
           if (props.onCloseAutoFocus) {
             props.onCloseAutoFocus(event);
@@ -95,6 +125,7 @@ const DialogContent = React.forwardRef<
           const state = (event.target as HTMLElement).getAttribute('data-state');
           if (state === 'closed') {
             forceResetModalState();
+            setIsClosing(false);
           }
           
           if (props.onAnimationEnd) {
@@ -111,8 +142,14 @@ const DialogContent = React.forwardRef<
         <DialogPrimitive.Close 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
           onClick={() => {
-            // Force cleanup on close click
-            forceResetModalState();
+            // Mark as closing and start cleanup
+            setIsClosing(true);
+            
+            // Schedule a complete reset after animation
+            closeTimerRef.current = setTimeout(() => {
+              forceResetModalState();
+              setIsClosing(false);
+            }, 300);
           }}
         >
           <X className="h-4 w-4" />
