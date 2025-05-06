@@ -14,7 +14,7 @@ const PopoverContent = React.forwardRef<
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
   // Track mount status to prevent unmounting issues
   const [isMounted, setIsMounted] = React.useState(false);
-  const portalRef = React.useRef<HTMLDivElement | null>(null);
+  const portalRef = React.useRef<HTMLElement | null>(null);
   
   React.useEffect(() => {
     setIsMounted(true);
@@ -25,31 +25,32 @@ const PopoverContent = React.forwardRef<
   React.useEffect(() => {
     return () => {
       // Clean up any orphaned portal elements
-      if (portalRef.current && document.body.contains(portalRef.current)) {
-        try {
-          document.body.removeChild(portalRef.current);
-        } catch (e) {
-          console.error("Failed to clean up portal:", e);
+      const portals = document.querySelectorAll('[data-radix-portal]');
+      portals.forEach(portal => {
+        if (portal.childElementCount === 0) {
+          try {
+            if (portal.parentNode) {
+              portal.parentNode.removeChild(portal);
+            }
+          } catch (e) {
+            console.error("Failed to clean up portal:", e);
+          }
         }
-      }
+      });
     };
   }, []);
 
-  // Safe portal creation
-  const Portal = React.useMemo(() => {
-    return function SafePortal(portalProps: React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Portal>) {
-      return (
-        <PopoverPrimitive.Portal {...portalProps} ref={(node) => {
-          if (node) portalRef.current = node as unknown as HTMLDivElement;
-        }} />
-      );
-    };
+  // Safe portal with DOM tracking after render
+  const trackPortalElement = React.useCallback((node: HTMLElement | null) => {
+    if (node) {
+      portalRef.current = node.parentElement;
+    }
   }, []);
 
   if (!isMounted) return null;
 
   return (
-    <Portal>
+    <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
         ref={ref}
         align={align}
@@ -70,9 +71,10 @@ const PopoverContent = React.forwardRef<
           // Allow focus but prevent scrolling issues
           e.preventDefault();
         }}
+        onRendered={trackPortalElement}
         {...props}
       />
-    </Portal>
+    </PopoverPrimitive.Portal>
   );
 })
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
