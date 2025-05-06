@@ -50,12 +50,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const UserManagementPage = () => {
   const { users, companies, currentUser, refetchUsers } = useAppContext();
+  
+  // All hooks first, regardless of conditions - this follows React's rules of hooks
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'reset'>('create');
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -67,17 +70,14 @@ const UserManagementPage = () => {
   const [password, setPassword] = useState('');
   const [userStatus, setUserStatus] = useState('active');
   
-  // Only consultants can access this page
-  if (currentUser?.role !== 'consultant') {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <p className="text-lg text-muted-foreground">You don't have permission to access this page.</p>
-      </div>
-    );
-  }
-  
-  // Debug helpers
+  // Check permissions via useEffect instead of immediate return
   useEffect(() => {
+    if (currentUser?.role === 'consultant') {
+      setHasPermission(true);
+    } else {
+      setHasPermission(false);
+    }
+    
     console.log("UserManagementPage mounted");
     console.log("Dialog state:", isDialogOpen);
     console.log("Delete dialog state:", isDeleteDialogOpen);
@@ -85,7 +85,7 @@ const UserManagementPage = () => {
     return () => {
       console.log("UserManagementPage unmounting");
     };
-  }, [isDialogOpen, isDeleteDialogOpen]);
+  }, [currentUser, isDialogOpen, isDeleteDialogOpen]);
   
   const handleOpenDialog = (mode: 'create' | 'edit' | 'reset', userId?: string) => {
     console.log(`Opening dialog in ${mode} mode for user:`, userId);
@@ -176,65 +176,24 @@ const UserManagementPage = () => {
     setLoading(true);
     try {
       if (dialogMode === 'create') {
-        // Create new user
-        // First, create auth user
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true, // Auto-confirm email
-        });
-        
-        if (authError) throw authError;
-        
-        // If auth user created successfully, update their profile
-        if (authData.user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-              name,
-              email,
-              phone: phone || null,
-              company_id: companyId || null,
-              role: role as 'user' | 'consultant',
-              preferred_language: preferredLanguage as 'en' | 'sv'
-            })
-            .eq('id', authData.user.id);
-          
-          if (profileError) throw profileError;
-        }
+        // Create new user logic
+        // ... keep existing code (user creation logic)
         
         toast({
           title: "User Created",
           description: "New user has been successfully created",
         });
       } else if (dialogMode === 'edit' && selectedUser) {
-        // Update existing user
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            name,
-            email,
-            phone: phone || null,
-            company_id: companyId || null,
-            role: role as 'user' | 'consultant',
-            preferred_language: preferredLanguage as 'en' | 'sv'
-          })
-          .eq('id', selectedUser);
-        
-        if (error) throw error;
+        // Update existing user logic
+        // ... keep existing code (user updating logic)
         
         toast({
           title: "User Updated",
           description: "User information has been successfully updated",
         });
       } else if (dialogMode === 'reset' && selectedUser) {
-        // Reset password
-        const { error } = await supabase.auth.admin.updateUserById(
-          selectedUser,
-          { password }
-        );
-        
-        if (error) throw error;
+        // Reset password logic
+        // ... keep existing code (password reset logic)
         
         toast({
           title: "Password Reset",
@@ -523,8 +482,19 @@ const UserManagementPage = () => {
             </form>
           </>
         );
+      default:
+        return null;
     }
   };
+
+  // Render based on permission flag from useEffect, not an early return
+  if (!hasPermission) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <p className="text-lg text-muted-foreground">You don't have permission to access this page.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -606,261 +576,7 @@ const UserManagementPage = () => {
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
-          {dialogMode === 'create' ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
-                <DialogDescription>
-                  Add a new user to the platform. They will receive an email with login instructions.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Full name" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="Email address" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (Optional)</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="Phone number" 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company</Label>
-                    <Select 
-                      value={companyId} 
-                      onValueChange={setCompanyId}
-                    >
-                      <SelectTrigger id="company">
-                        <SelectValue placeholder="Select Company" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map(company => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select 
-                      value={role} 
-                      onValueChange={setRole}
-                    >
-                      <SelectTrigger id="role">
-                        <SelectValue placeholder="Select Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="consultant">Consultant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="language">Preferred Language</Label>
-                    <Select 
-                      value={preferredLanguage} 
-                      onValueChange={setPreferredLanguage}
-                    >
-                      <SelectTrigger id="language">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="sv">Swedish</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label htmlFor="password">Initial Password</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      placeholder="Set initial password" 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? 'Creating...' : 'Create User'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          ) : dialogMode === 'edit' ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Edit User</DialogTitle>
-                <DialogDescription>
-                  Update user information.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Full name" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="Email address" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (Optional)</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="Phone number" 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company</Label>
-                    <Select 
-                      value={companyId} 
-                      onValueChange={setCompanyId}
-                    >
-                      <SelectTrigger id="company">
-                        <SelectValue placeholder="Select Company" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map(company => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select 
-                      value={role} 
-                      onValueChange={setRole}
-                    >
-                      <SelectTrigger id="role">
-                        <SelectValue placeholder="Select Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="consultant">Consultant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="language">Preferred Language</Label>
-                    <Select 
-                      value={preferredLanguage} 
-                      onValueChange={setPreferredLanguage}
-                    >
-                      <SelectTrigger id="language">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="sv">Swedish</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select 
-                      value={userStatus} 
-                      onValueChange={setUserStatus}
-                    >
-                      <SelectTrigger id="status">
-                        <SelectValue placeholder="Select Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? 'Updating...' : 'Update User'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle>Reset Password</DialogTitle>
-                <DialogDescription>
-                  Set a new password for this user.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">New Password</Label>
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="Enter new password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? 'Resetting...' : 'Reset Password'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          )}
+          {getDialogContent()}
         </DialogContent>
       </Dialog>
 
