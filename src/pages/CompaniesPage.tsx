@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,11 +44,29 @@ const CompaniesPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   
-  // If user is not a consultant, redirect them to the company dashboard
-  if (currentUser?.role !== 'consultant' && currentUser?.companyId) {
-    navigate('/company-dashboard');
-    return null;
+  // Move the navigation logic to useEffect
+  useEffect(() => {
+    if (isLoaded && currentUser) {
+      if (currentUser.role !== 'consultant' && currentUser.companyId) {
+        navigate('/company-dashboard');
+      }
+    }
+    
+    // Mark component as loaded after initial rendering
+    if (!isLoaded) {
+      setIsLoaded(true);
+    }
+  }, [currentUser, navigate, isLoaded]);
+  
+  // Early return with loading state instead of null
+  if (!isLoaded || !currentUser) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
   
   // Functions for managing companies
@@ -118,11 +136,20 @@ const CompaniesPage = () => {
     setIsDeleteDialogOpen(true);
   };
   
+  // Only show companies if the user is authorized to view them
+  if (currentUser.role !== 'consultant' && !currentUser.companyId) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">You don't have access to any companies.</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Companies</h1>
-        {currentUser?.role === 'consultant' && (
+        {currentUser.role === 'consultant' && (
           <Button onClick={() => setIsDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Company
@@ -151,7 +178,7 @@ const CompaniesPage = () => {
                     <h2 className="text-lg font-semibold">{company.name}</h2>
                   </div>
                   
-                  {currentUser?.role === 'consultant' && (
+                  {currentUser.role === 'consultant' && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
