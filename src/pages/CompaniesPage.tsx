@@ -65,13 +65,18 @@ const CompaniesPage = () => {
     }
   }, [isDeleteDialogOpen]);
   
-  // Confirm delete company
+  // Confirm delete company with safety check
   const confirmDeleteCompany = useCallback((companyId: string) => {
-    setCompanyToDelete(companyId);
-    setIsDeleteDialogOpen(true);
-  }, []);
+    // First make sure any previous dialogs are properly closed
+    resetModalState();
+    // Then open the delete confirmation dialog
+    setTimeout(() => {
+      setCompanyToDelete(companyId);
+      setIsDeleteDialogOpen(true);
+    }, 50);
+  }, [resetModalState]);
   
-  // Handle company deletion
+  // Handle company deletion with enhanced safety
   const handleDeleteCompany = useCallback(async () => {
     if (!companyToDelete) return;
     
@@ -79,12 +84,17 @@ const CompaniesPage = () => {
       setLoading(true);
       setIsLoading(true);
       
-      // First close the dialog
+      // First close the dialog safely
       setIsDeleteDialogOpen(false);
       
       // Store the ID before clearing it
       const deletedId = companyToDelete;
+      
+      // Clear state immediately to prevent UI issues
       setCompanyToDelete(null);
+      
+      // Small delay to allow UI to update
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       // Then delete the company
       await deleteCompany(deletedId);
@@ -95,8 +105,10 @@ const CompaniesPage = () => {
         description: "Company deleted successfully",
       });
       
-      // Reset all modal state
-      resetModalState();
+      // Reset all modal state with delay for safety
+      setTimeout(() => {
+        resetModalState();
+      }, 100);
     } catch (error: any) {
       console.error('Error deleting company:', error.message);
       toast({
@@ -107,11 +119,15 @@ const CompaniesPage = () => {
     } finally {
       setLoading(false);
       setIsLoading(false);
-      resetModalState();
+      
+      // Final safety reset
+      setTimeout(() => {
+        resetModalState();
+      }, 300);
     }
   }, [companyToDelete, deleteCompany, toast, setIsLoading, resetModalState]);
   
-  // Handle adding company
+  // Handle adding company with enhanced safety
   const handleAddCompany = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -128,13 +144,20 @@ const CompaniesPage = () => {
       setLoading(true);
       setIsLoading(true);
       
+      // Create company
       await addCompany({
         name: companyName,
         logo: companyLogo || undefined
       });
       
-      // Close dialog
+      // First close dialog
       setIsDialogOpen(false);
+      
+      // Reset form with delay
+      setTimeout(() => {
+        setCompanyName('');
+        setCompanyLogo('');
+      }, 100);
       
       // Show toast
       toast({
@@ -142,12 +165,10 @@ const CompaniesPage = () => {
         description: "Company created successfully",
       });
       
-      // Reset form
-      setCompanyName('');
-      setCompanyLogo('');
-      
-      // Reset all modal state
-      resetModalState();
+      // Reset modal state with delay for safety
+      setTimeout(() => {
+        resetModalState();
+      }, 300);
     } catch (error: any) {
       console.error('Error creating company:', error.message);
       toast({
@@ -158,12 +179,19 @@ const CompaniesPage = () => {
     } finally {
       setLoading(false);
       setIsLoading(false);
-      resetModalState();
+      
+      // Final safety reset
+      setTimeout(() => {
+        resetModalState();
+      }, 300);
     }
   }, [companyName, companyLogo, addCompany, toast, setIsLoading, resetModalState]);
 
   // Navigation and initialization effects
   useEffect(() => {
+    // Reset any leftover modal state on component mount
+    resetModalState();
+    
     if (isLoaded && currentUser) {
       if (currentUser.role !== 'consultant' && currentUser.companyId) {
         navigate('/company-dashboard');
@@ -174,7 +202,12 @@ const CompaniesPage = () => {
     if (!isLoaded) {
       setIsLoaded(true);
     }
-  }, [currentUser, navigate, isLoaded]);
+    
+    // Extra safety: cleanup on unmount
+    return () => {
+      resetModalState();
+    };
+  }, [currentUser, navigate, isLoaded, resetModalState]);
   
   // Early return with loading state
   if (!isLoaded || !currentUser) {
@@ -194,13 +227,24 @@ const CompaniesPage = () => {
     );
   }
   
+  // Safe dialog opening function
+  const openAddDialog = () => {
+    // First clean up any lingering modal state
+    resetModalState();
+    
+    // Then set the dialog to open with slight delay
+    setTimeout(() => {
+      setIsDialogOpen(true);
+    }, 50);
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Companies</h1>
         {currentUser.role === 'consultant' && (
           <Button 
-            onClick={() => setIsDialogOpen(true)}
+            onClick={openAddDialog}
             disabled={loading}
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -311,7 +355,13 @@ const CompaniesPage = () => {
       {/* Add Company Dialog */}
       <Dialog 
         open={isDialogOpen} 
-        onOpenChange={setIsDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            // Clean up when dialog closes
+            setTimeout(() => resetModalState(), 300);
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -346,7 +396,10 @@ const CompaniesPage = () => {
               <Button 
                 type="button" 
                 variant="outline" 
-                onClick={() => setIsDialogOpen(false)}
+                onClick={() => {
+                  setIsDialogOpen(false);
+                  setTimeout(() => resetModalState(), 300);
+                }}
                 disabled={loading}
               >
                 Cancel
@@ -362,7 +415,14 @@ const CompaniesPage = () => {
       {/* Delete Company Confirmation Dialog */}
       <AlertDialog 
         open={isDeleteDialogOpen} 
-        onOpenChange={setIsDeleteDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open);
+          if (!open) {
+            setCompanyToDelete(null);
+            // Cleanup when dialog closes
+            setTimeout(() => resetModalState(), 300);
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -373,9 +433,15 @@ const CompaniesPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={loading} onClick={() => {
+              // Extra safety reset when cancel is clicked
+              setTimeout(() => resetModalState(), 300);
+            }}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleDeleteCompany}
+              onClick={(e) => {
+                e.preventDefault(); // Prevent default to handle cleanup manually
+                handleDeleteCompany();
+              }}
               disabled={loading}
               className="bg-red-600 hover:bg-red-700"
             >

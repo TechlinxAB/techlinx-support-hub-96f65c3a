@@ -5,6 +5,11 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { cn } from "@/lib/utils"
 import { useModal } from "@/components/ui/modal-provider"
 
+// Enhanced safety utility function - returns true if an element exists and can be safely operated on
+const canSafelyRemoveElement = (element: Element | null): boolean => {
+  return !!(element && element.isConnected && element.parentNode);
+};
+
 const Popover = ({ 
   open, 
   onOpenChange,
@@ -21,7 +26,7 @@ const Popover = ({
       const timer = setTimeout(() => {
         setIsModalOpen(false);
         
-        // Enhanced cleanup on close - run resetModalState only if still closed
+        // Only run reset if still closed
         if (!open) {
           resetModalState();
         }
@@ -32,10 +37,10 @@ const Popover = ({
       };
     }
     
-    // Cleanup on unmount
+    // Cleanup on unmount - with extra safety check
     return () => {
       if (!open) {
-        resetModalState();
+        setTimeout(() => resetModalState(), 50);
       }
     };
   }, [open, setIsModalOpen, resetModalState]);
@@ -46,14 +51,15 @@ const Popover = ({
       onOpenChange={(newOpen) => {
         if (onOpenChange) onOpenChange(newOpen);
         
-        // Force cleanup when closing with extra safety delay
+        // Force cleanup when closing with safety check
         if (!newOpen) {
-          const cleanupTimer = setTimeout(() => {
-            resetModalState();
-          }, 350); // Slightly longer than animation duration
-          
-          // Clean up timer if component unmounts
-          return () => clearTimeout(cleanupTimer);
+          setTimeout(() => {
+            try {
+              resetModalState();
+            } catch (err) {
+              // Silently catch any cleanup errors
+            }
+          }, 300);
         }
       }}
       {...props}
@@ -70,72 +76,121 @@ const PopoverContent = React.forwardRef<
   const { resetModalState } = useModal();
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const portalRef = React.useRef<HTMLDivElement | null>(null);
+  const unmountingRef = React.useRef(false);
   
-  // Handle safe unmount with enhanced cleanup
+  // Enhanced unmount tracking and safer cleanup
   React.useEffect(() => {
-    // Store references to DOM elements for cleanup
-    const handleContentRefChange = (node: HTMLDivElement | null) => {
-      if (node) {
-        contentRef.current = node;
-        
-        // Find and store portal reference
+    return () => {
+      // Mark as unmounting to prevent race conditions
+      unmountingRef.current = true;
+      
+      // Ultra-safe cleanup with multiple backoff attempts
+      const attemptCleanup = (attempts = 3) => {
+        try {
+          if (attempts <= 0) return;
+          
+          // Try to safely remove the portal element
+          if (portalRef.current && canSafelyRemoveElement(portalRef.current)) {
+            const parent = portalRef.current.parentNode;
+            if (parent) {
+              try {
+                parent.removeChild(portalRef.current);
+              } catch (e) {
+                // If direct removal fails, schedule another attempt with exponential backoff
+                setTimeout(() => attemptCleanup(attempts - 1), 50 * (4 - attempts));
+              }
+            }
+          }
+          
+          // Always reset modal state as a fallback
+          resetModalState();
+        } catch (error) {
+          if (attempts > 0) {
+            // Retry with backoff
+            setTimeout(() => attemptCleanup(attempts - 1), 50);
+          }
+        }
+      };
+      
+      // Start cleanup cascade with a slight delay
+      setTimeout(() => attemptCleanup(), 50);
+    };
+  }, [resetModalState]);
+
+  // Content ref handling with DOM safety checks
+  const handleContentRefChange = React.useCallback((node: HTMLDivElement | null) => {
+    if (!node || unmountingRef.current) return;
+    
+    contentRef.current = node;
+    
+    // Find and store portal reference using a safer approach
+    setTimeout(() => {
+      try {
         let parent = node.parentElement;
-        while (parent) {
+        let attempts = 0;
+        
+        // Walk up the DOM tree with safety limits
+        while (parent && attempts < 10) {
+          attempts++;
           if (parent.hasAttribute('data-radix-portal')) {
-            portalRef.current = parent as HTMLDivElement; // Cast to correct type
+            portalRef.current = parent as HTMLDivElement;
             break;
           }
           parent = parent.parentElement;
         }
+      } catch (e) {
+        // Silently handle reference errors
       }
+    }, 0);
+  }, []);
+
+  // Enhance ref handling with better safety
+  React.useEffect(() => {
+    const handleRef = (node: HTMLDivElement | null) => {
+      if (!node || unmountingRef.current) return;
+      handleContentRefChange(node);
     };
     
-    // Apply ref handling
+    // Apply ref handling based on ref type
     if (typeof ref === 'function') {
       const originalRef = ref;
-      ref = (node) => {
+      const enhancedRef = (node: HTMLDivElement | null) => {
         originalRef(node);
-        handleContentRefChange(node);
+        handleRef(node);
       };
+      // We can't directly modify the ref, this is for side effects only
+      handleRef(contentRef.current);
     } else if (ref) {
-      const originalRef = ref.current;
-      handleContentRefChange(originalRef as HTMLDivElement); // Cast to correct type
+      // If ref is a RefObject, we can still track the node
+      handleRef(ref.current as HTMLDivElement | null);
     }
-    
-    // Cleanup function
-    return () => {
-      // Safe removal of portal element on unmount with multiple safety checks
-      setTimeout(() => {
-        try {
-          if (portalRef.current && portalRef.current.isConnected) {
-            const parentNode = portalRef.current.parentNode;
-            if (parentNode) {
-              parentNode.removeChild(portalRef.current);
-            }
-          }
-          
-          // Final safety reset
-          resetModalState();
-        } catch (error) {
-          console.log('Safe cleanup error (ignorable):', error);
-        }
-      }, 100);
-    };
-  }, [ref, resetModalState]);
+  }, [ref, handleContentRefChange]);
 
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
         ref={(node) => {
-          // Handle ref properly
-          if (typeof ref === 'function') {
-            ref(node);
-          } else if (ref) {
-            ref.current = node;
+          // Safely apply refs with better error handling
+          try {
+            // Apply original ref
+            if (typeof ref === 'function') {
+              ref(node);
+            } else if (ref) {
+              ref.current = node;
+            }
+            
+            // Store internal ref if not unmounting
+            if (!unmountingRef.current) {
+              contentRef.current = node;
+              
+              // Also try to find portal
+              if (node) {
+                handleContentRefChange(node);
+              }
+            }
+          } catch (e) {
+            // Silently handle ref errors
           }
-          
-          // Store our own reference
-          contentRef.current = node;
         }}
         align={align}
         sideOffset={sideOffset}
@@ -148,13 +203,15 @@ const PopoverContent = React.forwardRef<
           }
           
           // Safe delayed cleanup
-          setTimeout(() => {
-            try {
-              resetModalState();
-            } catch (err) {
-              console.log('Safe cleanup error (ignorable):', err);
-            }
-          }, 300);
+          if (!unmountingRef.current) {
+            setTimeout(() => {
+              try {
+                resetModalState();
+              } catch (err) {
+                // Silently catch any cleanup errors
+              }
+            }, 300);
+          }
         }}
         onPointerDownOutside={(event) => {
           // Prevent clicks outside from dismissing if loading
@@ -165,20 +222,24 @@ const PopoverContent = React.forwardRef<
           }
           
           // Safe delayed cleanup
-          setTimeout(() => {
-            try {
-              resetModalState();
-            } catch (err) {
-              console.log('Safe cleanup error (ignorable):', err);
-            }
-          }, 300);
+          if (!unmountingRef.current) {
+            setTimeout(() => {
+              try {
+                resetModalState();
+              } catch (err) {
+                // Silently catch any cleanup errors
+              }
+            }, 300);
+          }
         }}
         onCloseAutoFocus={(event) => {
           // Always reset modal state when popover closes
-          try {
-            resetModalState();
-          } catch (err) {
-            console.log('Safe cleanup error (ignorable):', err);
+          if (!unmountingRef.current) {
+            try {
+              resetModalState();
+            } catch (err) {
+              // Silently catch any cleanup errors
+            }
           }
           
           if (props.onCloseAutoFocus) {

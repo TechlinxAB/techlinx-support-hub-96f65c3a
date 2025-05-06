@@ -23,17 +23,31 @@ const ModalContext = createContext<ModalContextType>({
 // Custom hook to use the modal context
 export const useModal = () => useContext(ModalContext);
 
-// Helper function for safely removing DOM elements
-const safeRemoveElement = (element: Element): boolean => {
+// Enhanced helper function for safely removing DOM elements with more robust error handling
+const safeRemoveElement = (element: Element | null): boolean => {
+  if (!element) return false;
+  
   try {
-    if (element && element.isConnected && element.parentNode) {
-      element.parentNode.removeChild(element);
-      return true;
-    }
+    // Multiple safety checks
+    if (!element.isConnected) return false;
+    if (!element.parentNode) return false;
+    
+    // Store reference to parent before removal attempt
+    const parent = element.parentNode;
+    
+    // Verify parent still contains child before removal
+    if (!parent.contains(element)) return false;
+    
+    // Extra protection for race conditions
+    if (element.parentNode !== parent) return false;
+    
+    // Finally attempt removal with exception handling
+    parent.removeChild(element);
+    return true;
   } catch (error) {
     console.log('Safe element removal error (ignorable):', error);
+    return false;
   }
-  return false;
 };
 
 // Provider component
@@ -43,6 +57,8 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
   const scrollPosition = useRef(0);
   const bodyWasLocked = useRef(false);
   const lastResetTime = useRef(0);
+  const pendingOperationsRef = useRef<Array<() => void>>([]);
+  const cleanupInProgressRef = useRef(false);
   
   // Track modal open/close for debugging
   useEffect(() => {
@@ -51,90 +67,112 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Enhanced function to reset all modal state and force cleanup of DOM with improved safety
   const resetModalState = useCallback(() => {
-    // Throttle reset calls to prevent excessive DOM manipulation
+    // Prevent recursive calls and throttle reset calls
+    if (cleanupInProgressRef.current) return;
+    
     const now = Date.now();
     if (now - lastResetTime.current < 150) {
-      return; // Skip if called too frequently
+      // Instead of skipping entirely, queue the operation
+      pendingOperationsRef.current.push(() => resetModalState());
+      return;
     }
+    
+    cleanupInProgressRef.current = true;
     lastResetTime.current = now;
     
-    setIsModalOpen(false);
-    setIsLoading(false);
-    
-    // Clean up body styles
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
-    document.body.style.overflow = '';
-    document.body.removeAttribute('data-modal-open');
-    document.body.removeAttribute('data-loading');
-    
-    // ENHANCED SAFETY: Use querySelectorAll with try-catch around each removal
-    // Remove overlays with improved error handling
-    document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80').forEach(overlay => {
-      safeRemoveElement(overlay);
-    });
-    
-    // Remove closed dialogs with improved safety
-    document.querySelectorAll('[role="dialog"]').forEach(dialog => {
-      try {
-        if (dialog.getAttribute('data-state') === 'closed' && dialog.isConnected) {
-          safeRemoveElement(dialog);
-        }
-      } catch (error) {
-        console.log('Dialog cleanup error (ignorable):', error);
-      }
-    });
-    
-    // Close popovers with enhanced safety
-    document.querySelectorAll('[data-radix-popover-content-wrapper]').forEach(element => {
-      safeRemoveElement(element);
-    });
-    
-    // Clean orphaned portals with safety checks
-    document.querySelectorAll('[data-radix-portal]').forEach(portal => {
-      try {
-        // Only remove if truly empty
-        const hasVisibleContent = portal.children.length > 0 && 
-                                 !Array.from(portal.children).every(child => 
-                                   child.getAttribute('data-state') === 'closed');
-        
-        if (!hasVisibleContent && portal.isConnected) {
-          safeRemoveElement(portal);
-        }
-      } catch (error) {
-        console.log('Portal cleanup error (ignorable):', error);
-      }
-    });
-    
-    // Remove focus trap elements with safety
-    document.querySelectorAll('[data-radix-focus-guard]').forEach(element => {
-      safeRemoveElement(element);
-    });
-    
-    // Fix aria-hidden elements
-    document.querySelectorAll('[aria-hidden="true"]').forEach(element => {
-      if (element instanceof HTMLElement && 
-          element.dataset.radixDialog !== 'true' && 
-          element.dataset.radixSheet !== 'true') {
+    try {
+      setIsModalOpen(false);
+      setIsLoading(false);
+      
+      // Clean up body styles
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      document.body.removeAttribute('data-modal-open');
+      document.body.removeAttribute('data-loading');
+      
+      // Extra safety: Use querySelectorAll with robust error handling around each removal
+      // Process elements in batches with slight delays to prevent DOM manipulation race conditions
+      
+      // 1. First handle overlays (most visible issue)
+      setTimeout(() => {
         try {
-          element.removeAttribute('aria-hidden');
-        } catch (error) {
-          console.log('Aria attribute reset error (ignorable):', error);
+          document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80').forEach(overlay => {
+            safeRemoveElement(overlay);
+          });
+          
+          // 2. Then handle popovers that might be open but shouldn't be
+          setTimeout(() => {
+            try {
+              document.querySelectorAll('[data-radix-popover-content-wrapper]').forEach(element => {
+                safeRemoveElement(element);
+              });
+              
+              // 3. Finally handle any other portal elements that might be orphaned
+              setTimeout(() => {
+                try {
+                  document.querySelectorAll('[data-radix-portal]').forEach(portal => {
+                    const hasVisibleContent = portal.children.length > 0 && 
+                                            !Array.from(portal.children).every(child => 
+                                              child.getAttribute('data-state') === 'closed');
+                    
+                    if (!hasVisibleContent) {
+                      safeRemoveElement(portal);
+                    }
+                  });
+                  
+                  // 4. Clean orphaned focus trap elements
+                  document.querySelectorAll('[data-radix-focus-guard]').forEach(element => {
+                    safeRemoveElement(element);
+                  });
+                  
+                  // 5. Fix aria-hidden elements
+                  document.querySelectorAll('[aria-hidden="true"]').forEach(element => {
+                    if (element instanceof HTMLElement && 
+                        element.dataset.radixDialog !== 'true' && 
+                        element.dataset.radixSheet !== 'true') {
+                      try {
+                        element.removeAttribute('aria-hidden');
+                      } catch (error) {
+                        console.log('Aria attribute reset error (ignorable):', error);
+                      }
+                    }
+                  });
+                  
+                  // Process any pending operations that were queued during throttling
+                  if (pendingOperationsRef.current.length > 0) {
+                    const nextOperation = pendingOperationsRef.current.shift();
+                    if (nextOperation) {
+                      setTimeout(nextOperation, 50);
+                    }
+                  }
+                } catch (portalError) {
+                  console.log('Portal cleanup error (ignorable):', portalError);
+                }
+              }, 30);
+            } catch (popoverError) {
+              console.log('Popover cleanup error (ignorable):', popoverError);
+            }
+          }, 30);
+        } catch (overlayError) {
+          console.log('Overlay cleanup error (ignorable):', overlayError);
+        } finally {
+          // Restore scroll position if we previously locked the body
+          if (bodyWasLocked.current) {
+            window.scrollTo(0, scrollPosition.current);
+            bodyWasLocked.current = false;
+          }
+          
+          // Make sure click/touch events work again
+          document.documentElement.style.pointerEvents = '';
+          
+          console.log('Modal state fully reset and DOM cleaned');
         }
-      }
-    });
-    
-    // Restore scroll position if we previously locked the body
-    if (bodyWasLocked.current) {
-      window.scrollTo(0, scrollPosition.current);
-      bodyWasLocked.current = false;
+      }, 10);
+    } finally {
+      cleanupInProgressRef.current = false;
     }
-    
-    // Make sure click/touch events work again
-    document.documentElement.style.pointerEvents = '';
-    
-    console.log('Modal state fully reset and DOM cleaned');
   }, []);
 
   // Handle body styles when modal state changes
@@ -161,7 +199,7 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
       // Restore scroll position
       window.scrollTo(0, scrollPosition.current);
       
-      // Enhanced safety: Use the safeRemoveElement helper for cleanup
+      // Enhanced safety: Use the safeRemoveElement helper for cleanup with delay
       setTimeout(() => {
         if (!isModalOpen) {
           document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80').forEach(overlay => {
@@ -193,26 +231,78 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isLoading]);
   
-  // NEW: Added orphaned elements observer 
+  // Enhanced orphaned elements observer with mutation tracking
   // This continuously watches for and cleans up any detached modal elements
   useEffect(() => {
+    // New MutationObserver to catch DOM changes that might cause issues
+    const domObserver = new MutationObserver((mutations) => {
+      // Look for removed nodes that might cause reference errors
+      let needsReset = false;
+      
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          // If nodes are removed, check if any modals/popovers are affected
+          if (mutation.removedNodes.length > 0) {
+            for (const node of mutation.removedNodes) {
+              if (node instanceof HTMLElement) {
+                if (node.getAttribute('role') === 'dialog' || 
+                    node.hasAttribute('data-radix-popover-content')) {
+                  needsReset = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // If we see a portal added but no active modal, this could indicate an issue
+          if (!isModalOpen && mutation.addedNodes.length > 0) {
+            for (const node of mutation.addedNodes) {
+              if (node instanceof HTMLElement && 
+                  (node.hasAttribute('data-radix-portal') || 
+                   node.classList.contains('fixed') && node.classList.contains('inset-0'))) {
+                needsReset = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // If we detected something that needs cleanup, schedule a reset
+      if (needsReset) {
+        setTimeout(() => {
+          resetModalState();
+        }, 100);
+      }
+    });
+    
+    // Start observing with a deep config
+    domObserver.observe(document.body, { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-state', 'aria-hidden']
+    });
+    
     // Check for orphaned elements periodically
     const checkOrphanedElements = () => {
       if (!isModalOpen) {
         // Check for overlay elements with no modal
         document.querySelectorAll('.fixed.inset-0.z-50.bg-black\\/80').forEach(overlay => {
           const hasRelatedDialog = document.querySelectorAll('[role="dialog"][data-state="open"]').length > 0;
-          if (!hasRelatedDialog) {
+          if (!hasRelatedDialog && overlay.isConnected) {
             safeRemoveElement(overlay);
           }
         });
         
         // Check for portal elements with closed content
         document.querySelectorAll('[data-radix-portal]').forEach(portal => {
+          if (!portal.isConnected) return;
+          
           const hasOpenContent = Array.from(portal.querySelectorAll('[data-state]'))
             .some(el => el.getAttribute('data-state') === 'open');
             
-          if (!hasOpenContent && portal.isConnected) {
+          if (!hasOpenContent) {
             safeRemoveElement(portal);
           }
         });
@@ -229,13 +319,12 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
     };
     
     const intervalId = setInterval(checkOrphanedElements, 1000);
-    return () => clearInterval(intervalId);
-  }, [isModalOpen]);
-  
-  // Safety cleanup for when component unmounts
-  useEffect(() => {
+    
     return () => {
-      // Reset body styles on unmount
+      domObserver.disconnect();
+      clearInterval(intervalId);
+      
+      // Reset body styles on unmount for safety
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.width = '';
@@ -243,8 +332,8 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
       document.body.removeAttribute('data-modal-open');
       document.body.removeAttribute('data-loading');
     };
-  }, []);
-
+  }, [isModalOpen, resetModalState]);
+  
   // Double ESC key press for emergency reset
   useEffect(() => {
     let lastEscTime = 0;
@@ -281,8 +370,8 @@ export const ModalProvider = ({ children }: { children: React.ReactNode }) => {
       window.removeEventListener('popstate', cleanupAfterNavigation);
     };
   }, [isModalOpen, resetModalState]);
-  
-  // Emergency click handler to reset UI if it gets stuck
+
+  // Emergency click handler for UI rescue
   useEffect(() => {
     let clickCount = 0;
     let clickTimer: number | null = null;
