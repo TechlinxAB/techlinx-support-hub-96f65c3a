@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,11 +31,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useModal, useLoadingOperation } from '@/components/ui/modal-provider';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { setIsModalOpen, setIsLoading } = useModal();
+  const { withLoading } = useLoadingOperation();
   
   // All state declarations must be at the top level, not conditionally
   const [isLoaded, setIsLoaded] = useState(false);
@@ -46,6 +48,26 @@ const CompaniesPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Update global modal state when local dialog state changes
+  useEffect(() => {
+    setIsModalOpen(isDialogOpen || isDeleteDialogOpen);
+    
+    return () => {
+      // Safety cleanup when component unmounts
+      setIsModalOpen(false);
+    };
+  }, [isDialogOpen, isDeleteDialogOpen, setIsModalOpen]);
+  
+  // Update global loading state when local loading state changes
+  useEffect(() => {
+    setIsLoading(loading);
+    
+    return () => {
+      // Safety cleanup when component unmounts
+      setIsLoading(false);
+    };
+  }, [loading, setIsLoading]);
   
   // Reset form state when dialog closes
   useEffect(() => {
@@ -121,7 +143,7 @@ const CompaniesPage = () => {
           title: "Success",
           description: "Company deleted successfully",
         });
-      }, 300);
+      }, 500);
     } catch (error: any) {
       console.error('Error deleting company:', error.message);
       toast({
@@ -130,6 +152,9 @@ const CompaniesPage = () => {
         variant: "destructive",
       });
     } finally {
+      // Make sure to restore UI responsiveness
+      document.body.removeAttribute('data-loading');
+      document.body.removeAttribute('data-modal-open');
       setLoading(false);
     }
   }, [companyToDelete, deleteCompany, toast]);
@@ -166,7 +191,7 @@ const CompaniesPage = () => {
           title: "Success",
           description: "Company created successfully",
         });
-      }, 300);
+      }, 500);
     } catch (error: any) {
       console.error('Error creating company:', error.message);
       toast({
@@ -175,6 +200,9 @@ const CompaniesPage = () => {
         variant: "destructive",
       });
     } finally {
+      // Make sure to restore UI responsiveness
+      document.body.removeAttribute('data-loading');
+      document.body.removeAttribute('data-modal-open');
       setLoading(false);
     }
   }, [companyName, companyLogo, addCompany, toast]);
@@ -329,12 +357,23 @@ const CompaniesPage = () => {
         })}
       </div>
       
-      {/* Add Company Dialog - with explicit DialogClose component */}
+      {/* Add Company Dialog */}
       <Dialog 
         open={isDialogOpen} 
         onOpenChange={handleDialogClose}
       >
-        <DialogContent>
+        <DialogContent 
+          onInteractOutside={(e) => {
+            if (loading) {
+              e.preventDefault();
+            }
+          }}
+          onEscapeKeyDown={(e) => {
+            if (loading) {
+              e.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Add New Company</DialogTitle>
             <DialogDescription>
@@ -387,7 +426,18 @@ const CompaniesPage = () => {
         open={isDeleteDialogOpen} 
         onOpenChange={handleDeleteDialogClose}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          onInteractOutside={(e) => {
+            if (loading) {
+              e.preventDefault();
+            }
+          }}
+          onEscapeKeyDown={(e) => {
+            if (loading) {
+              e.preventDefault();
+            }
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -398,7 +448,7 @@ const CompaniesPage = () => {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleDeleteCompany}
+              onClick={() => withLoading(handleDeleteCompany)}
               disabled={loading}
               className="bg-red-600 hover:bg-red-700"
             >

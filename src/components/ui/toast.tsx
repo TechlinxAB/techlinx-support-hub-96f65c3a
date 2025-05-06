@@ -80,6 +80,14 @@ const ToastClose = React.forwardRef<
       className
     )}
     toast-close=""
+    onClick={(e) => {
+      // Prevent event from propagating up to other handlers
+      e.stopPropagation();
+      // Let the default handler run
+      if (props.onClick) {
+        props.onClick(e);
+      }
+    }}
     {...props}
   >
     <X className="h-4 w-4" />

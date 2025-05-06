@@ -7,7 +7,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 3000 // Setting to 3 seconds for better visibility
+const TOAST_REMOVE_DELAY = 5000 // Increased to 5 seconds for better visibility and to reduce interference with UI
 
 type ToasterToast = ToastProps & {
   id: string
@@ -57,16 +57,21 @@ interface State {
 // Store timeouts to be able to clean them up
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
-const addToRemoveQueue = (toastId: string) => {
-  // Clear any existing timeout for this toast
-  if (toastTimeouts.has(toastId)) {
-    clearTimeout(toastTimeouts.get(toastId));
+// Clean up function to be called when component unmounts or when toast should be removed
+const clearToastTimeout = (toastId: string) => {
+  const timeout = toastTimeouts.get(toastId);
+  if (timeout) {
+    clearTimeout(timeout);
     toastTimeouts.delete(toastId);
   }
+}
+
+const addToRemoveQueue = (toastId: string) => {
+  // Clear any existing timeout for this toast
+  clearToastTimeout(toastId);
 
   // Create a new timeout
   const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId);
     dispatch({
       type: "REMOVE_TOAST",
       toastId: toastId,
@@ -118,11 +123,18 @@ export const reducer = (state: State, action: Action): State => {
     }
     case "REMOVE_TOAST":
       if (action.toastId === undefined) {
+        // Clean up all timeouts
+        toastTimeouts.forEach((_, id) => clearToastTimeout(id));
+        
         return {
           ...state,
           toasts: [],
         }
       }
+      
+      // Clean up specific toast timeout
+      clearToastTimeout(action.toastId);
+      
       return {
         ...state,
         toasts: state.toasts.filter((t) => t.id !== action.toastId),
@@ -133,7 +145,7 @@ export const reducer = (state: State, action: Action): State => {
 // Clean up all timeouts when the component unmounts
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    toastTimeouts.forEach(timeout => clearTimeout(timeout));
+    toastTimeouts.forEach((timeout) => clearTimeout(timeout));
     toastTimeouts.clear();
   });
 }
@@ -215,6 +227,7 @@ function useToast() {
         toastTimeouts.forEach((timeout, key) => {
           if (key.startsWith('auto-')) {
             clearTimeout(timeout)
+            toastTimeouts.delete(key)
           }
         })
       }

@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider } from "./context/AppContext";
 import { AuthProvider } from "./context/AuthContext";
+import { ModalProvider } from "./components/ui/modal-provider";
+import ModalStyles from "./components/ui/modal-styles";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // Layouts
@@ -31,32 +33,35 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <AppProvider>
-        <TooltipProvider>
-          <Toaster />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/auth" element={<AuthPage />} />
-              
-              <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="cases" element={<CasesPage />} />
-                  <Route path="cases/new" element={<NewCasePage />} />
-                  <Route path="cases/:id" element={<CaseDetailPage />} />
-                  <Route path="companies" element={<CompaniesPage />} />
-                  <Route path="companies/:id" element={<CompaniesPage />} />
-                  <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-                  <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-                  <Route path="users" element={<UserManagementPage />} />
-                  <Route path="company-management" element={<CompanyManagementPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                  <Route path="search" element={<SearchPage />} />
-                  <Route path="*" element={<NotFound />} />
+        <ModalProvider>
+          <ModalStyles />
+          <TooltipProvider>
+            <Toaster />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/auth" element={<AuthPage />} />
+                
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="cases" element={<CasesPage />} />
+                    <Route path="cases/new" element={<NewCasePage />} />
+                    <Route path="cases/:id" element={<CaseDetailPage />} />
+                    <Route path="companies" element={<CompaniesPage />} />
+                    <Route path="companies/:id" element={<CompaniesPage />} />
+                    <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+                    <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+                    <Route path="users" element={<UserManagementPage />} />
+                    <Route path="company-management" element={<CompanyManagementPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="search" element={<SearchPage />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </ModalProvider>
       </AppProvider>
     </AuthProvider>
   </QueryClientProvider>
