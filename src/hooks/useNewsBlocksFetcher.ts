@@ -80,9 +80,25 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
 
       if (error) throw error;
 
-      const sortedBlocks = data
-        ? data.sort((a, b) => a.position - b.position)
+      // Transform the data to match CompanyNewsBlock type
+      const transformedBlocks: CompanyNewsBlock[] = data 
+        ? data.map(block => ({
+            id: block.id,
+            companyId: block.company_id,
+            title: block.title,
+            content: block.content,
+            type: block.type as any,
+            position: block.position,
+            parentId: block.parent_id || undefined,
+            createdAt: new Date(block.created_at),
+            updatedAt: new Date(block.updated_at),
+            createdBy: block.created_by,
+            isPublished: block.is_published || false
+          }))
         : [];
+
+      // Sort the blocks by position
+      const sortedBlocks = transformedBlocks.sort((a, b) => a.position - b.position);
 
       setBlocks(sortedBlocks);
       setError(null);
