@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,7 +43,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const isConsultant = currentUser?.role === 'consultant';
 
   // Function to handle manual refetching with error handling
-  const handleRefetch = async () => {
+  const handleRefetch = useCallback(async () => {
     setIsRefetching(true);
     setFetchError(null);
     
@@ -58,14 +58,19 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     } finally {
       setIsRefetching(false);
     }
-  };
+  }, [caseId, refetchReplies, refetchNotes]);
   
-  // Initial data fetch
+  // Initial data fetch - only run once when component mounts or caseId changes
   useEffect(() => {
     if (caseId) {
       handleRefetch();
     }
-  }, [caseId]); // Only depend on caseId to prevent refetch loops
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      // Cleanup if needed
+    };
+  }, [caseId, handleRefetch]); // Only depend on caseId and handleRefetch to prevent refetch loops
   
   // Merge replies and notes, sort by date
   const allItems = [
