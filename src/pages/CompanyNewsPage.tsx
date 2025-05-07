@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,12 @@ import { Card } from '@/components/ui/card';
 import { CompanyNewsBlock } from '@/types/companyNews';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { useToast } from '@/components/ui/use-toast';
 
 const CompanyNewsPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { 
     companies, 
     companyNewsBlocks, 
@@ -21,25 +23,61 @@ const CompanyNewsPage = () => {
   } = useAppContext();
 
   const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
   
   const company = companies.find(c => c.id === companyId);
   const isConsultant = currentUser?.role === 'consultant';
 
+  // Debounced refetch function to prevent rapid successive calls
+  const debouncedRefetch = useCallback(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      timeoutId = setTimeout(() => {
+        if (companyId) {
+          try {
+            refetchCompanyNewsBlocks(companyId);
+            setFetchAttempted(true);
+          } catch (error) {
+            console.error('Error refetching news blocks:', error);
+            setFetchError(error instanceof Error ? error : new Error(String(error)));
+            
+            // Show toast only once for errors
+            toast({
+              title: "Error loading content",
+              description: "Failed to load news content. Please try again later.",
+              variant: "destructive"
+            });
+          }
+        }
+      }, 300);
+    };
+  }, [companyId, refetchCompanyNewsBlocks, toast]);
+
   useEffect(() => {
-    if (companyId) {
-      refetchCompanyNewsBlocks(companyId);
+    if (companyId && !fetchAttempted) {
+      debouncedRefetch()();
     }
-  }, [companyId, refetchCompanyNewsBlocks]);
+  }, [companyId, debouncedRefetch, fetchAttempted]);
 
   useEffect(() => {
     if (!loadingCompanyNewsBlocks && companyId) {
-      // Only show published blocks for regular users, and show all blocks for consultants
-      const filteredBlocks = companyNewsBlocks
-        .filter(block => block.companyId === companyId)
-        .filter(block => isConsultant || block.isPublished)
-        .sort((a, b) => a.position - b.position);
-      
-      setBlocks(filteredBlocks);
+      try {
+        // Only show published blocks for regular users, and show all blocks for consultants
+        const filteredBlocks = companyNewsBlocks
+          .filter(block => block.companyId === companyId)
+          .filter(block => isConsultant || block.isPublished)
+          .sort((a, b) => a.position - b.position);
+        
+        setBlocks(filteredBlocks);
+        setFetchError(null);
+      } catch (error) {
+        console.error('Error processing news blocks:', error);
+        setFetchError(error instanceof Error ? error : new Error(String(error)));
+      }
     }
   }, [companyNewsBlocks, companyId, loadingCompanyNewsBlocks, isConsultant]);
 
@@ -164,7 +202,7 @@ const CompanyNewsPage = () => {
   };
 
   // Show loading state
-  if (loadingCompanyNewsBlocks) {
+  if (loadingCompanyNewsBlocks && !fetchError) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -172,6 +210,41 @@ const CompanyNewsPage = () => {
         </div>
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  // Show error state
+  if (fetchError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" onClick={() => navigate('/companies')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="text-2xl font-bold">
+            {company ? `${company.name} - News` : 'Company News'}
+          </h1>
+        </div>
+        
+        <Card className="p-6 border-red-200">
+          <div className="text-center py-10">
+            <h2 className="text-xl font-semibold text-red-600">Error Loading Content</h2>
+            <p className="text-muted-foreground mt-2">
+              We're having trouble loading the news content. Please try again later.
+            </p>
+            <Button 
+              className="mt-4"
+              onClick={() => {
+                setFetchAttempted(false);
+                setFetchError(null);
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
