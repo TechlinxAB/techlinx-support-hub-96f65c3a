@@ -69,13 +69,13 @@ export const useOptimizedNewsBlockSave = () => {
       lastSaveTimestamp.current = now;
       
       // Show a loading toast only if requested
-      let toastId: string | undefined;
+      let toastId: string | number | undefined;
       if (options?.showToast !== false) {
-        // Cast to string to fix the type error
+        // Using toast.loading which returns string or number
         toastId = toast.loading("Saving changes...", {
           id: `save-${blockId}`,
           duration: 30000 // Long duration in case save takes time
-        }) as string;
+        });
       }
       
       // Log save operation details for debugging
@@ -118,7 +118,7 @@ export const useOptimizedNewsBlockSave = () => {
       }
       
       options?.onSuccess?.();
-    } catch (error: any) { // Fixed: Properly type error parameter
+    } catch (error: any) { // Properly typed error parameter
       // Check if this was an abort error, which we can ignore
       if (error.name === 'AbortError') {
         console.log('Save operation was cancelled');

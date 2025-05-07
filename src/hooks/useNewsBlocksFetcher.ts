@@ -21,8 +21,8 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   const isMounted = useRef(true);
   const activeRequest = useRef<AbortController | null>(null);
   const lastFetchTime = useRef<number>(0);
-  const MIN_FETCH_INTERVAL = 5000; // Increased to 5 seconds between fetches
-  const CACHE_TTL = 30000; // Cache valid for 30 seconds (increased significantly)
+  const MIN_FETCH_INTERVAL = 2000; // Reduced to 2 seconds to allow more responsive updates
+  const CACHE_TTL = 15000; // Cache valid for 15 seconds (reduced for more responsive UI)
   
   // Flag to track if a fetch was forced
   const fetchForced = useRef<boolean>(false);
@@ -38,14 +38,17 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     };
   }, []);
 
-  // Update local blocks without refetching
+  // Update local blocks without refetching - enhanced to ensure proper sorting
   const updateLocalBlock = useCallback((updatedBlock: Partial<CompanyNewsBlock> & { id: string }) => {
     setBlocks(currentBlocks => {
-      return currentBlocks.map(block => 
+      const updatedBlocks = currentBlocks.map(block => 
         block.id === updatedBlock.id 
           ? { ...block, ...updatedBlock, updatedAt: new Date() } 
           : block
       );
+      
+      // Re-sort blocks by position to ensure proper order
+      return updatedBlocks.sort((a, b) => a.position - b.position);
     });
     
     // Also update cache if it exists
@@ -54,7 +57,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         block.id === updatedBlock.id 
           ? { ...block, ...updatedBlock, updatedAt: new Date() } 
           : block
-      );
+      ).sort((a, b) => a.position - b.position);
     }
   }, []);
 
@@ -66,7 +69,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
 
     fetchForced.current = force;
 
-    // Return cached data if available and not forced refresh with increased TTL
+    // Return cached data if available and not forced refresh
     const now = Date.now();
     if (
       !force && 
@@ -79,7 +82,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       return;
     }
 
-    // Prevent too frequent fetches with much stronger throttling
+    // Prevent too frequent fetches
     if (!force && now - lastFetchTime.current < MIN_FETCH_INTERVAL) {
       console.log("Fetch attempted too soon, skipping");
       return;
@@ -137,7 +140,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       setBlocks(sortedBlocks);
       setError(null);
 
-      // Cache the fetched data with longer TTL
+      // Cache the fetched data
       cachedData.current = {
         companyId,
         data: sortedBlocks,
@@ -148,7 +151,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       if (force && fetchForced.current) {
         toast.success("Content refreshed", { duration: 2000 });
       }
-    } catch (err) {
+    } catch (err: any) {
       // Ignore aborted requests
       if (err instanceof DOMException && err.name === 'AbortError') {
         console.log("Fetch was aborted");
@@ -174,7 +177,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     }
   }, [companyId]);
 
-  // Fetch initial data only once
+  // Fetch initial data
   useEffect(() => {
     // When companyId changes, clear cache
     if (cachedData.current?.companyId !== companyId) {
@@ -191,7 +194,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     loading, 
     error, 
     refetch: (force = true) => fetchNewsBlocks(force),
-    updateLocalBlock, // New method to update a block locally without refetching
+    updateLocalBlock,
     lastFetchTime: lastFetchTime.current,
     isCacheValid: cachedData.current && Date.now() - cachedData.current.timestamp < CACHE_TTL
   };

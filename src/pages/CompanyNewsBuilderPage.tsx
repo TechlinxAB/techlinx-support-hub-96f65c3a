@@ -185,35 +185,38 @@ const CompanyNewsBuilderPage = () => {
       targetBlock.position = block.position;
       block.position = temp;
       
-      // Update positions in database without triggering full refetch
+      // Update positions in database with improved local state management
       setLoading(true);
       try {
-        // Optimistically update local state
-        const updatedBlocks = newBlocks.sort((a, b) => a.position - b.position);
+        // Create a temporary sorted array for visual feedback
+        const tempSortedBlocks = newBlocks.map(b => ({...b})).sort((a, b) => a.position - b.position);
         
-        // Apply optimistic update first for better UI feedback
-        updatedBlocks.forEach(b => {
+        // Apply optimistic updates to local state FIRST for immediate visual feedback
+        tempSortedBlocks.forEach(b => {
           updateLocalBlock({
             id: b.id,
             position: b.position
           });
         });
         
+        // Show toast indicating the operation is in progress
+        const toastId = toast.loading("Updating block position...");
+        
         // Then make database updates
-        const promise1 = updateCompanyNewsBlock(block.id, { position: block.position });
-        const promise2 = updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
+        await updateCompanyNewsBlock(block.id, { position: block.position });
+        await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
         
-        // Wait for both updates to complete
-        await Promise.all([promise1, promise2]);
+        // Force a refetch to ensure server and client state are in sync
+        await refetchCompanyNewsBlocks(true);
         
-        toast.success("Block position updated");
+        toast.success("Block position updated", { id: toastId });
       } catch (error: any) {
         console.error('Error moving block:', error);
         toast.error("Failed to move block", {
           description: error.message || "Please try again"
         });
         
-        // Only refetch on error to restore correct state
+        // Always refetch on error or success to ensure state consistency
         refetchCompanyNewsBlocks(true);
       } finally {
         setLoading(false);
@@ -228,32 +231,35 @@ const CompanyNewsBuilderPage = () => {
       
       setLoading(true);
       try {
-        // Sort by position to simulate the update
-        const updatedBlocks = newBlocks.sort((a, b) => a.position - b.position);
+        // Create a temporary sorted array for visual feedback
+        const tempSortedBlocks = newBlocks.map(b => ({...b})).sort((a, b) => a.position - b.position);
         
-        // Apply optimistic update first for better UI feedback
-        updatedBlocks.forEach(b => {
+        // Apply optimistic updates to local state FIRST
+        tempSortedBlocks.forEach(b => {
           updateLocalBlock({
             id: b.id,
             position: b.position
           });
         });
         
+        // Show toast indicating the operation is in progress
+        const toastId = toast.loading("Updating block position...");
+        
         // Then make database updates
-        const promise1 = updateCompanyNewsBlock(block.id, { position: block.position });
-        const promise2 = updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
+        await updateCompanyNewsBlock(block.id, { position: block.position });
+        await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
         
-        // Wait for both updates to complete
-        await Promise.all([promise1, promise2]);
+        // Force a refetch to ensure server and client state are in sync
+        await refetchCompanyNewsBlocks(true);
         
-        toast.success("Block position updated");
+        toast.success("Block position updated", { id: toastId });
       } catch (error: any) {
         console.error('Error moving block:', error);
         toast.error("Failed to move block", {
           description: error.message || "Please try again"
         });
         
-        // Only refetch on error
+        // Always refetch on error to ensure state consistency
         refetchCompanyNewsBlocks(true);
       } finally {
         setLoading(false);
