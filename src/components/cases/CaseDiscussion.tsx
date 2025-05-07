@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -246,9 +245,8 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         isInternal: isInternalReply
       });
       
-      toast({
-        title: "Reply sent",
-        description: "Your reply has been added successfully.",
+      toast("Reply sent", {
+        description: "Your reply has been added successfully."
       });
       
       setReplyContent('');
@@ -268,10 +266,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         isInternal: isInternalReply
       });
       
-      toast({
-        title: "Network issue",
+      toast("Network issue", {
         description: "Your reply is saved and will be sent when connection improves.",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };
