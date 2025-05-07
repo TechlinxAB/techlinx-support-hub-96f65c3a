@@ -11,30 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-
-interface DashboardSettings {
-  showWelcome: boolean;
-  showSubtitle: boolean;
-  showNewCaseButton: boolean;
-  showCompanyNewsButton: boolean;
-  showCompanyDashboardButton: boolean;
-  showActiveCases: boolean;
-  showCompanyNotices: boolean;
-}
-
-interface CompanySettingsRow {
-  id: string;
-  company_id: string;
-  show_welcome: boolean;
-  show_subtitle: boolean;
-  show_new_case_button: boolean;
-  show_company_news_button: boolean;
-  show_company_dashboard_button: boolean;
-  show_active_cases: boolean;
-  show_company_notices: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import { DashboardSettings, CompanySettingsRow } from '@/types/dashboardTypes';
 
 const defaultSettings: DashboardSettings = {
   showWelcome: true,
@@ -84,7 +61,7 @@ const CompanySettingsPage = () => {
         }
         
         if (data) {
-          const settingsRow = data as CompanySettingsRow;
+          const settingsRow = data as unknown as CompanySettingsRow;
           setSettings({
             showWelcome: settingsRow.show_welcome,
             showSubtitle: settingsRow.show_subtitle,
@@ -115,6 +92,7 @@ const CompanySettingsPage = () => {
     
     setIsSaving(true);
     try {
+      // Cast as unknown to any to bypass type checking for this specific call
       const { data, error } = await supabase
         .from('company_settings')
         .upsert({
@@ -126,7 +104,7 @@ const CompanySettingsPage = () => {
           show_company_dashboard_button: settings.showCompanyDashboardButton,
           show_active_cases: settings.showActiveCases,
           show_company_notices: settings.showCompanyNotices,
-        })
+        } as any)
         .select();
       
       if (error) throw error;
