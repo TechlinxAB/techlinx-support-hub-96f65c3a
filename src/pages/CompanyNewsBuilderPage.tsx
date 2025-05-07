@@ -916,3 +916,270 @@ const CompanyNewsBuilderPage = () => {
       case 'dropdown': {
         const title = displayContent.title || 'Dropdown Title';
         const items = displayContent.items || [];
+        
+        return (
+          <div className="mt-4">
+            <h3 className="font-medium">{title}</h3>
+            <div className="mt-2 border rounded-md divide-y">
+              {items.length > 0 ? items.map((item: any, index: number) => (
+                <div key={index} className="p-3">
+                  <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
+                  {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
+                </div>
+              )) : (
+                <div className="p-3">
+                  <h4 className="text-sm font-medium">Sample Item</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">Sample content</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Button variant="ghost" onClick={() => navigate(`/company-news/${companyId}`)}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to News
+          </Button>
+          <h1 className="text-2xl font-bold">
+            {company ? `${company.name} - News Builder` : 'News Builder'}
+          </h1>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        {/* Sidebar with blocks list */}
+        <div className="md:col-span-3 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>News Blocks</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {blocks.length > 0 ? (
+                <div className="space-y-2">
+                  {blocks.map(block => (
+                    <div
+                      key={block.id}
+                      className={`flex items-center justify-between p-2 rounded-md border ${
+                        selectedBlockId === block.id ? 'bg-muted border-primary' : 'hover:bg-accent'
+                      } cursor-pointer`}
+                      onClick={() => setSelectedBlockId(block.id)}
+                    >
+                      <div className="truncate flex-1">
+                        <div className="text-sm font-medium">{block.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {block.type} {block.isPublished ? '(Published)' : '(Draft)'}
+                        </div>
+                      </div>
+                      <div className="flex space-x-1">
+                        <Button 
+                          size="icon"
+                          variant="ghost"
+                          disabled={blockIndex === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveBlock(block.id, 'up');
+                          }}
+                          className="h-7 w-7"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          size="icon"
+                          variant="ghost"
+                          disabled={blockIndex === blocks.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveBlock(block.id, 'down');
+                          }}
+                          className="h-7 w-7"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground">No blocks created yet</p>
+                </div>
+              )}
+              
+              <div className="pt-4 space-y-4 border-t">
+                <div className="space-y-3">
+                  <Label htmlFor="new-block-type">Add New Block</Label>
+                  <Select 
+                    value={newBlockType} 
+                    onValueChange={setNewBlockType as any}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select block type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="heading">Heading</SelectItem>
+                      <SelectItem value="text">Text</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="image">Image</SelectItem>
+                      <SelectItem value="notice">Notice</SelectItem>
+                      <SelectItem value="faq">FAQ</SelectItem>
+                      <SelectItem value="links">Links</SelectItem>
+                      <SelectItem value="dropdown">Dropdown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-3">
+                  <Label htmlFor="new-block-title">Block Title</Label>
+                  <Input 
+                    id="new-block-title" 
+                    placeholder="Enter block title"
+                    value={newBlockTitle}
+                    onChange={(e) => setNewBlockTitle(e.target.value)}
+                  />
+                </div>
+                
+                <Button 
+                  className="w-full"
+                  onClick={handleAddBlock}
+                  disabled={!newBlockTitle.trim() || loading}
+                >
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  Add Block
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Main content area */}
+        <div className="md:col-span-9">
+          {selectedBlock ? (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="mb-1">{editedBlockData.title}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedBlock.type} block
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1">
+                    <Switch
+                      checked={editedBlockData.isPublished || false}
+                      onCheckedChange={(checked) => {
+                        handleTogglePublish(selectedBlock.id, checked);
+                      }}
+                    />
+                    <Label>{editedBlockData.isPublished ? 'Published' : 'Draft'}</Label>
+                  </div>
+                  
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="icon">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this block?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete this news block.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteBlock(selectedBlock.id)}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="pt-4">
+                <Tabs 
+                  defaultValue="edit" 
+                  value={activeTab} 
+                  onValueChange={setActiveTab} 
+                  className="w-full"
+                >
+                  <TabsList className="grid grid-cols-2 mb-4">
+                    <TabsTrigger value="edit">Edit</TabsTrigger>
+                    <TabsTrigger value="preview">Preview</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="edit" className="space-y-4">
+                    {/* Title Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="block-title">Block Title</Label>
+                      <Input 
+                        id="block-title"
+                        value={editedBlockData.title || ''}
+                        onChange={(e) => handleFormChange('title', e.target.value)}
+                      />
+                    </div>
+                    
+                    {/* Dynamic content editor based on block type */}
+                    {renderBlockEditor()}
+                    
+                    {/* Save Button */}
+                    <Button 
+                      className="mt-4"
+                      disabled={!hasUnsavedChanges || loading} 
+                      onClick={handleSaveBlock}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </TabsContent>
+                  
+                  <TabsContent value="preview">
+                    <Card className="border-dashed">
+                      <CardContent className="pt-6">
+                        {renderBlockPreview(selectedBlock)}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-10 text-center">
+                <h2 className="text-xl font-semibold">No block selected</h2>
+                <p className="text-muted-foreground mt-2">
+                  Select a block from the left sidebar or create a new one to get started
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CompanyNewsBuilderPage;
