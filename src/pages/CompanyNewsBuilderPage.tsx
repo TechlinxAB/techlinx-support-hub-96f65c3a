@@ -966,7 +966,7 @@ const CompanyNewsBuilderPage = () => {
             <CardContent className="space-y-4">
               {blocks.length > 0 ? (
                 <div className="space-y-2">
-                  {blocks.map(block => (
+                  {blocks.map((block, index) => (
                     <div
                       key={block.id}
                       className={`flex items-center justify-between p-2 rounded-md border ${
@@ -984,7 +984,7 @@ const CompanyNewsBuilderPage = () => {
                         <Button 
                           size="icon"
                           variant="ghost"
-                          disabled={blockIndex === 0}
+                          disabled={index === 0}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMoveBlock(block.id, 'up');
@@ -996,7 +996,7 @@ const CompanyNewsBuilderPage = () => {
                         <Button 
                           size="icon"
                           variant="ghost"
-                          disabled={blockIndex === blocks.length - 1}
+                          disabled={index === blocks.length - 1}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMoveBlock(block.id, 'down');
