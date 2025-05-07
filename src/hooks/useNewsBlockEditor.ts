@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 interface UseNewsBlockEditorOptions {
   onSaveSuccess?: () => void; 
   onSaveError?: (error: Error) => void;
+  updateLocalBlock?: (block: Partial<CompanyNewsBlock> & { id: string }) => void;
 }
 
 export const useNewsBlockEditor = (
@@ -23,7 +24,7 @@ export const useNewsBlockEditor = (
   // Track manual save in progress
   const manualSaveInProgress = useRef(false);
   const lastAutoSaveAttempt = useRef<number>(0);
-  const AUTO_SAVE_THROTTLE = 2000; // Minimum 2 seconds between auto-save attempts
+  const AUTO_SAVE_THROTTLE = 5000; // Increased to 5 seconds between auto-save attempts
 
   // Get the save function from our optimized hook
   const { saving, debouncedSave, saveNewsBlock, isSaving } = useOptimizedNewsBlockSave();
@@ -173,13 +174,22 @@ export const useNewsBlockEditor = (
     setHasUnsavedChanges(true);
   };
 
-  // Save current block with enhanced feedback
+  // Save current block with enhanced feedback and optimistic updates
   const saveCurrentBlock = async () => {
     if (!selectedBlockId || !selectedBlock || !hasUnsavedChanges) return;
     if (manualSaveInProgress.current) return;
     
     manualSaveInProgress.current = true;
     setLocalSaving(true);
+    
+    // Apply optimistic update to local state immediately
+    if (options?.updateLocalBlock) {
+      options.updateLocalBlock({
+        id: selectedBlockId,
+        title: editedBlockData.title,
+        content: editedBlockData.content
+      });
+    }
     
     try {
       await saveNewsBlock(
@@ -215,10 +225,10 @@ export const useNewsBlockEditor = (
     }
   };
 
-  // Auto-save when changes are made with improved throttling
+  // Auto-save when changes are made with improved throttling and optimistic updates
   useEffect(() => {
     if (selectedBlockId && hasUnsavedChanges) {
-      // Throttle auto-save attempts 
+      // Throttle auto-save attempts much more aggressively
       const now = Date.now();
       if (now - lastAutoSaveAttempt.current < AUTO_SAVE_THROTTLE) {
         return;
@@ -226,13 +236,22 @@ export const useNewsBlockEditor = (
       
       lastAutoSaveAttempt.current = now;
       
+      // Apply optimistic update first for better UX
+      if (options?.updateLocalBlock) {
+        options.updateLocalBlock({
+          id: selectedBlockId,
+          title: editedBlockData.title,
+          content: editedBlockData.content
+        });
+      }
+      
       const cleanup = debouncedSave(
         selectedBlockId, 
         {
           title: editedBlockData.title,
           content: editedBlockData.content
         },
-        2000, // Increased debounce time to reduce save frequency
+        3000, // Increased debounce time to reduce save frequency
         {
           showToast: false, // Don't show toast for auto-saves
           onStart: () => {

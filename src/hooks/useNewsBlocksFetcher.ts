@@ -9,7 +9,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Cache fetched data
+  // Cache fetched data with longer TTL
   const cachedData = useRef<{
     companyId: string | undefined,
     data: CompanyNewsBlock[],
@@ -21,8 +21,11 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   const isMounted = useRef(true);
   const activeRequest = useRef<AbortController | null>(null);
   const lastFetchTime = useRef<number>(0);
-  const MIN_FETCH_INTERVAL = 2000; // Minimum 2 seconds between fetches
-  const CACHE_TTL = 10000; // Cache valid for 10 seconds (increased)
+  const MIN_FETCH_INTERVAL = 5000; // Increased to 5 seconds between fetches
+  const CACHE_TTL = 30000; // Cache valid for 30 seconds (increased significantly)
+  
+  // Flag to track if a fetch was forced
+  const fetchForced = useRef<boolean>(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -35,13 +38,35 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     };
   }, []);
 
+  // Update local blocks without refetching
+  const updateLocalBlock = useCallback((updatedBlock: Partial<CompanyNewsBlock> & { id: string }) => {
+    setBlocks(currentBlocks => {
+      return currentBlocks.map(block => 
+        block.id === updatedBlock.id 
+          ? { ...block, ...updatedBlock, updatedAt: new Date() } 
+          : block
+      );
+    });
+    
+    // Also update cache if it exists
+    if (cachedData.current) {
+      cachedData.current.data = cachedData.current.data.map(block => 
+        block.id === updatedBlock.id 
+          ? { ...block, ...updatedBlock, updatedAt: new Date() } 
+          : block
+      );
+    }
+  }, []);
+
   const fetchNewsBlocks = useCallback(async (force = false) => {
     if (!companyId) {
       setLoading(false);
       return;
     }
 
-    // Return cached data if available and not forced refresh
+    fetchForced.current = force;
+
+    // Return cached data if available and not forced refresh with increased TTL
     const now = Date.now();
     if (
       !force && 
@@ -54,7 +79,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       return;
     }
 
-    // Prevent too frequent fetches
+    // Prevent too frequent fetches with much stronger throttling
     if (!force && now - lastFetchTime.current < MIN_FETCH_INTERVAL) {
       console.log("Fetch attempted too soon, skipping");
       return;
@@ -112,12 +137,17 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       setBlocks(sortedBlocks);
       setError(null);
 
-      // Cache the fetched data
+      // Cache the fetched data with longer TTL
       cachedData.current = {
         companyId,
         data: sortedBlocks,
         timestamp: now
       };
+      
+      // Only show fetch success toast if it was forced
+      if (force && fetchForced.current) {
+        toast.success("Content refreshed", { duration: 2000 });
+      }
     } catch (err) {
       // Ignore aborted requests
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -129,8 +159,8 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         console.error('Error fetching news blocks:', err);
         setError(err instanceof Error ? err : new Error(String(err)));
         
-        // Only show toast for non-forced fetches to avoid spamming the user
-        if (!force) {
+        // Only show toast for forced fetches to avoid spamming the user
+        if (force && fetchForced.current) {
           toast.error("Failed to load news content", {
             description: err.message || "Please try again"
           });
@@ -140,14 +170,19 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       if (isMounted.current) {
         setLoading(false);
       }
+      fetchForced.current = false;
     }
   }, [companyId]);
 
-  // Fetch initial data
+  // Fetch initial data only once
   useEffect(() => {
     // When companyId changes, clear cache
-    cachedData.current = null;
-    fetchNewsBlocks(true);
+    if (cachedData.current?.companyId !== companyId) {
+      cachedData.current = null;
+      fetchNewsBlocks(true);
+    } else if (!cachedData.current) {
+      fetchNewsBlocks(true);
+    }
   }, [companyId, fetchNewsBlocks]);
 
   // Public API
@@ -156,7 +191,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     loading, 
     error, 
     refetch: (force = true) => fetchNewsBlocks(force),
-    // Include some stats to help with debugging
+    updateLocalBlock, // New method to update a block locally without refetching
     lastFetchTime: lastFetchTime.current,
     isCacheValid: cachedData.current && Date.now() - cachedData.current.timestamp < CACHE_TTL
   };

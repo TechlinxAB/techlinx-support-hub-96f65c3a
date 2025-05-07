@@ -96,7 +96,7 @@ export const useOptimizedNewsBlockSave = () => {
         .abortSignal(abortController.signal);
       
       // Race between the timeout and the update
-      const { error, data: responseData } = await Promise.race([
+      const { error } = await Promise.race([
         updatePromise,
         timeoutPromise
       ]) as any;
@@ -112,7 +112,6 @@ export const useOptimizedNewsBlockSave = () => {
       if (toastId && options?.showToast !== false) {
         toast.success("Changes saved", {
           id: toastId,
-          description: `Completed in ${Math.round(saveTime)}ms`,
           duration: 3000
         });
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -15,160 +15,71 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
-import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2 } from 'lucide-react';
-
-// Debounce utility function
-const useDebounce = (callback: Function, delay: number) => {
-  const timeoutRef = React.useRef<number | null>(null);
-
-  const debouncedCallback = useCallback((...args: any[]) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    
-    timeoutRef.current = window.setTimeout(() => {
-      callback(...args);
-    }, delay);
-  }, [callback, delay]);
-
-  return debouncedCallback;
-};
+import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit } from 'lucide-react';
+import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
+import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { 
     companies, 
-    companyNewsBlocks, 
     addCompanyNewsBlock, 
     updateCompanyNewsBlock,
     deleteCompanyNewsBlock, 
     publishCompanyNewsBlock,
-    refetchCompanyNewsBlocks,
-    currentUser,
-    loadingCompanyNewsBlocks
+    currentUser
   } = useAppContext();
 
-  // State
-  const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('edit');
-  const [loading, setLoading] = useState(false);
-  const [saveStartTime, setSaveStartTime] = useState<number | null>(null);
-  
-  // Form state for selected block (prevents auto-update)
-  const [editedBlockData, setEditedBlockData] = useState<any>({});
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [initialSelectedBlockId, setInitialSelectedBlockId] = useState<string | null>(null);
+  // Get blocks using our optimized fetcher 
+  const { 
+    blocks, 
+    loading: loadingCompanyNewsBlocks, 
+    refetch: refetchCompanyNewsBlocks,
+    updateLocalBlock 
+  } = useNewsBlocksFetcher(companyId);
 
-  // Form state for new blocks
+  // State
   const [newBlockType, setNewBlockType] = useState<NewsBlockType>('heading');
   const [newBlockTitle, setNewBlockTitle] = useState('');
-
+  const [loading, setLoading] = useState(false);
+  
   const company = companies.find(c => c.id === companyId);
 
-  useEffect(() => {
-    if (companyId) {
-      refetchCompanyNewsBlocks(companyId);
+  // Use our newsblock editor with optimistic updates
+  const { 
+    selectedBlockId, 
+    setSelectedBlockId,
+    selectedBlock,
+    editedBlockData,
+    hasUnsavedChanges,
+    saving,
+    activeTab,
+    setActiveTab,
+    handleFormChange,
+    handleNestedContentChange, 
+    saveCurrentBlock,
+    getDefaultContent
+  } = useNewsBlockEditor(blocks, {
+    updateLocalBlock, // Pass the optimistic update function
+    onSaveSuccess: () => {
+      // Don't refetch after save - we already updated local state
+      console.log('Save successful, updated local state');
+    },
+    onSaveError: (error) => {
+      console.error('Error during save:', error);
+      // Only refetch on error to recover correct state
+      refetchCompanyNewsBlocks(true);
     }
-  }, [companyId, refetchCompanyNewsBlocks]);
-
-  useEffect(() => {
-    if (!loadingCompanyNewsBlocks && companyId) {
-      const companyBlocks = companyNewsBlocks
-        .filter(block => block.companyId === companyId)
-        .sort((a, b) => a.position - b.position);
-      setBlocks(companyBlocks);
-
-      // Select the first block if none selected
-      if (companyBlocks.length > 0 && !selectedBlockId) {
-        setSelectedBlockId(companyBlocks[0].id);
-      }
-    }
-  }, [companyNewsBlocks, companyId, loadingCompanyNewsBlocks, selectedBlockId]);
-
-  // Update editedBlockData when selected block changes
-  useEffect(() => {
-    // Only initialize data when the selectedBlockId changes or it's the first time loading
-    if (selectedBlock && selectedBlockId !== initialSelectedBlockId) {
-      // Initialize with default content based on block type if content is undefined
-      const defaultContent = getDefaultContent(selectedBlock.type);
-      
-      // Make sure we have content with the correct structure
-      const blockContent = selectedBlock.content || defaultContent;
-      
-      console.log('Initializing editor with block data:', selectedBlock.title, blockContent);
-      
-      setEditedBlockData({
-        title: selectedBlock.title,
-        content: blockContent,
-        isPublished: selectedBlock.isPublished
-      });
-      setHasUnsavedChanges(false);
-      setInitialSelectedBlockId(selectedBlockId);
-    }
-  }, [selectedBlockId, initialSelectedBlockId]);
-
-  const selectedBlock = blocks.find(block => block.id === selectedBlockId);
-
-  // Function to create default content based on block type
-  const getDefaultContent = (type: NewsBlockType) => {
-    switch (type) {
-      case 'heading':
-        return { level: 2, text: 'New Heading' };
-      case 'text':
-        return { text: 'Enter your text here...' };
-      case 'card':
-        return {
-          title: 'Card Title',
-          content: 'Card content goes here...',
-          icon: '',
-          action: { label: 'Learn More', link: '#' }
-        };
-      case 'faq':
-        return {
-          items: [
-            { question: 'Frequently Asked Question', answer: 'Answer to the question.' }
-          ]
-        };
-      case 'links':
-        return {
-          links: [
-            { label: 'Link 1', url: '#', icon: '' },
-            { label: 'Link 2', url: '#', icon: '' }
-          ]
-        };
-      case 'dropdown':
-        return {
-          title: 'Dropdown Title',
-          items: [
-            { label: 'Item 1', content: 'Content for item 1' },
-            { label: 'Item 2', content: 'Content for item 2' }
-          ]
-        };
-      case 'image':
-        return { url: '', alt: 'Image description', caption: '' };
-      case 'notice':
-        return { 
-          type: 'info', 
-          title: 'Notice Title', 
-          message: 'Notice message goes here...' 
-        };
-      default:
-        return {};
-    }
-  };
+  });
 
   const handleAddBlock = async () => {
     if (!companyId || !newBlockType || !newBlockTitle.trim()) {
-      toast({
-        title: "Error",
-        description: "Company ID, block type and title are required",
-        variant: "destructive"
+      toast("Error", {
+        description: "Company ID, block type and title are required"
       });
       return;
     }
@@ -190,78 +101,65 @@ const CompanyNewsBuilderPage = () => {
       });
 
       if (newBlockId) {
+        // Add block to local state optimistically
+        const newBlock: CompanyNewsBlock = {
+          id: newBlockId,
+          companyId,
+          title: newBlockTitle,
+          type: newBlockType,
+          content: getDefaultContent(newBlockType),
+          position,
+          isPublished: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        // Only refetch when adding a new block - we need the server-generated ID
+        await refetchCompanyNewsBlocks(true);
+        
+        // After refetch, select the new block
         setSelectedBlockId(newBlockId);
         setNewBlockTitle('');
-        toast({
-          title: "Success",
-          description: "Block added successfully"
-        });
+        
+        toast.success("Block added successfully");
       }
     } catch (error) {
       console.error('Error adding block:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add block",
-        variant: "destructive"
+      toast.error("Failed to add block", {
+        description: error.message || "Please try again"
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // New save block function with performance logging
-  const handleSaveBlock = async () => {
-    if (!selectedBlockId || !selectedBlock) return;
-    
-    setLoading(true);
-    setSaveStartTime(Date.now());
-    console.log('Starting save operation at:', new Date().toISOString());
-    console.log('Content size:', JSON.stringify(editedBlockData.content).length, 'bytes');
-    
-    try {
-      await updateCompanyNewsBlock(selectedBlockId, {
-        title: editedBlockData.title,
-        content: editedBlockData.content
-      });
-      
-      const saveTime = Date.now() - (saveStartTime || Date.now());
-      console.log(`Save completed in ${saveTime}ms`);
-      
-      toast({
-        title: "Success",
-        description: `Changes saved successfully (${saveTime}ms)`
-      });
-      setHasUnsavedChanges(false);
-    } catch (error) {
-      console.error('Error saving block:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save changes",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-      setSaveStartTime(null);
-    }
-  };
-
-  // Rest of the component functions
   const handleDeleteBlock = async (blockId: string) => {
     setLoading(true);
     try {
+      // Optimistically remove from local state
+      const deletedBlock = blocks.find(b => b.id === blockId);
+      const updatedBlocks = blocks.filter(b => b.id !== blockId);
+      
+      // If the deleted block is selected, select another one
+      if (selectedBlockId === blockId) {
+        setSelectedBlockId(updatedBlocks.length > 0 ? updatedBlocks[0].id : null);
+      }
+      
+      // Delete from database
       await deleteCompanyNewsBlock(blockId);
-      setSelectedBlockId(blocks.length > 1 ? blocks[0].id : null);
-      toast({
-        title: "Success",
-        description: "Block deleted successfully"
-      });
+      
+      // Trigger refetch to ensure local state is consistent
+      refetchCompanyNewsBlocks(true);
+      
+      toast.success("Block deleted successfully");
     } catch (error) {
       console.error('Error deleting block:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete block",
-        variant: "destructive"
+      toast.error("Failed to delete block", {
+        description: error.message || "Please try again"
       });
+      
+      // Refetch to ensure state is correct after error
+      refetchCompanyNewsBlocks(true);
     } finally {
       setLoading(false);
     }
@@ -277,49 +175,72 @@ const CompanyNewsBuilderPage = () => {
     if (direction === 'up' && blockIndex > 0) {
       const targetBlock = newBlocks[blockIndex - 1];
       
-      // Swap positions
+      // Swap positions 
       const temp = targetBlock.position;
       targetBlock.position = block.position;
       block.position = temp;
       
-      // Update in database
+      // Update positions in database without triggering full refetch
       setLoading(true);
       try {
+        // Optimistically update local state
+        const updatedBlocks = newBlocks.sort((a, b) => a.position - b.position);
+        
+        // Make database updates
         await updateCompanyNewsBlock(block.id, { position: block.position });
         await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
-        await refetchCompanyNewsBlocks(companyId);
+        
+        // Use local update instead of refetch
+        updatedBlocks.forEach(b => {
+          updateLocalBlock({
+            id: b.id,
+            position: b.position
+          });
+        });
       } catch (error) {
         console.error('Error moving block:', error);
-        toast({
-          title: "Error",
-          description: "Failed to move block",
-          variant: "destructive"
+        toast.error("Failed to move block", {
+          description: error.message || "Please try again"
         });
+        
+        // Only refetch on error
+        refetchCompanyNewsBlocks(true);
       } finally {
         setLoading(false);
       }
     } 
     else if (direction === 'down' && blockIndex < newBlocks.length - 1) {
+      // Same pattern as moving up
       const targetBlock = newBlocks[blockIndex + 1];
       
-      // Swap positions
       const temp = targetBlock.position;
       targetBlock.position = block.position;
       block.position = temp;
       
-      // Update in database
       setLoading(true);
       try {
+        // Sort by position to simulate the update
+        const updatedBlocks = newBlocks.sort((a, b) => a.position - b.position);
+        
+        // Database updates
         await updateCompanyNewsBlock(block.id, { position: block.position });
         await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
-        await refetchCompanyNewsBlocks(companyId);
+        
+        // Update local state without full refetch
+        updatedBlocks.forEach(b => {
+          updateLocalBlock({
+            id: b.id,
+            position: b.position
+          });
+        });
       } catch (error) {
         console.error('Error moving block:', error);
-        toast({
-          title: "Error",
-          description: "Failed to move block",
-          variant: "destructive"
+        toast.error("Failed to move block", {
+          description: error.message || "Please try again"
         });
+        
+        // Only refetch on error
+        refetchCompanyNewsBlocks(true);
       } finally {
         setLoading(false);
       }
@@ -329,78 +250,34 @@ const CompanyNewsBuilderPage = () => {
   const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
     setLoading(true);
     try {
+      // Optimistic update
+      updateLocalBlock({
+        id: blockId,
+        isPublished
+      });
+      
+      // Database update
       await publishCompanyNewsBlock(blockId, isPublished);
-      toast({
-        title: isPublished ? "Published" : "Unpublished",
+      
+      toast.success(isPublished ? "Published" : "Unpublished", {
         description: `Block ${isPublished ? 'published' : 'unpublished'} successfully`
       });
     } catch (error) {
       console.error('Error toggling publish status:', error);
-      toast({
-        title: "Error",
-        description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`,
-        variant: "destructive"
+      toast.error("Error", {
+        description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
+      
+      // Only refetch on error
+      refetchCompanyNewsBlocks(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle form input changes without immediately saving to database
-  const handleFormChange = (field: string, value: any) => {
-    console.log(`Form field changed: ${field}`, value);
-    setEditedBlockData((prev: any) => {
-      if (field.startsWith('content.')) {
-        const contentField = field.replace('content.', '');
-        return {
-          ...prev,
-          content: {
-            ...prev.content,
-            [contentField]: value
-          }
-        };
-      }
-      return {
-        ...prev,
-        [field]: value
-      };
-    });
-    setHasUnsavedChanges(true);
-  };
-
-  // Complex nested object change handler
-  const handleNestedContentChange = (path: string[], value: any) => {
-    console.log(`Nested content changed: ${path.join('.')}`, value);
-    setEditedBlockData((prev: any) => {
-      const newContent = { ...prev.content };
-      
-      let current = newContent;
-      for (let i = 0; i < path.length - 1; i++) {
-        const key = path[i];
-        if (Array.isArray(current[key])) {
-          // If it's an array, we need to make a copy of the array
-          current[key] = [...current[key]];
-          current = current[key];
-        } else {
-          // If it's an object, we need to make a copy of the object
-          current[key] = { ...current[key] };
-          current = current[key];
-        }
-      }
-      
-      current[path[path.length - 1]] = value;
-      
-      return {
-        ...prev,
-        content: newContent
-      };
-    });
-    
-    setHasUnsavedChanges(true);
-  };
-
   // Content editor based on block type
   const renderBlockEditor = () => {
+    // ... keep existing code (block editor implementation)
     if (!selectedBlock || !editedBlockData || !editedBlockData.content) return null;
 
     // Make sure we have the necessary content structure for each block type
@@ -546,50 +423,43 @@ const CompanyNewsBuilderPage = () => {
           </div>
         );
       
-      case 'notice':
+      case 'notice': {
+        const noticeType = displayContent.type || 'info';
+        let bgColor = 'bg-blue-50';
+        let borderColor = 'border-blue-300';
+        let textColor = 'text-blue-800';
+        
+        switch (noticeType) {
+          case 'warning':
+            bgColor = 'bg-yellow-50';
+            borderColor = 'border-yellow-300';
+            textColor = 'text-yellow-800';
+            break;
+          case 'success':
+            bgColor = 'bg-green-50';
+            borderColor = 'border-green-300';
+            textColor = 'text-green-800';
+            break;
+          case 'error':
+            bgColor = 'bg-red-50';
+            borderColor = 'border-red-300';
+            textColor = 'text-red-800';
+            break;
+        }
+        
         return (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="notice-type">Notice Type</Label>
-              <Select 
-                value={editedBlockData.content.type || 'info'} 
-                onValueChange={(value) => handleFormChange('content.type', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select notice type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="info">Info</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                  <SelectItem value="success">Success</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notice-title">Notice Title</Label>
-              <Input 
-                id="notice-title" 
-                value={editedBlockData.content.title || ''} 
-                onChange={(e) => handleFormChange('content.title', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notice-message">Notice Message</Label>
-              <Textarea 
-                id="notice-message" 
-                rows={5}
-                value={editedBlockData.content.message || ''} 
-                onChange={(e) => handleFormChange('content.message', e.target.value)}
-              />
-            </div>
+          <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
+            <h4 className={`font-medium ${textColor}`}>{displayContent.title || 'Notice Title'}</h4>
+            <p className={`mt-2 ${textColor}`}>{displayContent.message || 'Notice message'}</p>
           </div>
         );
+      }
       
-      case 'faq':
+      case 'faq': {
+        const items = displayContent.items || [];
         return (
-          <div className="space-y-6">
-            {editedBlockData.content.items?.map((item: any, index: number) => (
+          <div className="mt-4 space-y-6">
+            {items.length > 0 ? items.map((item: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`faq-question-${index}`}>Question {index + 1}</Label>
@@ -628,7 +498,12 @@ const CompanyNewsBuilderPage = () => {
                   Remove Question
                 </Button>
               </div>
-            ))}
+            )) : (
+              <div>
+                <h4 className="font-medium">Sample Question</h4>
+                <p className="mt-1">Sample Answer</p>
+              </div>
+            )}
             <Button 
               variant="outline"
               onClick={() => {
@@ -640,11 +515,13 @@ const CompanyNewsBuilderPage = () => {
             </Button>
           </div>
         );
+      }
       
-      case 'links':
+      case 'links': {
+        const links = displayContent.links || [];
         return (
-          <div className="space-y-6">
-            {editedBlockData.content.links?.map((link: any, index: number) => (
+          <div className="mt-4 space-y-6">
+            {links.length > 0 ? links.map((link: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`link-label-${index}`}>Link {index + 1} Label</Label>
@@ -694,7 +571,11 @@ const CompanyNewsBuilderPage = () => {
                   Remove Link
                 </Button>
               </div>
-            ))}
+            )) : (
+              <div className="flex items-center">
+                <a href="#" className="text-blue-600 hover:underline">Sample Link</a>
+              </div>
+            )}
             <Button 
               variant="outline"
               onClick={() => {
@@ -706,70 +587,31 @@ const CompanyNewsBuilderPage = () => {
             </Button>
           </div>
         );
-
-      case 'dropdown':
+      }
+      
+      case 'dropdown': {
+        const title = displayContent.title || 'Dropdown Title';
+        const items = displayContent.items || [];
+        
         return (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="dropdown-title">Dropdown Title</Label>
-              <Input 
-                id="dropdown-title" 
-                value={editedBlockData.content.title || ''} 
-                onChange={(e) => handleFormChange('content.title', e.target.value)}
-              />
+          <div className="mt-4">
+            <h3 className="font-medium">{title}</h3>
+            <div className="mt-2 border rounded-md divide-y">
+              {items.length > 0 ? items.map((item: any, index: number) => (
+                <div key={index} className="p-3">
+                  <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
+                  {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
+                </div>
+              )) : (
+                <div className="p-3">
+                  <h4 className="text-sm font-medium">Sample Item</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">Sample content</p>
+                </div>
+              )}
             </div>
-            
-            {editedBlockData.content.items?.map((item: any, index: number) => (
-              <div key={index} className="space-y-4 border-b pb-4">
-                <div className="space-y-2">
-                  <Label htmlFor={`dropdown-label-${index}`}>Item {index + 1} Label</Label>
-                  <Input 
-                    id={`dropdown-label-${index}`}
-                    value={item.label || ''} 
-                    onChange={(e) => {
-                      const newItems = [...editedBlockData.content.items];
-                      newItems[index] = { ...newItems[index], label: e.target.value };
-                      handleFormChange('content.items', newItems);
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`dropdown-content-${index}`}>Item {index + 1} Content</Label>
-                  <Textarea 
-                    id={`dropdown-content-${index}`}
-                    rows={3}
-                    value={item.content || ''} 
-                    onChange={(e) => {
-                      const newItems = [...editedBlockData.content.items];
-                      newItems[index] = { ...newItems[index], content: e.target.value };
-                      handleFormChange('content.items', newItems);
-                    }}
-                  />
-                </div>
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => {
-                    const newItems = editedBlockData.content.items.filter((_: any, i: number) => i !== index);
-                    handleFormChange('content.items', newItems);
-                  }}
-                  disabled={editedBlockData.content.items.length <= 1}
-                >
-                  Remove Item
-                </Button>
-              </div>
-            ))}
-            <Button 
-              variant="outline"
-              onClick={() => {
-                const newItems = [...(editedBlockData.content.items || []), { label: 'New Item', content: 'Content here...' }];
-                handleFormChange('content.items', newItems);
-              }}
-            >
-              Add Item
-            </Button>
           </div>
         );
+      }
       
       default:
         return <div>Select a block type</div>;
@@ -984,7 +826,7 @@ const CompanyNewsBuilderPage = () => {
                         <Button 
                           size="icon"
                           variant="ghost"
-                          disabled={index === 0}
+                          disabled={index === 0 || loading}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMoveBlock(block.id, 'up');
@@ -996,7 +838,7 @@ const CompanyNewsBuilderPage = () => {
                         <Button 
                           size="icon"
                           variant="ghost"
-                          disabled={index === blocks.length - 1}
+                          disabled={index === blocks.length - 1 || loading}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMoveBlock(block.id, 'down');
@@ -1011,7 +853,7 @@ const CompanyNewsBuilderPage = () => {
                 </div>
               ) : (
                 <div className="text-center py-4">
-                  <p className="text-muted-foreground">No blocks created yet</p>
+                  <p className="text-muted-foreground">{loadingCompanyNewsBlocks ? 'Loading...' : 'No blocks created yet'}</p>
                 </div>
               )}
               
@@ -1059,6 +901,18 @@ const CompanyNewsBuilderPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          <Button 
+            className="w-full" 
+            variant="outline"
+            onClick={() => refetchCompanyNewsBlocks(true)}
+            disabled={loadingCompanyNewsBlocks}
+          >
+            {loadingCompanyNewsBlocks ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Refresh Content
+          </Button>
         </div>
         
         {/* Main content area */}
@@ -1076,6 +930,7 @@ const CompanyNewsBuilderPage = () => {
                   <div className="flex items-center space-x-1">
                     <Switch
                       checked={editedBlockData.isPublished || false}
+                      disabled={loading || saving}
                       onCheckedChange={(checked) => {
                         handleTogglePublish(selectedBlock.id, checked);
                       }}
@@ -1085,7 +940,7 @@ const CompanyNewsBuilderPage = () => {
                   
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon">
+                      <Button variant="destructive" size="icon" disabled={loading || saving}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </AlertDialogTrigger>
@@ -1139,10 +994,10 @@ const CompanyNewsBuilderPage = () => {
                     {/* Save Button */}
                     <Button 
                       className="mt-4"
-                      disabled={!hasUnsavedChanges || loading} 
-                      onClick={handleSaveBlock}
+                      disabled={!hasUnsavedChanges || saving || loading} 
+                      onClick={saveCurrentBlock}
                     >
-                      {loading ? (
+                      {saving ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
                           Saving...
