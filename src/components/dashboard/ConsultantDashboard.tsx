@@ -4,6 +4,7 @@ import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import CaseList from '@/components/cases/CaseList';
+import { ChartContainer } from '@/components/ui/chart';
 
 const ConsultantDashboard = () => {
   const { cases, companies } = useAppContext();
@@ -116,8 +117,20 @@ const ConsultantDashboard = () => {
                   data={companyCaseCounts}
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
-                  <XAxis dataKey="name" />
-                  <YAxis />
+                  {/* Using default parameters instead of defaultProps */}
+                  <XAxis 
+                    dataKey="name"
+                    tick={{ fontSize: 12 }}
+                    height={50}
+                    tickLine={true}
+                    axisLine={true}
+                  />
+                  <YAxis
+                    width={40}
+                    tickLine={true}
+                    axisLine={true}
+                    tick={{ fontSize: 12 }}
+                  />
                   <Tooltip />
                   <Bar dataKey="cases" fill="#387A3D" />
                 </BarChart>
