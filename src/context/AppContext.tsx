@@ -243,7 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         300 // Categories change rarely - cache for 5 minutes
       );
       
-      const mappedCategories: CaseCategory[] = data.map(cat => ({
+      const mappedCategories: CaseCategory[] = data.map((cat: any) => ({
         id: cat.id,
         name: cat.name
       }));
@@ -255,18 +255,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchCompanies = async () => {
     try {
-      const data = await fetchWithRetry(
-        () => supabase.from('companies').select('*')
-      );
+      const { data, error } = await supabase.from('companies').select('*');
+      
+      if (error) throw error;
+      if (!data) return;
       
       const mappedCompanies: Company[] = data.map(company => ({
         id: company.id,
         name: company.name,
-        logo: company.logo
+        logo: company.logo || undefined
       }));
       setCompanies(mappedCompanies);
     } catch (error: any) {
       console.error('Error fetching companies:', error.message);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      
+      if (error) throw error;
+      if (!data) return;
+      
+      const mappedUsers: User[] = data.map(user => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || undefined,
+        companyId: user.company_id || '',
+        role: user.role as UserRole,
+        preferredLanguage: (user.preferred_language as Language) || 'en',
+        avatar: user.avatar || undefined
+      }));
+      setUsers(mappedUsers);
+    } catch (error: any) {
+      console.error('Error fetching users:', error.message);
     }
   };
 
@@ -361,32 +385,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const data = await fetchWithRetry(
-        () => supabase.from('profiles').select('*')
-      );
-      
-      const mappedUsers: User[] = data.map(user => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone || undefined,
-        companyId: user.company_id || '',
-        role: user.role as UserRole,
-        preferredLanguage: (user.preferred_language as Language) || 'en',
-        avatar: user.avatar
-      }));
-      setUsers(mappedUsers);
-    } catch (error: any) {
-      console.error('Error fetching users:', error.message);
-    }
-  };
-
-  const refetchUsers = async () => {
-    await fetchUsers();
   };
 
   const fetchCases = async () => {
