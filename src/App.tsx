@@ -24,7 +24,6 @@ import CompanyDashboardBuilderPage from "./pages/CompanyDashboardBuilderPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import CompanyManagementPage from "./pages/CompanyManagementPage";
 import SettingsPage from "./pages/SettingsPage";
-import SearchPage from "./pages/SearchPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 
@@ -63,7 +62,6 @@ const App = () => (
                     <Route path="users" element={<UserManagementPage />} />
                     <Route path="company-management" element={<CompanyManagementPage />} />
                     <Route path="settings" element={<SettingsPage />} />
-                    <Route path="search" element={<SearchPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Route>

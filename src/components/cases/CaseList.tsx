@@ -20,8 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import CaseCard from './CaseCard';
-import { Plus, Filter, RefreshCw, LayoutGrid, LayoutList } from 'lucide-react';
+import { Filter, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -30,18 +29,24 @@ interface CaseListProps {
   showFilters?: boolean;
   limit?: number;
   statusFilter?: CaseStatus | 'all';
+  searchQuery?: string;
 }
 
-const CaseList = ({ title = "All Cases", showFilters = true, limit, statusFilter = 'all' }: CaseListProps) => {
+const CaseList = ({ 
+  title = "All Cases", 
+  showFilters = true, 
+  limit, 
+  statusFilter = 'all',
+  searchQuery = ''
+}: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
   
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -54,9 +59,10 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit, statusFilter
     ? cases 
     : cases.filter(c => c.userId === currentUser?.id);
   
-  // Apply search filter
-  if (searchQuery) {
-    const query = searchQuery.toLowerCase();
+  // Apply search filter (either from props or local state)
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+  if (effectiveSearchQuery) {
+    const query = effectiveSearchQuery.toLowerCase();
     filteredCases = filteredCases.filter(c => 
       c.title.toLowerCase().includes(query) || 
       c.description.toLowerCase().includes(query)
@@ -114,32 +120,14 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit, statusFilter
           <h2 className="text-xl font-bold">{title}</h2>
           <div className="flex gap-2">
             {showFilters && (
-              <>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setShowFilterMenu(!showFilterMenu)}
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                </Button>
-                <Button 
-                  variant={viewMode === 'grid' ? 'default' : 'outline'}
-                  size="icon"
-                  className="w-8 h-8"
-                  onClick={() => setViewMode('grid')}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
-                  size="icon"
-                  className="w-8 h-8"
-                  onClick={() => setViewMode('list')}
-                >
-                  <LayoutList className="h-4 w-4" />
-                </Button>
-              </>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowFilterMenu(!showFilterMenu)}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+              </Button>
             )}
             <Button 
               variant="outline" 
@@ -149,29 +137,24 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit, statusFilter
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>
-            <Button 
-              size="sm" 
-              onClick={() => navigate('/cases/new')}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Case
-            </Button>
           </div>
+        </div>
+      )}
+      
+      {showFilters && !searchQuery && (
+        <div className="mb-4">
+          <Input
+            placeholder="Search cases..."
+            value={localSearchQuery}
+            onChange={(e) => setLocalSearchQuery(e.target.value)}
+            className="bg-background mb-2"
+          />
         </div>
       )}
       
       {showFilters && showFilterMenu && (
         <div className="bg-muted/50 p-3 rounded-lg mb-4 animate-fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <Input
-                placeholder="Search cases..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-background"
-              />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Select 
                 value={priorityFilter} 
@@ -213,12 +196,6 @@ const CaseList = ({ title = "All Cases", showFilters = true, limit, statusFilter
       {filteredCases.length === 0 ? (
         <div className="text-center p-8 bg-muted/50 rounded-lg">
           <p className="text-muted-foreground">No cases found</p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCases.map((caseItem) => (
-            <CaseCard key={caseItem.id} caseItem={caseItem} />
-          ))}
         </div>
       ) : (
         <div className="rounded-md border">
