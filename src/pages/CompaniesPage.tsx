@@ -11,7 +11,8 @@ import {
   LayoutDashboard, 
   Plus,
   Trash2,
-  Settings
+  Settings,
+  Edit
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -228,6 +229,30 @@ const CompaniesPage = () => {
                     >
                       <MessageCircle className="h-4 w-4" />
                       Cases
+                    </Button>
+                  </div>
+
+                  {/* New row for company news */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {currentUser?.role === 'consultant' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="flex gap-1 items-center justify-center"
+                        onClick={() => navigate(`/company-news-builder/${company.id}`)}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit News
+                      </Button>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex gap-1 items-center justify-center"
+                      onClick={() => navigate(`/company-news/${company.id}`)}
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      View News
                     </Button>
                   </div>
                 </div>

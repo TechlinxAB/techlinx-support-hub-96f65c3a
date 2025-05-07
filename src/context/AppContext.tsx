@@ -1,9 +1,9 @@
-
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { DashboardBlock } from '@/types/dashboard';
+import { CompanyNewsBlock } from '@/types/companyNews';
 
 // Define types
 export type UserRole = 'user' | 'consultant';
@@ -110,6 +110,7 @@ interface AppContextType {
   replies: Reply[];
   notes: Note[];
   dashboardBlocks: DashboardBlock[];
+  companyNewsBlocks: CompanyNewsBlock[];
   
   // Current state
   currentUser: User | null;
@@ -126,6 +127,7 @@ interface AppContextType {
   loadingReplies: boolean;
   loadingNotes: boolean;
   loadingDashboardBlocks: boolean;
+  loadingCompanyNewsBlocks: boolean;
   refetchCases: () => Promise<void>;
   refetchReplies: (caseId?: string) => Promise<void>;
   refetchNotes: (caseId?: string) => Promise<void>;
@@ -135,6 +137,13 @@ interface AppContextType {
   updateDashboardBlock: (blockId: string, updates: Partial<DashboardBlock>) => Promise<void>;
   deleteDashboardBlock: (blockId: string) => Promise<void>;
   refetchDashboardBlocks: (companyId?: string) => Promise<void>;
+
+  // Company news block actions
+  addCompanyNewsBlock: (block: Omit<CompanyNewsBlock, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<string | undefined>;
+  updateCompanyNewsBlock: (blockId: string, updates: Partial<CompanyNewsBlock>) => Promise<void>;
+  deleteCompanyNewsBlock: (blockId: string) => Promise<void>;
+  publishCompanyNewsBlock: (blockId: string, isPublished: boolean) => Promise<void>;
+  refetchCompanyNewsBlocks: (companyId?: string) => Promise<void>;
 
   // Company management
   addCompany: (company: Omit<Company, 'id'>) => Promise<string | undefined>;
@@ -156,7 +165,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notesData, setNotesData] = useState<Note[]>([]);
   const [categories, setCategories] = useState<CaseCategory[]>([]);
   const [dashboardBlocks, setDashboardBlocks] = useState<DashboardBlock[]>([]);
+  const [companyNewsBlocks, setCompanyNewsBlocks] = useState<CompanyNewsBlock[]>([]);
   const [loadingDashboardBlocks, setLoadingDashboardBlocks] = useState<boolean>(true);
+  const [loadingCompanyNewsBlocks, setLoadingCompanyNewsBlocks] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [language, setLanguage] = useState<Language>('en');
   const [loadingCases, setLoadingCases] = useState<boolean>(true);
@@ -226,6 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fetchUsers(),
       fetchCases(),
       fetchDashboardBlocks(),
+      fetchCompanyNewsBlocks(),
     ]);
   };
 
@@ -683,6 +695,192 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const fetchCompanyNewsBlocks = async (companyId?: string) => {
+    setLoadingCompanyNewsBlocks(true);
+    try {
+      let query = supabase
+        .from('company_news_blocks')
+        .select('*');
+      
+      if (companyId) {
+        query = query.eq('company_id', companyId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      if (data) {
+        const mappedBlocks: CompanyNewsBlock[] = data.map(block => ({
+          id: block.id,
+          companyId: block.company_id,
+          title: block.title,
+          content: block.content,
+          type: block.type as CompanyNewsBlock['type'],
+          position: block.position,
+          parentId: block.parent_id || undefined,
+          createdAt: new Date(block.created_at),
+          updatedAt: new Date(block.updated_at),
+          createdBy: block.created_by,
+          isPublished: block.is_published || false
+        }));
+        setCompanyNewsBlocks(mappedBlocks);
+      }
+    } catch (error: any) {
+      console.error('Error fetching company news blocks:', error.message);
+    } finally {
+      setLoadingCompanyNewsBlocks(false);
+    }
+  };
+
+  const refetchCompanyNewsBlocks = async (companyId?: string) => {
+    await fetchCompanyNewsBlocks(companyId);
+  };
+
+  const addCompanyNewsBlock = async (
+    block: Omit<CompanyNewsBlock, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
+  ): Promise<string | undefined> => {
+    try {
+      // Ensure we have the current user's ID
+      if (!user) {
+        throw new Error('User must be logged in to add company news blocks');
+      }
+
+      const { data, error } = await supabase
+        .from('company_news_blocks')
+        .insert({
+          company_id: block.companyId,
+          title: block.title,
+          content: block.content,
+          type: block.type,
+          position: block.position,
+          parent_id: block.parentId,
+          created_by: user.id,
+          is_published: block.isPublished
+        })
+        .select();
+      
+      if (error) throw error;
+      
+      if (data && data[0]) {
+        await refetchCompanyNewsBlocks(block.companyId);
+        toast({
+          title: "News Block Created",
+          description: "Your news block has been successfully created",
+        });
+        return data[0].id;
+      }
+    } catch (error: any) {
+      console.error('Error adding company news block:', error.message);
+      toast({
+        title: "Error Creating Block",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+    return undefined;
+  };
+
+  const updateCompanyNewsBlock = async (blockId: string, updates: Partial<CompanyNewsBlock>) => {
+    try {
+      // Convert from camelCase to snake_case for Supabase
+      const dbUpdates: any = {};
+      
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.content !== undefined) dbUpdates.content = updates.content;
+      if (updates.type !== undefined) dbUpdates.type = updates.type;
+      if (updates.position !== undefined) dbUpdates.position = updates.position;
+      if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId;
+      if (updates.companyId !== undefined) dbUpdates.company_id = updates.companyId;
+      if (updates.isPublished !== undefined) dbUpdates.is_published = updates.isPublished;
+      
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .update(dbUpdates)
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      // Find the company ID for refetching
+      const blockToUpdate = companyNewsBlocks.find(block => block.id === blockId);
+      if (blockToUpdate) {
+        await refetchCompanyNewsBlocks(blockToUpdate.companyId);
+      }
+      
+      toast({
+        title: "News Block Updated",
+        description: "The news block has been successfully updated",
+      });
+    } catch (error: any) {
+      console.error('Error updating company news block:', error.message);
+      toast({
+        title: "Error Updating Block",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteCompanyNewsBlock = async (blockId: string) => {
+    try {
+      // Find the company ID for refetching before deletion
+      const blockToDelete = companyNewsBlocks.find(block => block.id === blockId);
+      const companyId = blockToDelete?.companyId;
+      
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .delete()
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      if (companyId) {
+        await refetchCompanyNewsBlocks(companyId);
+      }
+      
+      toast({
+        title: "News Block Deleted",
+        description: "The news block has been successfully deleted",
+      });
+    } catch (error: any) {
+      console.error('Error deleting company news block:', error.message);
+      toast({
+        title: "Error Deleting Block",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const publishCompanyNewsBlock = async (blockId: string, isPublished: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .update({ is_published: isPublished })
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      // Find the company ID for refetching
+      const blockToUpdate = companyNewsBlocks.find(block => block.id === blockId);
+      if (blockToUpdate) {
+        await refetchCompanyNewsBlocks(blockToUpdate.companyId);
+      }
+      
+      toast({
+        title: isPublished ? "News Block Published" : "News Block Unpublished",
+        description: `The news block has been successfully ${isPublished ? 'published' : 'unpublished'}`,
+      });
+    } catch (error: any) {
+      console.error('Error updating company news block publish status:', error.message);
+      toast({
+        title: "Error Updating Block",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Actions
   const addCase = async (newCase: Omit<Case, 'id' | 'createdAt' | 'updatedAt'>): Promise<string | undefined> => {
     try {
@@ -818,6 +1016,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         replies: repliesData,
         notes: notesData,
         dashboardBlocks,
+        companyNewsBlocks,
         currentUser,
         language,
         setCurrentUser,
@@ -830,6 +1029,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadingReplies,
         loadingNotes,
         loadingDashboardBlocks,
+        loadingCompanyNewsBlocks,
         refetchCases,
         refetchReplies,
         refetchNotes,
@@ -837,6 +1037,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateDashboardBlock,
         deleteDashboardBlock,
         refetchDashboardBlocks,
+        addCompanyNewsBlock,
+        updateCompanyNewsBlock,
+        deleteCompanyNewsBlock,
+        publishCompanyNewsBlock,
+        refetchCompanyNewsBlocks,
         addCompany,
         updateCompany,
         deleteCompany,

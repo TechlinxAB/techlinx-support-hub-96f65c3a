@@ -208,6 +208,63 @@ export type Database = {
         }
         Relationships: []
       }
+      company_news_blocks: {
+        Row: {
+          company_id: string
+          content: Json
+          created_at: string | null
+          created_by: string
+          id: string
+          is_published: boolean | null
+          parent_id: string | null
+          position: number
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          content: Json
+          created_at?: string | null
+          created_by: string
+          id?: string
+          is_published?: boolean | null
+          parent_id?: string | null
+          position: number
+          title: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          content?: Json
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          is_published?: boolean | null
+          parent_id?: string | null
+          position?: number
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_news_blocks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_news_blocks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "company_news_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           company_id: string
