@@ -117,21 +117,29 @@ const ConsultantDashboard = () => {
                   data={companyCaseCounts}
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
-                  {/* Using default parameters instead of defaultProps */}
+                  {/* Explicitly providing all props instead of relying on defaultProps */}
                   <XAxis 
-                    dataKey="name"
+                    dataKey="name" 
+                    scale="band"
+                    padding={{ left: 10, right: 10 }}
                     tick={{ fontSize: 12 }}
-                    height={50}
+                    height={60}
                     tickLine={true}
                     axisLine={true}
+                    interval={0}
+                    tickMargin={5}
+                    minTickGap={0}
+                    allowDecimals={false}
                   />
                   <YAxis
                     width={40}
                     tickLine={true}
                     axisLine={true}
                     tick={{ fontSize: 12 }}
+                    allowDecimals={false}
+                    minTickGap={5}
                   />
-                  <Tooltip />
+                  <Tooltip cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }} />
                   <Bar dataKey="cases" fill="#387A3D" />
                 </BarChart>
               </ResponsiveContainer>
