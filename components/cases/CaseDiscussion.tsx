@@ -1,30 +1,71 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/components/ui/use-toast';
 
 interface CaseDiscussionProps {
   caseId: string;
 }
 
 const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
-  const { currentUser, replies, notes, addReply, addNote, users, loadingReplies, loadingNotes } = useAppContext();
+  const { 
+    currentUser, 
+    replies, 
+    notes, 
+    addReply, 
+    addNote, 
+    users, 
+    loadingReplies, 
+    loadingNotes, 
+    refetchReplies,
+    refetchNotes 
+  } = useAppContext();
   
   const [replyContent, setReplyContent] = useState('');
   const [isInternalReply, setIsInternalReply] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [attachments, setAttachments] = useState<FileList | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isRefetching, setIsRefetching] = useState(false);
   
+  const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
+
+  // Function to handle manual refetching with error handling
+  const handleRefetch = async () => {
+    setIsRefetching(true);
+    setFetchError(null);
+    
+    try {
+      await Promise.all([
+        refetchReplies(caseId),
+        refetchNotes(caseId)
+      ]);
+    } catch (error) {
+      setFetchError('Failed to load discussion. Please try again later.');
+      console.error('Error refetching data:', error);
+    } finally {
+      setIsRefetching(false);
+    }
+  };
+  
+  // Initial data fetch
+  useEffect(() => {
+    if (caseId) {
+      handleRefetch();
+    }
+  }, [caseId]); // Only depend on caseId to prevent refetch loops
   
   // Merge replies and notes, sort by date
   const allItems = [
@@ -51,16 +92,30 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     
     if (!replyContent.trim()) return;
     
-    await addReply({
-      caseId,
-      userId: currentUser!.id,
-      content: replyContent,
-      isInternal: isInternalReply
-    });
-    
-    setReplyContent('');
-    setIsInternalReply(false);
-    setAttachments(null);
+    try {
+      await addReply({
+        caseId,
+        userId: currentUser!.id,
+        content: replyContent,
+        isInternal: isInternalReply
+      });
+      
+      setReplyContent('');
+      setIsInternalReply(false);
+      setAttachments(null);
+      
+      toast({
+        title: "Reply sent",
+        description: "Your reply has been added to the discussion.",
+      });
+    } catch (error) {
+      console.error('Error adding reply:', error);
+      toast({
+        title: "Failed to send reply",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    }
   };
   
   const handleAddNote = async (e: React.FormEvent) => {
@@ -68,22 +123,60 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     
     if (!noteContent.trim()) return;
     
-    await addNote({
-      caseId,
-      userId: currentUser!.id,
-      content: noteContent,
-    });
-    
-    setNoteContent('');
+    try {
+      await addNote({
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+      });
+      
+      setNoteContent('');
+      
+      toast({
+        title: "Note added",
+        description: "Your internal note has been added.",
+      });
+    } catch (error) {
+      console.error('Error adding note:', error);
+      toast({
+        title: "Failed to add note",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    }
   };
   
-  if (loadingReplies || loadingNotes) {
+  if (fetchError) {
+    return (
+      <Card>
+        <CardHeader>Discussion</CardHeader>
+        <CardContent>
+          <Alert className="mb-4" variant="destructive">
+            <AlertDescription>{fetchError}</AlertDescription>
+          </Alert>
+          <div className="flex justify-center">
+            <Button 
+              onClick={handleRefetch} 
+              variant="outline"
+              disabled={isRefetching}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              {isRefetching ? 'Retrying...' : 'Retry'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  if (loadingReplies || loadingNotes || isRefetching) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
         <CardContent>
           <div className="flex justify-center p-8">
-            <p>Loading discussion...</p>
+            <p className="text-muted-foreground">Loading discussion...</p>
           </div>
         </CardContent>
       </Card>
@@ -94,7 +187,19 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <h3 className="text-lg font-semibold">Discussion</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Discussion</h3>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleRefetch}
+              disabled={isRefetching}
+              className="h-8 gap-1"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         
         <CardContent className="space-y-4">
