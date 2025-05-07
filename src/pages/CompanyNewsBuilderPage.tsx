@@ -111,7 +111,8 @@ const CompanyNewsBuilderPage = () => {
           position,
           isPublished: false,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          createdBy: currentUser?.id || '' // Add the missing createdBy property
         };
         
         // Only refetch when adding a new block - we need the server-generated ID
@@ -277,7 +278,6 @@ const CompanyNewsBuilderPage = () => {
 
   // Content editor based on block type
   const renderBlockEditor = () => {
-    // ... keep existing code (block editor implementation)
     if (!selectedBlock || !editedBlockData || !editedBlockData.content) return null;
 
     // Make sure we have the necessary content structure for each block type
@@ -424,7 +424,7 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'notice': {
-        const noticeType = displayContent.type || 'info';
+        const noticeType = content.type || 'info';  // Fixed: changed displayContent to content
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
         let textColor = 'text-blue-800';
@@ -449,14 +449,14 @@ const CompanyNewsBuilderPage = () => {
         
         return (
           <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
-            <h4 className={`font-medium ${textColor}`}>{displayContent.title || 'Notice Title'}</h4>
-            <p className={`mt-2 ${textColor}`}>{displayContent.message || 'Notice message'}</p>
+            <h4 className={`font-medium ${textColor}`}>{content.title || 'Notice Title'}</h4>
+            <p className={`mt-2 ${textColor}`}>{content.message || 'Notice message'}</p>
           </div>
         );
       }
       
       case 'faq': {
-        const items = displayContent.items || [];
+        const items = content.items || []; // Fixed: changed displayContent to content
         return (
           <div className="mt-4 space-y-6">
             {items.length > 0 ? items.map((item: any, index: number) => (
@@ -518,7 +518,7 @@ const CompanyNewsBuilderPage = () => {
       }
       
       case 'links': {
-        const links = displayContent.links || [];
+        const links = content.links || []; // Fixed: changed displayContent to content
         return (
           <div className="mt-4 space-y-6">
             {links.length > 0 ? links.map((link: any, index: number) => (
@@ -590,8 +590,8 @@ const CompanyNewsBuilderPage = () => {
       }
       
       case 'dropdown': {
-        const title = displayContent.title || 'Dropdown Title';
-        const items = displayContent.items || [];
+        const title = content.title || 'Dropdown Title'; // Fixed: changed displayContent to content
+        const items = content.items || []; // Fixed: changed displayContent to content
         
         return (
           <div className="mt-4">
@@ -895,146 +895,4 @@ const CompanyNewsBuilderPage = () => {
                   onClick={handleAddBlock}
                   disabled={!newBlockTitle.trim() || loading}
                 >
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                  Add Block
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Button 
-            className="w-full" 
-            variant="outline"
-            onClick={() => refetchCompanyNewsBlocks(true)}
-            disabled={loadingCompanyNewsBlocks}
-          >
-            {loadingCompanyNewsBlocks ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            Refresh Content
-          </Button>
-        </div>
-        
-        {/* Main content area */}
-        <div className="md:col-span-9">
-          {selectedBlock ? (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div>
-                  <CardTitle className="mb-1">{editedBlockData.title}</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedBlock.type} block
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="flex items-center space-x-1">
-                    <Switch
-                      checked={editedBlockData.isPublished || false}
-                      disabled={loading || saving}
-                      onCheckedChange={(checked) => {
-                        handleTogglePublish(selectedBlock.id, checked);
-                      }}
-                    />
-                    <Label>{editedBlockData.isPublished ? 'Published' : 'Draft'}</Label>
-                  </div>
-                  
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon" disabled={loading || saving}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete this block?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete this news block.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDeleteBlock(selectedBlock.id)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="pt-4">
-                <Tabs 
-                  defaultValue="edit" 
-                  value={activeTab} 
-                  onValueChange={setActiveTab} 
-                  className="w-full"
-                >
-                  <TabsList className="grid grid-cols-2 mb-4">
-                    <TabsTrigger value="edit">Edit</TabsTrigger>
-                    <TabsTrigger value="preview">Preview</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="edit" className="space-y-4">
-                    {/* Title Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="block-title">Block Title</Label>
-                      <Input 
-                        id="block-title"
-                        value={editedBlockData.title || ''}
-                        onChange={(e) => handleFormChange('title', e.target.value)}
-                      />
-                    </div>
-                    
-                    {/* Dynamic content editor based on block type */}
-                    {renderBlockEditor()}
-                    
-                    {/* Save Button */}
-                    <Button 
-                      className="mt-4"
-                      disabled={!hasUnsavedChanges || saving || loading} 
-                      onClick={saveCurrentBlock}
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          Save Changes
-                        </>
-                      )}
-                    </Button>
-                  </TabsContent>
-                  
-                  <TabsContent value="preview">
-                    <Card className="border-dashed">
-                      <CardContent className="pt-6">
-                        {renderBlockPreview(selectedBlock)}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-10 text-center">
-                <h2 className="text-xl font-semibold">No block selected</h2>
-                <p className="text-muted-foreground mt-2">
-                  Select a block from the left sidebar or create a new one to get started
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default CompanyNewsBuilderPage;
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin
