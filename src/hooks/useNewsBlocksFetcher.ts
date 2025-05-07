@@ -1,7 +1,8 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CompanyNewsBlock } from '@/types/companyNews';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 
 export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
@@ -25,6 +26,8 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   
   // Flag to track if a fetch was forced
   const fetchForced = useRef<boolean>(false);
+  // Track if we've already shown a success toast for this operation
+  const successToastShown = useRef<boolean>(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -67,6 +70,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     }
 
     fetchForced.current = force;
+    successToastShown.current = false;
 
     // Return cached data if available and not forced refresh
     const now = Date.now();
@@ -146,9 +150,10 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         timestamp: now
       };
       
-      // Only show fetch success toast if it was forced
-      if (force && fetchForced.current) {
+      // Only show fetch success toast if it was forced and we haven't shown one yet
+      if (force && fetchForced.current && !successToastShown.current) {
         toast("Content refreshed", { duration: 2000 });
+        successToastShown.current = true;
       }
     } catch (err: any) {
       // Ignore aborted requests
@@ -162,10 +167,11 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         setError(err instanceof Error ? err : new Error(String(err)));
         
         // Only show toast for forced fetches to avoid spamming the user
-        if (force && fetchForced.current) {
+        if (force && fetchForced.current && !successToastShown.current) {
           toast("Failed to load news content", {
             description: err.message || "Please try again"
           });
+          successToastShown.current = true;
         }
       }
     } finally {

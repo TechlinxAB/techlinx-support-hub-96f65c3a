@@ -1,5 +1,6 @@
+
 import { useState, useCallback, useRef } from 'react';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface SaveOptions {
@@ -22,6 +23,9 @@ export const useOptimizedNewsBlockSave = () => {
   // Throttle settings
   const MIN_SAVE_INTERVAL = 1000; // Minimum time between save operations
   const lastSaveTimestamp = useRef<number>(0);
+  
+  // Track active toast IDs to prevent duplicates
+  const activeToastIds = useRef<Map<string, string | number>>(new Map());
 
   const cancelPendingSave = (blockId: string) => {
     if (pendingSaves.current.has(blockId)) {
@@ -70,8 +74,16 @@ export const useOptimizedNewsBlockSave = () => {
       // Show a loading toast only if requested
       let toastId: string | number | undefined;
       if (options?.showToast !== false) {
-        // Using toast.loading which returns string or number
-        toastId = toast.loading("Saving changes...");
+        // If we already have a toast for this block, use that ID
+        if (activeToastIds.current.has(blockId)) {
+          toastId = activeToastIds.current.get(blockId);
+        } else {
+          // Using toast.loading which returns string or number
+          toastId = toast.loading("Saving changes...");
+          if (toastId !== -1) {
+            activeToastIds.current.set(blockId, toastId);
+          }
+        }
       }
       
       // Log save operation details for debugging
@@ -106,10 +118,18 @@ export const useOptimizedNewsBlockSave = () => {
       setLastSaveTime(saveTime);
       
       // Update toast status if it was shown
-      if (toastId && options?.showToast !== false) {
-        toast("Changes saved", {
-          id: toastId
+      if (toastId && toastId !== -1 && options?.showToast !== false) {
+        toast({
+          title: "News Block Updated",
+          description: "The news block has been successfully updated",
+          id: toastId,
+          variant: "success"
         });
+        
+        // Remove this toast ID after a delay
+        setTimeout(() => {
+          activeToastIds.current.delete(blockId);
+        }, 2000);
       }
       
       options?.onSuccess?.();
@@ -139,6 +159,9 @@ export const useOptimizedNewsBlockSave = () => {
       if (options?.onError) {
         options.onError(errorObject);
       }
+      
+      // Clear any active toast IDs for this block
+      activeToastIds.current.delete(blockId);
     } finally {
       setSaving(false);
       saveInProgress.current = false;

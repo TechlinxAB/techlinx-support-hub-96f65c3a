@@ -1,7 +1,8 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 
 interface UseNewsBlockEditorOptions {
   onSaveSuccess?: () => void; 
@@ -25,6 +26,9 @@ export const useNewsBlockEditor = (
   const manualSaveInProgress = useRef(false);
   const lastAutoSaveAttempt = useRef<number>(0);
   const AUTO_SAVE_THROTTLE = 5000; // Increased to 5 seconds between auto-save attempts
+  
+  // Track if we've shown an error toast for the current operation
+  const errorToastShown = useRef(false);
 
   // Get the save function from our optimized hook
   const { saving, debouncedSave, saveNewsBlock, isSaving } = useOptimizedNewsBlockSave();
@@ -96,6 +100,9 @@ export const useNewsBlockEditor = (
       });
       setHasUnsavedChanges(false);
       setInitialSelectedBlockId(selectedBlockId);
+      
+      // Reset error toast tracker when block selection changes
+      errorToastShown.current = false;
     }
   }, [selectedBlockId, initialSelectedBlockId, selectedBlock]);
 
@@ -181,6 +188,7 @@ export const useNewsBlockEditor = (
     
     manualSaveInProgress.current = true;
     setLocalSaving(true);
+    errorToastShown.current = false;
     
     // Apply optimistic update to local state immediately
     if (options?.updateLocalBlock) {
@@ -214,9 +222,15 @@ export const useNewsBlockEditor = (
       );
     } catch (error) {
       console.error('Error saving block:', error);
-      toast("Could not save changes", { 
-        description: "Please try again"
-      });
+      
+      // Only show the error toast if we haven't shown one already
+      if (!errorToastShown.current) {
+        toast("Could not save changes", { 
+          description: "Please try again"
+        });
+        errorToastShown.current = true;
+      }
+      
       options?.onSaveError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {
       setLocalSaving(false);
@@ -234,6 +248,7 @@ export const useNewsBlockEditor = (
       }
       
       lastAutoSaveAttempt.current = now;
+      errorToastShown.current = false;
       
       // Apply optimistic update first for better UX
       if (options?.updateLocalBlock) {
@@ -263,6 +278,16 @@ export const useNewsBlockEditor = (
           },
           onError: (error) => {
             console.error("Auto-save failed:", error.message);
+            
+            // Only show an error toast once per auto-save operation
+            if (!errorToastShown.current) {
+              toast("Auto-save failed", {
+                description: error.message || "Changes will be saved when connection is restored",
+                variant: "destructive"
+              });
+              errorToastShown.current = true;
+            }
+            
             options?.onSaveError?.(error);
           }
         }
