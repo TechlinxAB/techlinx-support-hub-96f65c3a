@@ -208,6 +208,56 @@ export type Database = {
         }
         Relationships: []
       }
+      company_settings: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          show_active_cases: boolean | null
+          show_company_dashboard_button: boolean | null
+          show_company_news_button: boolean | null
+          show_company_notices: boolean | null
+          show_new_case_button: boolean | null
+          show_subtitle: boolean | null
+          show_welcome: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          show_active_cases?: boolean | null
+          show_company_dashboard_button?: boolean | null
+          show_company_news_button?: boolean | null
+          show_company_notices?: boolean | null
+          show_new_case_button?: boolean | null
+          show_subtitle?: boolean | null
+          show_welcome?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          show_active_cases?: boolean | null
+          show_company_dashboard_button?: boolean | null
+          show_company_news_button?: boolean | null
+          show_company_notices?: boolean | null
+          show_new_case_button?: boolean | null
+          show_subtitle?: boolean | null
+          show_welcome?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dashboard_blocks: {
         Row: {
           company_id: string

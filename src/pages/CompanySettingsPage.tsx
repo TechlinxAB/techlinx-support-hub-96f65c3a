@@ -49,28 +49,27 @@ const CompanySettingsPage = () => {
       
       setLoading(true);
       try {
-        // Use type casting to bypass TypeScript limitations
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)
-          .single();
+          .maybeSingle();
         
-        if (error && error.code !== 'PGRST116') {
-          // PGRST116 means no rows returned
+        if (error) {
+          console.error('Error fetching company settings:', error);
           throw error;
         }
         
         if (data) {
           const settingsRow = data as unknown as CompanySettingsRow;
           setSettings({
-            showWelcome: settingsRow.show_welcome,
-            showSubtitle: settingsRow.show_subtitle,
-            showNewCaseButton: settingsRow.show_new_case_button,
-            showCompanyNewsButton: settingsRow.show_company_news_button,
-            showCompanyDashboardButton: settingsRow.show_company_dashboard_button,
-            showActiveCases: settingsRow.show_active_cases,
-            showCompanyNotices: settingsRow.show_company_notices,
+            showWelcome: settingsRow.show_welcome ?? true,
+            showSubtitle: settingsRow.show_subtitle ?? true,
+            showNewCaseButton: settingsRow.show_new_case_button ?? true,
+            showCompanyNewsButton: settingsRow.show_company_news_button ?? true,
+            showCompanyDashboardButton: settingsRow.show_company_dashboard_button ?? true,
+            showActiveCases: settingsRow.show_active_cases ?? true,
+            showCompanyNotices: settingsRow.show_company_notices ?? true,
           });
         }
       } catch (error) {
@@ -93,22 +92,52 @@ const CompanySettingsPage = () => {
     
     setIsSaving(true);
     try {
-      // Use type casting to bypass TypeScript limitations
-      const { data, error } = await (supabase as any)
+      // First check if settings for this company already exist
+      const { data: existingSettings, error: checkError } = await supabase
         .from('company_settings')
-        .upsert({
-          company_id: companyId,
-          show_welcome: settings.showWelcome,
-          show_subtitle: settings.showSubtitle,
-          show_new_case_button: settings.showNewCaseButton,
-          show_company_news_button: settings.showCompanyNewsButton,
-          show_company_dashboard_button: settings.showCompanyDashboardButton,
-          show_active_cases: settings.showActiveCases,
-          show_company_notices: settings.showCompanyNotices,
-        })
-        .select();
+        .select('id')
+        .eq('company_id', companyId)
+        .maybeSingle();
       
-      if (error) throw error;
+      if (checkError) {
+        console.error('Error checking existing settings:', checkError);
+        throw checkError;
+      }
+      
+      let result;
+      
+      if (existingSettings) {
+        // Update existing record
+        result = await supabase
+          .from('company_settings')
+          .update({
+            show_welcome: settings.showWelcome,
+            show_subtitle: settings.showSubtitle,
+            show_new_case_button: settings.showNewCaseButton,
+            show_company_news_button: settings.showCompanyNewsButton,
+            show_company_dashboard_button: settings.showCompanyDashboardButton,
+            show_active_cases: settings.showActiveCases,
+            show_company_notices: settings.showCompanyNotices,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId);
+      } else {
+        // Insert new record
+        result = await supabase
+          .from('company_settings')
+          .insert({
+            company_id: companyId,
+            show_welcome: settings.showWelcome,
+            show_subtitle: settings.showSubtitle,
+            show_new_case_button: settings.showNewCaseButton,
+            show_company_news_button: settings.showCompanyNewsButton,
+            show_company_dashboard_button: settings.showCompanyDashboardButton,
+            show_active_cases: settings.showActiveCases,
+            show_company_notices: settings.showCompanyNotices
+          });
+      }
+      
+      if (result.error) throw result.error;
       
       toast({
         title: "Settings Saved",
