@@ -13,7 +13,7 @@ import { Loader, PlusCircle, Trash, MoveUp, MoveDown, Edit, Eye, EyeOff } from '
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 
 const CompanyDashboardBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -106,6 +106,8 @@ const CompanyDashboardBuilderPage = () => {
   
   const handleSaveBlock = async () => {
     try {
+      const toastId = toast.loading("Saving dashboard block...");
+      
       if (editingBlock) {
         // Update existing block
         await updateDashboardBlock(editingBlock.id, {
@@ -129,13 +131,12 @@ const CompanyDashboardBuilderPage = () => {
         });
       }
       
+      toast.success("Block saved successfully", { id: toastId });
       setDialogOpen(false);
     } catch (error) {
       console.error('Error saving block:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save dashboard block",
-        variant: "destructive"
+      toast.error("Failed to save dashboard block", {
+        description: error.message || "Please try again"
       });
     }
   };

@@ -1,8 +1,7 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 
 interface UseNewsBlockEditorOptions {
   onSaveSuccess?: () => void; 
@@ -23,6 +22,8 @@ export const useNewsBlockEditor = (
   
   // Track manual save in progress
   const manualSaveInProgress = useRef(false);
+  const lastAutoSaveAttempt = useRef<number>(0);
+  const AUTO_SAVE_THROTTLE = 2000; // Minimum 2 seconds between auto-save attempts
 
   // Get the save function from our optimized hook
   const { saving, debouncedSave, saveNewsBlock, isSaving } = useOptimizedNewsBlockSave();
@@ -181,12 +182,6 @@ export const useNewsBlockEditor = (
     setLocalSaving(true);
     
     try {
-      const toastId = toast({
-        title: "Saving changes",
-        description: "Please wait while your changes are being saved...",
-        duration: 30000 // Long duration for potentially slow saves
-      });
-      
       await saveNewsBlock(
         selectedBlockId, 
         {
@@ -194,37 +189,23 @@ export const useNewsBlockEditor = (
           content: editedBlockData.content
         }, 
         {
+          showToast: true,
           onStart: () => {
             setLocalSaving(true);
           },
           onSuccess: () => {
             setHasUnsavedChanges(false);
-            toast({
-              id: toastId,
-              title: "Success",
-              description: "Changes saved successfully",
-              duration: 3000
-            });
             options?.onSaveSuccess?.();
           },
           onError: (error) => {
-            toast({
-              id: toastId,
-              title: "Error",
-              description: `Failed to save: ${error.message}`,
-              variant: "destructive",
-              duration: 5000
-            });
             options?.onSaveError?.(error);
           }
         }
       );
     } catch (error) {
       console.error('Error saving block:', error);
-      toast({
-        title: "Error",
-        description: "Could not save changes. Please try again.",
-        variant: "destructive",
+      toast.error("Could not save changes", { 
+        description: "Please try again",
         duration: 5000
       });
       options?.onSaveError?.(error instanceof Error ? error : new Error(String(error)));
@@ -234,17 +215,26 @@ export const useNewsBlockEditor = (
     }
   };
 
-  // Auto-save when changes are made with optimized debounce
+  // Auto-save when changes are made with improved throttling
   useEffect(() => {
     if (selectedBlockId && hasUnsavedChanges) {
+      // Throttle auto-save attempts 
+      const now = Date.now();
+      if (now - lastAutoSaveAttempt.current < AUTO_SAVE_THROTTLE) {
+        return;
+      }
+      
+      lastAutoSaveAttempt.current = now;
+      
       const cleanup = debouncedSave(
         selectedBlockId, 
         {
           title: editedBlockData.title,
           content: editedBlockData.content
         },
-        1800, // Slightly longer debounce time
+        2000, // Increased debounce time to reduce save frequency
         {
+          showToast: false, // Don't show toast for auto-saves
           onStart: () => {
             console.log("Auto-save starting...");
           },

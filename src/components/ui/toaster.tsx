@@ -38,7 +38,7 @@ export function Toaster() {
         )
       })}
       <ToastViewport />
-      <style jsx global>{`
+      <style>{`
         @keyframes toast-progress {
           from {
             transform: scaleX(1);
