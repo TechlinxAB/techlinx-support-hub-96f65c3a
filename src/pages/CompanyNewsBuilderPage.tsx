@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -19,7 +18,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
-import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2 } from 'lucide-react';
+
+// Debounce utility function
+const useDebounce = (callback: Function, delay: number) => {
+  const timeoutRef = React.useRef<number | null>(null);
+
+  const debouncedCallback = useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    timeoutRef.current = window.setTimeout(() => {
+      callback(...args);
+    }, delay);
+  }, [callback, delay]);
+
+  return debouncedCallback;
+};
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -42,6 +58,7 @@ const CompanyNewsBuilderPage = () => {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('edit');
   const [loading, setLoading] = useState(false);
+  const [saveStartTime, setSaveStartTime] = useState<number | null>(null);
   
   // Form state for selected block (prevents auto-update)
   const [editedBlockData, setEditedBlockData] = useState<any>({});
@@ -83,6 +100,8 @@ const CompanyNewsBuilderPage = () => {
       
       // Make sure we have content with the correct structure
       const blockContent = selectedBlock.content || defaultContent;
+      
+      console.log('Initializing editor with block data:', selectedBlock.title, blockContent);
       
       setEditedBlockData({
         title: selectedBlock.title,
@@ -190,20 +209,27 @@ const CompanyNewsBuilderPage = () => {
     }
   };
 
-  // New save block function
+  // New save block function with performance logging
   const handleSaveBlock = async () => {
     if (!selectedBlockId || !selectedBlock) return;
     
     setLoading(true);
+    setSaveStartTime(Date.now());
+    console.log('Starting save operation at:', new Date().toISOString());
+    console.log('Content size:', JSON.stringify(editedBlockData.content).length, 'bytes');
+    
     try {
       await updateCompanyNewsBlock(selectedBlockId, {
         title: editedBlockData.title,
         content: editedBlockData.content
       });
       
+      const saveTime = Date.now() - (saveStartTime || Date.now());
+      console.log(`Save completed in ${saveTime}ms`);
+      
       toast({
         title: "Success",
-        description: "Changes saved successfully"
+        description: `Changes saved successfully (${saveTime}ms)`
       });
       setHasUnsavedChanges(false);
     } catch (error) {
@@ -215,9 +241,11 @@ const CompanyNewsBuilderPage = () => {
       });
     } finally {
       setLoading(false);
+      setSaveStartTime(null);
     }
   };
 
+  // Rest of the component functions
   const handleDeleteBlock = async (blockId: string) => {
     setLoading(true);
     try {
@@ -320,6 +348,7 @@ const CompanyNewsBuilderPage = () => {
 
   // Handle form input changes without immediately saving to database
   const handleFormChange = (field: string, value: any) => {
+    console.log(`Form field changed: ${field}`, value);
     setEditedBlockData((prev: any) => {
       if (field.startsWith('content.')) {
         const contentField = field.replace('content.', '');
@@ -341,6 +370,7 @@ const CompanyNewsBuilderPage = () => {
 
   // Complex nested object change handler
   const handleNestedContentChange = (path: string[], value: any) => {
+    console.log(`Nested content changed: ${path.join('.')}`, value);
     setEditedBlockData((prev: any) => {
       const newContent = { ...prev.content };
       
@@ -886,259 +916,3 @@ const CompanyNewsBuilderPage = () => {
       case 'dropdown': {
         const title = displayContent.title || 'Dropdown Title';
         const items = displayContent.items || [];
-        return (
-          <div className="mt-4">
-            <h4 className="font-medium">{title}</h4>
-            <div className="space-y-2 mt-2">
-              {items.length > 0 ? items.map((item: any, index: number) => (
-                <div key={index} className="border p-2 rounded-md">
-                  <p className="font-medium">{item.label || `Item ${index + 1}`}</p>
-                  <p className="text-sm">{item.content || 'Content here'}</p>
-                </div>
-              )) : (
-                <div className="border p-2 rounded-md">
-                  <p className="font-medium">Sample Item</p>
-                  <p className="text-sm">Sample content</p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      }
-      
-      default:
-        return <p>Preview not available for this block type.</p>;
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Button variant="ghost" onClick={() => navigate('/companies')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <h1 className="text-2xl font-bold">
-            {company ? `${company.name} - News Editor` : 'Company News Editor'}
-          </h1>
-        </div>
-        
-        <div className="flex space-x-2">
-          <Button 
-            onClick={() => navigate(`/company-news/${companyId}`)}
-            variant="outline"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            View Published News
-          </Button>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* Sidebar with block list */}
-        <div className="md:col-span-3 border rounded-lg p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">News Blocks</h2>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Select 
-                value={newBlockType} 
-                onValueChange={(value) => setNewBlockType(value as NewsBlockType)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select block type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="heading">Heading</SelectItem>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="notice">Notice</SelectItem>
-                  <SelectItem value="faq">FAQ</SelectItem>
-                  <SelectItem value="links">Links</SelectItem>
-                  <SelectItem value="dropdown">Dropdown</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input 
-                placeholder="Block title" 
-                value={newBlockTitle}
-                onChange={(e) => setNewBlockTitle(e.target.value)}
-              />
-              <Button 
-                className="w-full" 
-                onClick={handleAddBlock} 
-                disabled={loading || !newBlockTitle.trim()}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Block
-              </Button>
-            </div>
-            
-            <div className="space-y-1 max-h-[400px] overflow-y-auto">
-              {blocks.map((block) => (
-                <div 
-                  key={block.id}
-                  className={`flex items-center justify-between p-2 rounded hover:bg-accent cursor-pointer ${
-                    selectedBlockId === block.id ? 'bg-accent' : ''
-                  }`}
-                  onClick={() => {
-                    // Check for unsaved changes before switching blocks
-                    if (hasUnsavedChanges && selectedBlockId !== block.id) {
-                      if (confirm('You have unsaved changes. Do you want to save them before switching blocks?')) {
-                        handleSaveBlock().then(() => {
-                          setSelectedBlockId(block.id);
-                        });
-                      } else {
-                        setSelectedBlockId(block.id);
-                        setHasUnsavedChanges(false);
-                      }
-                    } else {
-                      setSelectedBlockId(block.id);
-                    }
-                  }}
-                >
-                  <div className="flex items-center">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${block.isPublished ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                    <p className="truncate flex-1">{block.title}</p>
-                  </div>
-                  
-                  <div className="flex space-x-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveBlock(block.id, 'up');
-                      }}
-                      disabled={blocks.indexOf(block) === 0 || loading}
-                      className="h-6 w-6 p-0"
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveBlock(block.id, 'down');
-                      }}
-                      disabled={blocks.indexOf(block) === blocks.length - 1 || loading}
-                      className="h-6 w-6 p-0"
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-
-              {blocks.length === 0 && (
-                <div className="text-center py-4 text-muted-foreground">
-                  No blocks added yet
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Main editor area */}
-        <div className="md:col-span-9 border rounded-lg">
-          {selectedBlock ? (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="flex items-center justify-between border-b p-4">
-                <TabsList>
-                  <TabsTrigger value="edit">Edit</TabsTrigger>
-                  <TabsTrigger value="preview">Preview</TabsTrigger>
-                </TabsList>
-                <div className="flex items-center space-x-4">
-                  {/* Save button */}
-                  <Button 
-                    variant={hasUnsavedChanges ? "default" : "outline"}
-                    size="sm"
-                    onClick={handleSaveBlock}
-                    disabled={loading || !hasUnsavedChanges}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    {hasUnsavedChanges ? "Save Changes" : "Saved"}
-                  </Button>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="published" 
-                      checked={selectedBlock.isPublished}
-                      onCheckedChange={(checked) => handleTogglePublish(selectedBlock.id, checked)}
-                      disabled={loading}
-                    />
-                    <Label htmlFor="published">{selectedBlock.isPublished ? 'Published' : 'Draft'}</Label>
-                  </div>
-                  
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the
-                          "{selectedBlock.title}" block.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => handleDeleteBlock(selectedBlock.id)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-
-              <TabsContent value="edit" className="p-4">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="block-title">Block Title</Label>
-                    <Input 
-                      id="block-title"
-                      value={editedBlockData.title || ''}
-                      onChange={(e) => handleFormChange('title', e.target.value)}
-                    />
-                  </div>
-                  
-                  {renderBlockEditor()}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="preview" className="p-4 border-t">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-muted-foreground">Block Preview</h3>
-                  <div className="p-4 border rounded-lg">
-                    {selectedBlock && renderBlockPreview(selectedBlock)}
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <div className="p-10 text-center">
-              <h3 className="mb-2">Select a block to edit or create a new block</h3>
-              <p className="text-muted-foreground">
-                Use the sidebar on the left to manage your company news blocks
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default CompanyNewsBuilderPage;
