@@ -48,6 +48,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { UserRole, Language } from '@/context/AppContext'; // Import the type definitions
+import { userManagementService } from '@/services/userManagementService';
 
 const UserManagementPage = () => {
   const { users, companies, currentUser, refetchUsers } = useAppContext();
@@ -73,24 +74,10 @@ const UserManagementPage = () => {
   
   // Check permissions via useEffect instead of immediate return
   useEffect(() => {
-    if (currentUser?.role === 'consultant') {
-      setHasPermission(true);
-    } else {
-      setHasPermission(false);
-    }
-    
-    console.log("UserManagementPage mounted");
-    console.log("Dialog state:", isDialogOpen);
-    console.log("Delete dialog state:", isDeleteDialogOpen);
-    
-    return () => {
-      console.log("UserManagementPage unmounting");
-    };
-  }, [currentUser, isDialogOpen, isDeleteDialogOpen]);
+    setHasPermission(currentUser?.role === 'consultant');
+  }, [currentUser]);
   
   const handleOpenDialog = (mode: 'create' | 'edit' | 'reset', userId?: string) => {
-    console.log(`Opening dialog in ${mode} mode for user:`, userId);
-    
     setDialogMode(mode);
     setSelectedUser(userId || null);
     
@@ -120,20 +107,12 @@ const UserManagementPage = () => {
       setPassword('');
     }
     
-    // Important: set state first, then open dialog after a short delay
-    setTimeout(() => {
-      setIsDialogOpen(true);
-    }, 50);
+    setIsDialogOpen(true);
   };
 
   const handleConfirmDelete = (userId: string) => {
-    console.log("Opening delete confirmation for user:", userId);
     setUserToDelete(userId);
-    
-    // Important: set state first, then open dialog after a short delay
-    setTimeout(() => {
-      setIsDeleteDialogOpen(true);
-    }, 50);
+    setIsDeleteDialogOpen(true);
   };
   
   const handleDeleteUser = async () => {
@@ -141,14 +120,7 @@ const UserManagementPage = () => {
     
     setLoading(true);
     try {
-      // In a real implementation, we would delete the user from auth and profiles
-      // Deleting from profiles should cascade to auth due to foreign key constraints
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userToDelete);
-      
-      if (error) throw error;
+      await userManagementService.deleteUser(userToDelete);
       
       toast({
         title: "User Deleted",
@@ -163,7 +135,6 @@ const UserManagementPage = () => {
         description: error.message,
         variant: "destructive",
       });
-      console.error('Error deleting user:', error);
     } finally {
       setLoading(false);
       setIsDeleteDialogOpen(false);
@@ -177,39 +148,15 @@ const UserManagementPage = () => {
     setLoading(true);
     try {
       if (dialogMode === 'create') {
-        // Create new user with Supabase auth
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        await userManagementService.createUser({
           email,
           password,
-          email_confirm: true, // Auto-confirm the email
-          user_metadata: {
-            name,
-            phone,
-            role,
-            preferred_language: preferredLanguage,
-            company_id: companyId || null
-          }
+          name,
+          phone,
+          role,
+          preferredLanguage,
+          companyId: companyId || undefined
         });
-        
-        if (authError) throw authError;
-        
-        if (!authData.user) {
-          throw new Error('Failed to create user');
-        }
-        
-        // Ensure profile is created correctly with all details
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            name,
-            phone,
-            role: role as UserRole,
-            preferred_language: preferredLanguage as Language,
-            company_id: companyId || null
-          })
-          .eq('id', authData.user.id);
-          
-        if (profileError) throw profileError;
         
         toast({
           title: "User Created",
@@ -219,39 +166,16 @@ const UserManagementPage = () => {
         // Refresh the users list
         await refetchUsers();
       } else if (dialogMode === 'edit' && selectedUser) {
-        // Update user profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            name,
-            email,
-            phone,
-            company_id: companyId || null,
-            role: role as UserRole,
-            preferred_language: preferredLanguage as Language
-          })
-          .eq('id', selectedUser);
-          
-        if (profileError) throw profileError;
-        
-        // If status is inactive, disable the user's account
-        if (userStatus === 'inactive') {
-          // Disable user account
-          const { error } = await supabase.auth.admin.updateUserById(
-            selectedUser,
-            { ban_duration: '87600h' } // 10 years - effectively disabling the account
-          );
-          
-          if (error) throw error;
-        } else if (userStatus === 'active') {
-          // Enable user account if it was disabled
-          const { error } = await supabase.auth.admin.updateUserById(
-            selectedUser,
-            { ban_duration: null }
-          );
-          
-          if (error) throw error;
-        }
+        await userManagementService.updateUser({
+          userId: selectedUser,
+          name,
+          email,
+          phone,
+          companyId: companyId || null,
+          role,
+          preferredLanguage,
+          status: userStatus as 'active' | 'inactive'
+        });
         
         toast({
           title: "User Updated",
@@ -261,13 +185,10 @@ const UserManagementPage = () => {
         // Refresh the users list
         await refetchUsers();
       } else if (dialogMode === 'reset' && selectedUser) {
-        // Reset password
-        const { error } = await supabase.auth.admin.updateUserById(
-          selectedUser,
-          { password }
-        );
-        
-        if (error) throw error;
+        await userManagementService.resetPassword({
+          userId: selectedUser,
+          password
+        });
         
         toast({
           title: "Password Reset",
@@ -310,6 +231,7 @@ const UserManagementPage = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -321,6 +243,7 @@ const UserManagementPage = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -330,6 +253,7 @@ const UserManagementPage = () => {
                     placeholder="Phone number" 
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -337,6 +261,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={companyId} 
                     onValueChange={setCompanyId}
+                    disabled={loading}
                   >
                     <SelectTrigger id="company">
                       <SelectValue placeholder="Select Company" />
@@ -355,6 +280,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={role} 
                     onValueChange={(value: UserRole) => setRole(value)}
+                    disabled={loading}
                   >
                     <SelectTrigger id="role">
                       <SelectValue placeholder="Select Role" />
@@ -370,6 +296,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={preferredLanguage} 
                     onValueChange={(value: Language) => setPreferredLanguage(value)}
+                    disabled={loading}
                   >
                     <SelectTrigger id="language">
                       <SelectValue placeholder="Select Language" />
@@ -389,15 +316,21 @@ const UserManagementPage = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? 'Creating...' : 'Create User'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : 'Create User'}
                 </Button>
               </DialogFooter>
             </form>
@@ -423,6 +356,7 @@ const UserManagementPage = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -434,6 +368,7 @@ const UserManagementPage = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -443,6 +378,7 @@ const UserManagementPage = () => {
                     placeholder="Phone number" 
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -450,6 +386,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={companyId} 
                     onValueChange={setCompanyId}
+                    disabled={loading}
                   >
                     <SelectTrigger id="company">
                       <SelectValue placeholder="Select Company" />
@@ -468,6 +405,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={role} 
                     onValueChange={(value: UserRole) => setRole(value)}
+                    disabled={loading}
                   >
                     <SelectTrigger id="role">
                       <SelectValue placeholder="Select Role" />
@@ -483,6 +421,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={preferredLanguage} 
                     onValueChange={(value: Language) => setPreferredLanguage(value)}
+                    disabled={loading}
                   >
                     <SelectTrigger id="language">
                       <SelectValue placeholder="Select Language" />
@@ -498,6 +437,7 @@ const UserManagementPage = () => {
                   <Select 
                     value={userStatus} 
                     onValueChange={setUserStatus}
+                    disabled={loading}
                   >
                     <SelectTrigger id="status">
                       <SelectValue placeholder="Select Status" />
@@ -510,11 +450,16 @@ const UserManagementPage = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? 'Updating...' : 'Update User'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : 'Update User'}
                 </Button>
               </DialogFooter>
             </form>
@@ -540,14 +485,20 @@ const UserManagementPage = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={loading}
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? 'Resetting...' : 'Reset Password'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : 'Reset Password'}
                 </Button>
               </DialogFooter>
             </form>
@@ -590,64 +541,360 @@ const UserManagementPage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => {
-              const company = companies.find(c => c.id === user.companyId);
-              
-              return (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{company?.name || 'N/A'}</TableCell>
-                  <TableCell>
-                    {user.role === 'consultant' ? (
-                      <Badge variant="default" className="bg-primary">Consultant</Badge>
-                    ) : (
-                      <Badge variant="secondary">User</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      Active
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleOpenDialog('edit', user.id)}>
-                          <UserCog className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleOpenDialog('reset', user.id)}>
-                          <KeyRound className="h-4 w-4 mr-2" />
-                          Reset Password
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => handleConfirmDelete(user.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <UserX className="h-4 w-4 mr-2" />
-                          Delete User
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {users.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  No users found
+                </TableCell>
+              </TableRow>
+            ) : (
+              users.map((user) => {
+                const company = companies.find(c => c.id === user.companyId);
+                
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{company?.name || 'N/A'}</TableCell>
+                    <TableCell>
+                      {user.role === 'consultant' ? (
+                        <Badge variant="default" className="bg-primary">Consultant</Badge>
+                      ) : (
+                        <Badge variant="secondary">User</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        Active
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleOpenDialog('edit', user.id)}>
+                            <UserCog className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenDialog('reset', user.id)}>
+                            <KeyRound className="h-4 w-4 mr-2" />
+                            Reset Password
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleConfirmDelete(user.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <UserX className="h-4 w-4 mr-2" />
+                            Delete User
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </div>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
-          {getDialogContent()}
+          {dialogMode === 'create' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Create New User</DialogTitle>
+                <DialogDescription>
+                  Add a new user to the platform. They will receive an email with login instructions.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="Full name" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      placeholder="Email address" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone (Optional)</Label>
+                    <Input 
+                      id="phone" 
+                      placeholder="Phone number" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company">Company</Label>
+                    <Select 
+                      value={companyId} 
+                      onValueChange={setCompanyId}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="company">
+                        <SelectValue placeholder="Select Company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map(company => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Select 
+                      value={role} 
+                      onValueChange={(value: UserRole) => setRole(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="role">
+                        <SelectValue placeholder="Select Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="consultant">Consultant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="language">Preferred Language</Label>
+                    <Select 
+                      value={preferredLanguage} 
+                      onValueChange={(value: Language) => setPreferredLanguage(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="language">
+                        <SelectValue placeholder="Select Language" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="sv">Swedish</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="password">Initial Password</Label>
+                    <Input 
+                      id="password" 
+                      type="password" 
+                      placeholder="Set initial password" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : 'Create User'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          )}
+          
+          {dialogMode === 'edit' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Edit User</DialogTitle>
+                <DialogDescription>
+                  Update user information.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="Full name" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      placeholder="Email address" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone (Optional)</Label>
+                    <Input 
+                      id="phone" 
+                      placeholder="Phone number" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company">Company</Label>
+                    <Select 
+                      value={companyId} 
+                      onValueChange={setCompanyId}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="company">
+                        <SelectValue placeholder="Select Company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map(company => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Select 
+                      value={role} 
+                      onValueChange={(value: UserRole) => setRole(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="role">
+                        <SelectValue placeholder="Select Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="consultant">Consultant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="language">Preferred Language</Label>
+                    <Select 
+                      value={preferredLanguage} 
+                      onValueChange={(value: Language) => setPreferredLanguage(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="language">
+                        <SelectValue placeholder="Select Language" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="sv">Swedish</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select 
+                      value={userStatus} 
+                      onValueChange={setUserStatus}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="status">
+                        <SelectValue placeholder="Select Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : 'Update User'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          )}
+          
+          {dialogMode === 'reset' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Reset Password</DialogTitle>
+                <DialogDescription>
+                  Set a new password for this user.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">New Password</Label>
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    placeholder="Enter new password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Resetting...
+                      </>
+                    ) : 'Reset Password'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -661,13 +908,18 @@ const UserManagementPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteUser}
               disabled={loading}
               className="bg-red-600 hover:bg-red-700"
             >
-              {loading ? 'Deleting...' : 'Delete User'}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : 'Delete User'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
