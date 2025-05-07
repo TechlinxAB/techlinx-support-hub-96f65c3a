@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -176,24 +177,97 @@ const UserManagementPage = () => {
     setLoading(true);
     try {
       if (dialogMode === 'create') {
-        // Create new user logic
-        // ... keep existing code (user creation logic)
+        // Create new user with Supabase auth
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true, // Auto-confirm the email
+          user_metadata: {
+            name,
+            phone,
+            role,
+            preferred_language: preferredLanguage,
+            company_id: companyId || null
+          }
+        });
+        
+        if (authError) throw authError;
+        
+        if (!authData.user) {
+          throw new Error('Failed to create user');
+        }
+        
+        // Ensure profile is created correctly with all details
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            name,
+            phone,
+            role,
+            preferred_language: preferredLanguage,
+            company_id: companyId || null
+          })
+          .eq('id', authData.user.id);
+          
+        if (profileError) throw profileError;
         
         toast({
           title: "User Created",
           description: "New user has been successfully created",
         });
+        
+        // Refresh the users list
+        await refetchUsers();
       } else if (dialogMode === 'edit' && selectedUser) {
-        // Update existing user logic
-        // ... keep existing code (user updating logic)
+        // Update user profile
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            name,
+            email,
+            phone,
+            company_id: companyId || null,
+            role,
+            preferred_language: preferredLanguage
+          })
+          .eq('id', selectedUser);
+          
+        if (profileError) throw profileError;
+        
+        // If status is inactive, disable the user's account
+        if (userStatus === 'inactive') {
+          // Disable user account
+          const { error } = await supabase.auth.admin.updateUserById(
+            selectedUser,
+            { ban_duration: '87600h' } // 10 years - effectively disabling the account
+          );
+          
+          if (error) throw error;
+        } else if (userStatus === 'active') {
+          // Enable user account if it was disabled
+          const { error } = await supabase.auth.admin.updateUserById(
+            selectedUser,
+            { ban_duration: null }
+          );
+          
+          if (error) throw error;
+        }
         
         toast({
           title: "User Updated",
           description: "User information has been successfully updated",
         });
+        
+        // Refresh the users list
+        await refetchUsers();
       } else if (dialogMode === 'reset' && selectedUser) {
-        // Reset password logic
-        // ... keep existing code (password reset logic)
+        // Reset password
+        const { error } = await supabase.auth.admin.updateUserById(
+          selectedUser,
+          { password }
+        );
+        
+        if (error) throw error;
         
         toast({
           title: "Password Reset",
@@ -201,18 +275,15 @@ const UserManagementPage = () => {
         });
       }
       
-      // Refresh the users list
-      await refetchUsers();
-      
       // Close the dialog
       setIsDialogOpen(false);
     } catch (error: any) {
+      console.error('Error submitting form:', error);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
-      console.error('Error submitting form:', error);
     } finally {
       setLoading(false);
     }
