@@ -33,10 +33,12 @@ import {
   MoreHorizontal, 
   Pencil, 
   Trash2, 
-  Plus 
+  Plus,
+  Settings
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useNavigate } from 'react-router-dom';
 
 const CompanyManagementPage = () => {
   const { companies, currentUser, addCompany, updateCompany, deleteCompany } = useAppContext();
@@ -46,6 +48,7 @@ const CompanyManagementPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Form state
   const [name, setName] = useState('');
@@ -124,6 +127,10 @@ const CompanyManagementPage = () => {
       setLoading(false);
     }
   };
+
+  const handleGoToSettings = (companyId: string) => {
+    navigate(`/company/${companyId}/settings`);
+  };
   
   return (
     <div className="space-y-6">
@@ -159,6 +166,10 @@ const CompanyManagementPage = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => handleGoToSettings(company.id)}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Settings
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleOpenDialog('edit', company.id)}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit

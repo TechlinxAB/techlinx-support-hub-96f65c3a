@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -26,6 +27,7 @@ import CompanyManagementPage from "./pages/CompanyManagementPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
+import CompanySettingsPage from "./pages/CompanySettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +59,7 @@ const App = () => (
                     <Route path="cases/:id" element={<CaseDetailPage />} />
                     <Route path="companies" element={<CompaniesPage />} />
                     <Route path="companies/:id" element={<CompaniesPage />} />
+                    <Route path="company/:id/settings" element={<CompanySettingsPage />} />
                     <Route path="company-dashboard" element={<CompanyDashboardPage />} />
                     <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
                     <Route path="users" element={<UserManagementPage />} />
