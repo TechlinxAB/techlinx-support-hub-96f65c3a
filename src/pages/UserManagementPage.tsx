@@ -124,16 +124,14 @@ const UserManagementPage = () => {
     try {
       await userManagementService.deleteUser(userToDelete);
       
-      toast({
-        title: "User Deleted",
+      toast("User Deleted", {
         description: "The user has been successfully removed",
       });
       
       // Refresh the users list
       await refetchUsers();
     } catch (error: any) {
-      toast({
-        title: "Error Deleting User",
+      toast("Error Deleting User", {
         description: error.message,
         variant: "destructive",
       });
@@ -160,8 +158,7 @@ const UserManagementPage = () => {
           companyId: companyId || undefined
         });
         
-        toast({
-          title: "User Created",
+        toast("User Created", {
           description: "New user has been successfully created",
         });
         
@@ -179,8 +176,7 @@ const UserManagementPage = () => {
           status: userStatus as 'active' | 'inactive'
         });
         
-        toast({
-          title: "User Updated",
+        toast("User Updated", {
           description: "User information has been successfully updated",
         });
         
@@ -192,8 +188,7 @@ const UserManagementPage = () => {
           password
         });
         
-        toast({
-          title: "Password Reset",
+        toast("Password Reset", {
           description: "User password has been successfully reset",
         });
       }
@@ -202,8 +197,7 @@ const UserManagementPage = () => {
       setIsDialogOpen(false);
     } catch (error: any) {
       console.error('Error submitting form:', error);
-      toast({
-        title: "Error",
+      toast("Error", {
         description: error.message,
         variant: "destructive",
       });
@@ -608,295 +602,7 @@ const UserManagementPage = () => {
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
-          {dialogMode === 'create' && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
-                <DialogDescription>
-                  Add a new user to the platform. They will receive an email with login instructions.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Full name" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="Email address" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (Optional)</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="Phone number" 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company</Label>
-                    <Select 
-                      value={companyId} 
-                      onValueChange={setCompanyId}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="company">
-                        <SelectValue placeholder="Select Company" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map(company => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select 
-                      value={role} 
-                      onValueChange={(value: UserRole) => setRole(value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="role">
-                        <SelectValue placeholder="Select Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="consultant">Consultant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="language">Preferred Language</Label>
-                    <Select 
-                      value={preferredLanguage} 
-                      onValueChange={(value: Language) => setPreferredLanguage(value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="language">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="sv">Swedish</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label htmlFor="password">Initial Password</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      placeholder="Set initial password" 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : 'Create User'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          )}
-          
-          {dialogMode === 'edit' && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Edit User</DialogTitle>
-                <DialogDescription>
-                  Update user information.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Full name" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="Email address" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (Optional)</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="Phone number" 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company</Label>
-                    <Select 
-                      value={companyId} 
-                      onValueChange={setCompanyId}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="company">
-                        <SelectValue placeholder="Select Company" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map(company => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select 
-                      value={role} 
-                      onValueChange={(value: UserRole) => setRole(value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="role">
-                        <SelectValue placeholder="Select Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="consultant">Consultant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="language">Preferred Language</Label>
-                    <Select 
-                      value={preferredLanguage} 
-                      onValueChange={(value: Language) => setPreferredLanguage(value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="language">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="sv">Swedish</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select 
-                      value={userStatus} 
-                      onValueChange={setUserStatus}
-                      disabled={loading}
-                    >
-                      <SelectTrigger id="status">
-                        <SelectValue placeholder="Select Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Updating...
-                      </>
-                    ) : 'Update User'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          )}
-          
-          {dialogMode === 'reset' && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Reset Password</DialogTitle>
-                <DialogDescription>
-                  Set a new password for this user.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">New Password</Label>
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="Enter new password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Resetting...
-                      </>
-                    ) : 'Reset Password'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          )}
+          {getDialogContent()}
         </DialogContent>
       </Dialog>
 
