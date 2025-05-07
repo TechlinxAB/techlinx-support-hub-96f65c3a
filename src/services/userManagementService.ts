@@ -28,8 +28,11 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
+    // Use URL constructor to get the origin from the client
+    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    
     const response = await fetch(
-      `${supabase.supabaseUrl}/functions/v1/user-management`,
+      `${supabaseUrl}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
@@ -85,8 +88,11 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
+    // Use URL constructor to get the origin from the client
+    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    
     const response = await fetch(
-      `${supabase.supabaseUrl}/functions/v1/user-management`,
+      `${supabaseUrl}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
@@ -125,8 +131,11 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
+    // Use URL constructor to get the origin from the client
+    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    
     const response = await fetch(
-      `${supabase.supabaseUrl}/functions/v1/user-management`,
+      `${supabaseUrl}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
@@ -159,8 +168,11 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
+    // Use URL constructor to get the origin from the client
+    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    
     const response = await fetch(
-      `${supabase.supabaseUrl}/functions/v1/user-management`,
+      `${supabaseUrl}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {

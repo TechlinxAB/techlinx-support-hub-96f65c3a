@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,12 +43,13 @@ import {
   KeyRound, 
   UserX, 
   UserCheck,
-  AlertCircle 
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { UserRole, Language } from '@/context/AppContext'; // Import the type definitions
+import { UserRole, Language } from '@/context/AppContext'; 
 import { userManagementService } from '@/services/userManagementService';
 
 const UserManagementPage = () => {
