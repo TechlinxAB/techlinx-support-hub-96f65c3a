@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MessageCircle, Users, Search, Settings, Clock, UserPlus, Building } from 'lucide-react';
+import { LayoutDashboard, MessageCircle, Users, Settings, Clock, UserPlus, Building } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -40,12 +39,6 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
       icon: <Building className="sidebar-icon" />,
       isActive: location.pathname.startsWith('/company-dashboard'),
       showOnlyForUser: true
-    },
-    {
-      to: "/search",
-      label: "Search",
-      icon: <Search className="sidebar-icon" />,
-      isActive: location.pathname === '/search'
     }
   ];
 

@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -9,6 +8,7 @@ import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import useModalManager from "./hooks/use-modal-manager";
 import ModalReset from "./components/ui/modal-reset";
+import SearchPage from "./pages/SearchPage";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -62,6 +62,7 @@ const App = () => (
                     <Route path="users" element={<UserManagementPage />} />
                     <Route path="company-management" element={<CompanyManagementPage />} />
                     <Route path="settings" element={<SettingsPage />} />
+                    <Route path="search" element={<SearchPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Route>
