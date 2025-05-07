@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -28,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
 
 const CaseDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,12 +40,11 @@ const CaseDetailPage = () => {
     users, 
     categories, 
     currentUser, 
-    refetchReplies, 
-    refetchNotes,
     updateCase,
     refetchCases 
   } = useAppContext();
   
+  const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({
     title: '',
@@ -63,14 +64,6 @@ const CaseDetailPage = () => {
   
   const isConsultant = currentUser?.role === 'consultant';
   const isOwnCase = currentCase?.userId === currentUser?.id;
-  
-  // Load replies and notes for this case
-  useEffect(() => {
-    if (id) {
-      refetchReplies(id);
-      refetchNotes(id);
-    }
-  }, [id, refetchReplies, refetchNotes]);
   
   // Initialize edit form when case data is available
   useEffect(() => {
@@ -95,26 +88,56 @@ const CaseDetailPage = () => {
   }
   
   const handleStatusChange = async (newStatus: string) => {
-    await updateCase(id!, {
-      status: newStatus as any
-    });
-    refetchCases();
+    try {
+      await updateCase(id!, {
+        status: newStatus as any
+      });
+      
+      toast({
+        title: "Status Updated",
+        description: `Case status changed to ${newStatus}`,
+      });
+      
+      refetchCases();
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Could not update case status. Please try again.",
+        variant: "destructive"
+      });
+      console.error("Error updating case status:", error);
+    }
   };
   
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    await updateCase(id!, {
-      title: editFormData.title,
-      description: editFormData.description,
-      status: editFormData.status as any,
-      priority: editFormData.priority as any, 
-      categoryId: editFormData.categoryId,
-      assignedToId: editFormData.assignedToId || undefined
-    });
-    
-    setIsEditDialogOpen(false);
-    refetchCases();
+    try {
+      await updateCase(id!, {
+        title: editFormData.title,
+        description: editFormData.description,
+        status: editFormData.status as any,
+        priority: editFormData.priority as any, 
+        categoryId: editFormData.categoryId,
+        assignedToId: editFormData.assignedToId || undefined
+      });
+      
+      setIsEditDialogOpen(false);
+      
+      toast({
+        title: "Case Updated",
+        description: "Case details have been successfully updated",
+      });
+      
+      refetchCases();
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Could not update case details. Please try again.",
+        variant: "destructive"
+      });
+      console.error("Error updating case:", error);
+    }
   };
   
   const getStatusBadgeClass = (status: string) => {
@@ -334,7 +357,7 @@ const CaseDetailPage = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <CaseDiscussion caseId={id!} />
+          {id && <CaseDiscussion caseId={id} />}
         </div>
         
         <div className="space-y-6">

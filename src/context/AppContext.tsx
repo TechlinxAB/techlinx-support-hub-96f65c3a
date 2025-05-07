@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { DashboardBlock } from '@/types/dashboard';
 
 // Define types
@@ -62,6 +62,42 @@ export interface Note {
   content: string;
   createdAt: Date;
 }
+
+// Utility function for API requests with retry logic
+const fetchWithRetry = async <T,>(
+  apiCall: () => Promise<{ data: T | null; error: any }>,
+  maxRetries = 3,
+  delayMs = 300
+): Promise<T> => {
+  let retries = 0;
+  
+  while (true) {
+    try {
+      const { data, error } = await apiCall();
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data === null) {
+        throw new Error("No data returned");
+      }
+      
+      return data as T;
+    } catch (error) {
+      retries++;
+      console.log(`API call failed. Retry ${retries}/${maxRetries}`);
+      
+      if (retries >= maxRetries) {
+        throw error;
+      }
+      
+      // Exponential backoff with jitter
+      const delay = delayMs * Math.pow(2, retries - 1) + Math.random() * 100;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
 
 // Create context
 interface AppContextType {
@@ -128,7 +164,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  
+  // Cache for API responses to reduce redundant fetches
+  const apiCache = React.useRef<{
+    [key: string]: {
+      data: any;
+      timestamp: number;
+    }
+  }>({}).current;
 
+  const getCachedOrFetch = async <T,>(
+    cacheKey: string,
+    fetchFn: () => Promise<T>,
+    cacheMaxAgeSec = 60 // Default 1 minute
+  ): Promise<T> => {
+    const now = Date.now();
+    const cachedEntry = apiCache[cacheKey];
+    
+    if (cachedEntry && (now - cachedEntry.timestamp) / 1000 < cacheMaxAgeSec) {
+      console.log(`Using cached response for ${cacheKey}`);
+      return cachedEntry.data;
+    }
+    
+    // Otherwise fetch and cache
+    const data = await fetchFn();
+    apiCache[cacheKey] = {
+      data,
+      timestamp: now
+    };
+    
+    return data;
+  };
+  
   // Fetch data when authenticated
   useEffect(() => {
     if (user && profile) {
@@ -163,19 +230,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*');
+      const data = await getCachedOrFetch(
+        'categories',
+        async () => {
+          const { data, error } = await supabase
+            .from('categories')
+            .select('*');
+          
+          if (error) throw error;
+          return data || [];
+        },
+        300 // Categories change rarely - cache for 5 minutes
+      );
       
-      if (error) throw error;
-      
-      if (data) {
-        const mappedCategories: CaseCategory[] = data.map(cat => ({
-          id: cat.id,
-          name: cat.name
-        }));
-        setCategories(mappedCategories);
-      }
+      const mappedCategories: CaseCategory[] = data.map(cat => ({
+        id: cat.id,
+        name: cat.name
+      }));
+      setCategories(mappedCategories);
     } catch (error: any) {
       console.error('Error fetching categories:', error.message);
     }
@@ -183,26 +255,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchCompanies = async () => {
     try {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*');
+      const data = await fetchWithRetry(
+        () => supabase.from('companies').select('*')
+      );
       
-      if (error) throw error;
-      
-      if (data) {
-        const mappedCompanies: Company[] = data.map(company => ({
-          id: company.id,
-          name: company.name,
-          logo: company.logo
-        }));
-        setCompanies(mappedCompanies);
-      }
+      const mappedCompanies: Company[] = data.map(company => ({
+        id: company.id,
+        name: company.name,
+        logo: company.logo
+      }));
+      setCompanies(mappedCompanies);
     } catch (error: any) {
       console.error('Error fetching companies:', error.message);
     }
   };
 
   const refetchCompanies = async () => {
+    // Clear cache and force refresh
+    delete apiCache['companies'];
     await fetchCompanies();
   };
 
@@ -295,25 +365,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*');
+      const data = await fetchWithRetry(
+        () => supabase.from('profiles').select('*')
+      );
       
-      if (error) throw error;
-      
-      if (data) {
-        const mappedUsers: User[] = data.map(user => ({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone || undefined,
-          companyId: user.company_id || '',
-          role: user.role as UserRole,
-          preferredLanguage: (user.preferred_language as Language) || 'en',
-          avatar: user.avatar
-        }));
-        setUsers(mappedUsers);
-      }
+      const mappedUsers: User[] = data.map(user => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || undefined,
+        companyId: user.company_id || '',
+        role: user.role as UserRole,
+        preferredLanguage: (user.preferred_language as Language) || 'en',
+        avatar: user.avatar
+      }));
+      setUsers(mappedUsers);
     } catch (error: any) {
       console.error('Error fetching users:', error.message);
     }
@@ -326,11 +392,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchCases = async () => {
     setLoadingCases(true);
     try {
-      const { data, error } = await supabase
-        .from('cases')
-        .select('*');
-      
-      if (error) throw error;
+      const data = await fetchWithRetry(
+        () => supabase.from('cases').select('*')
+      );
       
       if (data) {
         const mappedCases: Case[] = data.map(caseItem => ({
@@ -350,6 +414,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Error fetching cases:', error.message);
+      toast({
+        title: "Error",
+        description: "Could not load cases. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingCases(false);
     }
@@ -372,7 +441,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching replies:', error.message);
+        throw error;
+      }
       
       if (data) {
         const mappedReplies: Reply[] = data.map(reply => ({
@@ -386,14 +458,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRepliesData(mappedReplies);
       }
     } catch (error: any) {
-      console.error('Error fetching replies:', error.message);
+      console.error('Error fetching replies:', error);
+      toast({
+        title: "Error",
+        description: "Could not load discussion replies. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingReplies(false);
     }
   };
 
   const refetchReplies = async (caseId?: string) => {
-    await fetchReplies(caseId);
+    return await fetchReplies(caseId);
   };
 
   const fetchNotes = async (caseId?: string) => {
@@ -409,7 +486,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching notes:', error.message);
+        throw error;
+      }
       
       if (data) {
         const mappedNotes: Note[] = data.map(note => ({
@@ -422,14 +502,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setNotesData(mappedNotes);
       }
     } catch (error: any) {
-      console.error('Error fetching notes:', error.message);
+      console.error('Error fetching notes:', error);
+      toast({
+        title: "Error",
+        description: "Could not load discussion notes. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingNotes(false);
     }
   };
 
   const refetchNotes = async (caseId?: string) => {
-    await fetchNotes(caseId);
+    return await fetchNotes(caseId);
   };
 
   const fetchDashboardBlocks = async (companyId?: string) => {
@@ -658,6 +743,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
+      throw error; // Re-throw to allow caller to handle
     }
   };
 
@@ -675,11 +761,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       
       await refetchReplies(reply.caseId);
-      
-      toast({
-        title: "Reply Added",
-        description: "Your reply has been added successfully",
-      });
     } catch (error: any) {
       console.error('Error adding reply:', error.message);
       toast({
@@ -687,6 +768,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
+      throw error; // Re-throw to allow caller to handle
     }
   };
 
@@ -703,11 +785,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       
       await refetchNotes(note.caseId);
-      
-      toast({
-        title: "Note Added",
-        description: "Your note has been added successfully",
-      });
     } catch (error: any) {
       console.error('Error adding note:', error.message);
       toast({
@@ -715,6 +792,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
+      throw error; // Re-throw to allow caller to handle
     }
   };
 
