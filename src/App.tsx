@@ -28,6 +28,9 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
+import CompanyNewsBuilderPage from "./pages/CompanyNewsBuilderPage";
+import CompanyNewsPage from "./pages/CompanyNewsPage";
+import Index from "./pages/Index";
 
 const queryClient = new QueryClient();
 
@@ -50,18 +53,20 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
+                <Route path="/" element={<Index />} />
                 
                 <Route element={<ProtectedRoute />}>
                   <Route path="/" element={<Layout />}>
-                    <Route index element={<Dashboard />} />
+                    <Route path="dashboard" element={<Dashboard />} />
                     <Route path="cases" element={<CasesPage />} />
                     <Route path="cases/new" element={<NewCasePage />} />
                     <Route path="cases/:id" element={<CaseDetailPage />} />
                     <Route path="companies" element={<CompaniesPage />} />
-                    <Route path="companies/:id" element={<CompaniesPage />} />
                     <Route path="company/:id/settings" element={<CompanySettingsPage />} />
                     <Route path="company-dashboard" element={<CompanyDashboardPage />} />
                     <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+                    <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
+                    <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
                     <Route path="users" element={<UserManagementPage />} />
                     <Route path="company-management" element={<CompanyManagementPage />} />
                     <Route path="settings" element={<SettingsPage />} />

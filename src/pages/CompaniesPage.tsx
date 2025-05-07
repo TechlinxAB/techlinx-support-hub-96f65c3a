@@ -11,7 +11,8 @@ import {
   LayoutDashboard, 
   Plus,
   Trash2,
-  Settings
+  Settings,
+  Newspaper
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -196,7 +197,7 @@ const CompaniesPage = () => {
                       <span>{companyCases.length}</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -216,6 +217,18 @@ const CompaniesPage = () => {
                       <LayoutDashboard className="h-4 w-4" />
                       Dashboard
                     </Button>
+                    
+                    {currentUser?.role === 'consultant' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="flex gap-1 items-center justify-center"
+                        onClick={() => navigate(`/company-news-builder/${company.id}`)}
+                      >
+                        <Newspaper className="h-4 w-4" />
+                        Edit News
+                      </Button>
+                    )}
                     
                     <Button 
                       variant="outline" 
