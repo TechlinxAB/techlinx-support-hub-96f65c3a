@@ -28,8 +28,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Use URL constructor to get the origin from the client
-    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    // Get the Supabase URL from the environment
+    const supabaseUrl = new URL(supabase.url).origin;
     
     const response = await fetch(
       `${supabaseUrl}/functions/v1/user-management`,
@@ -88,8 +88,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Use URL constructor to get the origin from the client
-    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    // Get the Supabase URL from the environment
+    const supabaseUrl = new URL(supabase.url).origin;
     
     const response = await fetch(
       `${supabaseUrl}/functions/v1/user-management`,
@@ -131,8 +131,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Use URL constructor to get the origin from the client
-    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    // Get the Supabase URL from the environment
+    const supabaseUrl = new URL(supabase.url).origin;
     
     const response = await fetch(
       `${supabaseUrl}/functions/v1/user-management`,
@@ -168,8 +168,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Use URL constructor to get the origin from the client
-    const supabaseUrl = new URL(supabase.supabaseClient.url).origin;
+    // Get the Supabase URL from the environment
+    const supabaseUrl = new URL(supabase.url).origin;
     
     const response = await fetch(
       `${supabaseUrl}/functions/v1/user-management`,
