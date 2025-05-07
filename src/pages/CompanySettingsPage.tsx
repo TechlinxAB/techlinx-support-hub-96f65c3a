@@ -22,6 +22,20 @@ interface DashboardSettings {
   showCompanyNotices: boolean;
 }
 
+interface CompanySettingsRow {
+  id: string;
+  company_id: string;
+  show_welcome: boolean;
+  show_subtitle: boolean;
+  show_new_case_button: boolean;
+  show_company_news_button: boolean;
+  show_company_dashboard_button: boolean;
+  show_active_cases: boolean;
+  show_company_notices: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 const defaultSettings: DashboardSettings = {
   showWelcome: true,
   showSubtitle: true,
@@ -70,14 +84,15 @@ const CompanySettingsPage = () => {
         }
         
         if (data) {
+          const settingsRow = data as CompanySettingsRow;
           setSettings({
-            showWelcome: data.show_welcome,
-            showSubtitle: data.show_subtitle,
-            showNewCaseButton: data.show_new_case_button,
-            showCompanyNewsButton: data.show_company_news_button,
-            showCompanyDashboardButton: data.show_company_dashboard_button,
-            showActiveCases: data.show_active_cases,
-            showCompanyNotices: data.show_company_notices,
+            showWelcome: settingsRow.show_welcome,
+            showSubtitle: settingsRow.show_subtitle,
+            showNewCaseButton: settingsRow.show_new_case_button,
+            showCompanyNewsButton: settingsRow.show_company_news_button,
+            showCompanyDashboardButton: settingsRow.show_company_dashboard_button,
+            showActiveCases: settingsRow.show_active_cases,
+            showCompanyNotices: settingsRow.show_company_notices,
           });
         }
       } catch (error) {

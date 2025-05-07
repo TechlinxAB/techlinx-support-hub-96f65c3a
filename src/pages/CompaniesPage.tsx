@@ -10,7 +10,8 @@ import {
   FileText, 
   LayoutDashboard, 
   Plus,
-  Trash2
+  Trash2,
+  Settings
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -162,6 +163,13 @@ const CompaniesPage = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => navigate(`/company/${company.id}/settings`)}
+                          className="cursor-pointer"
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Company Settings
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => confirmDeleteCompany(company.id)}
                           className="text-red-600 cursor-pointer"

@@ -63,7 +63,7 @@ const UserDashboard = () => {
           .eq('company_id', currentUser.companyId)
           .maybeSingle();
         
-        if (settingsError && settingsError.code !== 'PGRST116') {
+        if (settingsError) {
           console.error('Error fetching company settings:', settingsError);
         }
         
