@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -112,7 +113,7 @@ const CompanyNewsBuilderPage = () => {
           isPublished: false,
           createdAt: new Date(),
           updatedAt: new Date(),
-          createdBy: currentUser?.id || '' // Add the missing createdBy property
+          createdBy: currentUser?.id || '' // Fixed: added createdBy field
         };
         
         // Only refetch when adding a new block - we need the server-generated ID
@@ -895,4 +896,120 @@ const CompanyNewsBuilderPage = () => {
                   onClick={handleAddBlock}
                   disabled={!newBlockTitle.trim() || loading}
                 >
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...</>
+                  ) : (
+                    <><Plus className="mr-2 h-4 w-4" /> Add Block</>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Editor area */}
+        <div className="md:col-span-9 space-y-4">
+          {selectedBlock ? (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle>{selectedBlock.title}</CardTitle>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1">
+                      <Label htmlFor="published" className="text-sm">Publish</Label>
+                      <Switch 
+                        id="published"
+                        checked={editedBlockData?.isPublished || false}
+                        onCheckedChange={(checked) => {
+                          handleTogglePublish(selectedBlock.id, checked);
+                        }}
+                      />
+                    </div>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete this news block.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => handleDeleteBlock(selectedBlock.id)}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="mt-4">
+                    <div className="mb-4">
+                      <Label htmlFor="edit-title">Title</Label>
+                      <Input 
+                        id="edit-title"
+                        value={editedBlockData?.title || ''}
+                        onChange={(e) => handleFormChange('title', e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="edit">
+                          <Edit className="h-4 w-4 mr-2" /> Edit
+                        </TabsTrigger>
+                        <TabsTrigger value="preview">
+                          <Eye className="h-4 w-4 mr-2" /> Preview
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="edit" className="mt-4">
+                        {renderBlockEditor()}
+                        
+                        <div className="mt-6 flex items-center justify-end space-x-2">
+                          <Button
+                            variant="default"
+                            onClick={saveCurrentBlock}
+                            disabled={!hasUnsavedChanges || saving}
+                          >
+                            {saving ? (
+                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                            ) : (
+                              <><Save className="mr-2 h-4 w-4" /> Save Changes</>
+                            )}
+                          </Button>
+                        </div>
+                      </TabsContent>
+                      <TabsContent value="preview" className="mt-4">
+                        <div className="p-4 border rounded-lg">
+                          {renderBlockPreview(selectedBlock)}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card className="h-[400px] flex items-center justify-center">
+              <CardContent className="text-center text-muted-foreground">
+                {blocks.length > 0 ? 'Select a block to edit' : 'Create a new block to get started'}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CompanyNewsBuilderPage;

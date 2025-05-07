@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -70,7 +71,7 @@ export const useOptimizedNewsBlockSave = () => {
       // Show a loading toast only if requested
       let toastId: string | undefined;
       if (options?.showToast !== false) {
-        // Fix the type error by ensuring toastId is always a string
+        // Fixed the type error by ensuring toastId is treated as a string
         toastId = toast.loading("Saving changes...", {
           id: `save-${blockId}`,
           duration: 30000 // Long duration in case save takes time
