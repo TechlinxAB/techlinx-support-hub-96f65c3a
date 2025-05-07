@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const [localReplies, setLocalReplies] = useState<any[]>([]);
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [dataFetched, setDataFetched] = useState(false); // Add this to track if initial data fetch is done
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
@@ -147,11 +149,13 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         const caseReplies = replies.filter(r => r.caseId === caseId);
         const caseNotes = notes.filter(n => n.caseId === caseId);
         discussionCache.set(caseId, caseReplies, caseNotes);
+        setDataFetched(true); // Mark data as fetched
       })
       .catch(error => {
         console.error('Error fetching discussion data:', error);
         setFetchError('Failed to load discussion data. Using cached data if available.');
         setOfflineMode(true);
+        setDataFetched(true); // Mark data as fetched even if it failed
         
         toast({
           title: "Connection issue",
@@ -164,9 +168,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       });
   }, [caseId, refetchReplies, refetchNotes, replies, notes, toast]);
   
-  // Initial data fetch with limited frequency
+  // Initial data fetch with limited frequency, but only ONCE
   useEffect(() => {
-    if (caseId) {
+    if (caseId && !dataFetched) {
       debouncedFetch(caseId);
     }
     
@@ -175,7 +179,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [caseId, debouncedFetch]);
+  }, [caseId, debouncedFetch, dataFetched]); // Add dataFetched to dependencies
   
   // Store pending submissions
   const storePendingSubmission = useCallback((type: 'reply' | 'note', data: any) => {
