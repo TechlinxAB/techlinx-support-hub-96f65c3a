@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -9,86 +9,19 @@ import { CompanyNewsBlock } from '@/types/companyNews';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/components/ui/use-toast';
+import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 
 const CompanyNewsPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
+  const { companies, currentUser } = useAppContext();
   const { toast } = useToast();
-  const { 
-    companies, 
-    companyNewsBlocks, 
-    refetchCompanyNewsBlocks, 
-    currentUser,
-    loadingCompanyNewsBlocks 
-  } = useAppContext();
 
-  const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
-  const [fetchAttempted, setFetchAttempted] = useState(false);
-  const [fetchError, setFetchError] = useState<Error | null>(null);
+  const { blocks, loading: loadingBlocks, error: fetchError, refetch } = useNewsBlocksFetcher(companyId);
   const [fetchInProgress, setFetchInProgress] = useState(false);
   
   const company = companies.find(c => c.id === companyId);
   const isConsultant = currentUser?.role === 'consultant';
-
-  // Debounced refetch function to prevent rapid successive calls
-  const debouncedRefetch = useCallback(() => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      
-      // Don't start a new fetch if one is in progress
-      if (fetchInProgress) return;
-      
-      setFetchInProgress(true);
-      timeoutId = setTimeout(() => {
-        if (companyId) {
-          try {
-            refetchCompanyNewsBlocks(companyId)
-              .finally(() => {
-                setFetchInProgress(false);
-                setFetchAttempted(true);
-              });
-          } catch (error) {
-            console.error('Error refetching news blocks:', error);
-            setFetchError(error instanceof Error ? error : new Error(String(error)));
-            setFetchInProgress(false);
-            
-            // Show toast only once for errors
-            toast({
-              title: "Error loading content",
-              description: "Failed to load news content. Please try again later.",
-              variant: "destructive"
-            });
-          }
-        }
-      }, 300);
-    };
-  }, [companyId, refetchCompanyNewsBlocks, toast, fetchInProgress]);
-
-  useEffect(() => {
-    if (companyId && !fetchAttempted && !fetchInProgress) {
-      debouncedRefetch()();
-    }
-  }, [companyId, debouncedRefetch, fetchAttempted, fetchInProgress]);
-
-  useEffect(() => {
-    if (!loadingCompanyNewsBlocks && companyId) {
-      try {
-        // Only show published blocks for regular users, and show all blocks for consultants
-        const filteredBlocks = companyNewsBlocks
-          .filter(block => block.companyId === companyId)
-          .filter(block => isConsultant || block.isPublished)
-          .sort((a, b) => a.position - b.position);
-        
-        setBlocks(filteredBlocks);
-        setFetchError(null);
-      } catch (error) {
-        console.error('Error processing news blocks:', error);
-        setFetchError(error instanceof Error ? error : new Error(String(error)));
-      }
-    }
-  }, [companyNewsBlocks, companyId, loadingCompanyNewsBlocks, isConsultant]);
 
   // Function to render a block based on its type
   const renderBlock = (block: CompanyNewsBlock) => {
@@ -210,8 +143,19 @@ const CompanyNewsPage = () => {
     }
   };
 
+  // Handle manual refresh
+  const handleRefresh = useCallback(() => {
+    if (fetchInProgress) return;
+    setFetchInProgress(true);
+
+    refetch(true)
+      .finally(() => {
+        setFetchInProgress(false);
+      });
+  }, [refetch, fetchInProgress]);
+
   // Show loading state
-  if (loadingCompanyNewsBlocks && !fetchError) {
+  if (loadingBlocks && !fetchError) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -245,11 +189,8 @@ const CompanyNewsPage = () => {
             </p>
             <Button 
               className="mt-4"
-              onClick={() => {
-                setFetchAttempted(false);
-                setFetchError(null);
-                setFetchInProgress(false);
-              }}
+              onClick={handleRefresh}
+              disabled={fetchInProgress}
             >
               Retry
             </Button>
@@ -258,6 +199,10 @@ const CompanyNewsPage = () => {
       </div>
     );
   }
+
+  // Filter blocks for display
+  const displayBlocks = blocks
+    .filter(block => isConsultant || block.isPublished);
 
   return (
     <div className="space-y-6">
@@ -281,9 +226,9 @@ const CompanyNewsPage = () => {
       </div>
       
       <Card className="p-6">
-        {blocks.length > 0 ? (
+        {displayBlocks.length > 0 ? (
           <div className="space-y-4">
-            {blocks.map(block => (
+            {displayBlocks.map(block => (
               <div key={block.id} className={block.isPublished ? '' : 'opacity-50 border-l-4 border-yellow-300 pl-4'}>
                 {!block.isPublished && isConsultant && (
                   <div className="text-sm text-yellow-600 mb-1">

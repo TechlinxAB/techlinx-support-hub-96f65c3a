@@ -6,6 +6,7 @@ import { CompanyAnnouncement } from '@/types/dashboardTypes';
 // Define backoff strategy parameters
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
+const CACHE_TTL = 60000; // 1 minute cache validity
 
 export const useCompanyAnnouncements = (companyId: string | undefined) => {
   const [announcements, setAnnouncements] = useState<CompanyAnnouncement[]>([]);
@@ -17,6 +18,13 @@ export const useCompanyAnnouncements = (companyId: string | undefined) => {
   
   // Use ref to track active request to prevent multiple simultaneous requests
   const activeRequest = useRef<AbortController | null>(null);
+  
+  // Use cache to prevent redundant fetches
+  const cache = useRef<{
+    companyId: string,
+    data: CompanyAnnouncement[],
+    timestamp: number
+  } | null>(null);
 
   useEffect(() => {
     // Set isMounted to false when component unmounts
@@ -42,6 +50,17 @@ export const useCompanyAnnouncements = (companyId: string | undefined) => {
     }
     
     if (!companyId) {
+      setLoading(false);
+      return;
+    }
+    
+    // Check if we have a valid cached response
+    const now = Date.now();
+    if (cache.current && 
+        cache.current.companyId === companyId &&
+        now - cache.current.timestamp < CACHE_TTL) {
+      // Use cached data
+      setAnnouncements(cache.current.data);
       setLoading(false);
       return;
     }
@@ -81,8 +100,16 @@ export const useCompanyAnnouncements = (companyId: string | undefined) => {
         }
         
         if (isMounted.current) {
-          setAnnouncements(announcementsData || []);
+          const result = announcementsData || [];
+          setAnnouncements(result);
           setLoading(false);
+          
+          // Cache the successful response
+          cache.current = {
+            companyId,
+            data: result,
+            timestamp: Date.now()
+          };
         }
       } catch (error) {
         // If the request was aborted, don't retry or set error state

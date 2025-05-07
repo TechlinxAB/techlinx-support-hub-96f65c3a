@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -11,25 +11,27 @@ interface SaveOptions {
 export const useOptimizedNewsBlockSave = () => {
   const [saving, setSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<number | null>(null);
+  const saveInProgress = useRef<boolean>(false);
+  const saveQueue = useRef<Map<string, {data: any, options?: SaveOptions}>>(new Map());
 
   // Store pending saves to prevent duplicate submissions
-  const pendingSaves = new Map<string, NodeJS.Timeout>();
+  const pendingSaves = useRef(new Map<string, NodeJS.Timeout>());
 
   const cancelPendingSave = (blockId: string) => {
-    if (pendingSaves.has(blockId)) {
-      clearTimeout(pendingSaves.get(blockId));
-      pendingSaves.delete(blockId);
+    if (pendingSaves.current.has(blockId)) {
+      clearTimeout(pendingSaves.current.get(blockId));
+      pendingSaves.current.delete(blockId);
     }
   };
 
-  const saveNewsBlock = useCallback(async (
-    blockId: string, 
-    data: Partial<any>, 
-    options?: SaveOptions
-  ) => {
-    // Cancel any pending saves for this block
-    cancelPendingSave(blockId);
-
+  // Process the save queue
+  const processQueue = useCallback(async () => {
+    if (saveInProgress.current || saveQueue.current.size === 0) return;
+    
+    saveInProgress.current = true;
+    const [blockId, { data, options }] = Array.from(saveQueue.current.entries())[0];
+    saveQueue.current.delete(blockId);
+    
     try {
       setSaving(true);
       const startTime = performance.now();
@@ -76,14 +78,33 @@ export const useOptimizedNewsBlockSave = () => {
       options?.onError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {
       setSaving(false);
+      saveInProgress.current = false;
+      
+      // Process next item in queue if any
+      setTimeout(() => {
+        processQueue();
+      }, 300); // Add small delay between requests
     }
   }, []);
+
+  const saveNewsBlock = useCallback(async (
+    blockId: string, 
+    data: Partial<any>, 
+    options?: SaveOptions
+  ) => {
+    // Cancel any pending saves for this block
+    cancelPendingSave(blockId);
+    
+    // Add to save queue and process
+    saveQueue.current.set(blockId, { data, options });
+    processQueue();
+  }, [processQueue]);
 
   // Debounced save function
   const debouncedSave = useCallback((
     blockId: string, 
     data: Partial<any>, 
-    delay: number = 500,
+    delay: number = 1000,
     options?: SaveOptions
   ) => {
     // Cancel any pending saves for this block
@@ -92,11 +113,11 @@ export const useOptimizedNewsBlockSave = () => {
     // Create a new debounced save
     const timeoutId = setTimeout(() => {
       saveNewsBlock(blockId, data, options);
-      pendingSaves.delete(blockId);
+      pendingSaves.current.delete(blockId);
     }, delay);
     
     // Store the timeout ID
-    pendingSaves.set(blockId, timeoutId);
+    pendingSaves.current.set(blockId, timeoutId);
     
     return () => {
       cancelPendingSave(blockId);
@@ -108,6 +129,7 @@ export const useOptimizedNewsBlockSave = () => {
     saveNewsBlock,
     debouncedSave,
     lastSaveTime,
-    cancelPendingSave
+    cancelPendingSave,
+    queueSize: saveQueue.current.size
   };
 };
