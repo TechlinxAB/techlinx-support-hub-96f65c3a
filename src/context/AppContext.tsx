@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -255,12 +256,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchCompanies = async () => {
     try {
-      const { data, error } = await supabase.from('companies').select('*');
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*');
       
       if (error) throw error;
       if (!data) return;
       
-      const mappedCompanies: Company[] = data.map(company => ({
+      const mappedCompanies: Company[] = data.map((company: any) => ({
         id: company.id,
         name: company.name,
         logo: company.logo || undefined
@@ -273,12 +276,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*');
       
       if (error) throw error;
       if (!data) return;
       
-      const mappedUsers: User[] = data.map(user => ({
+      const mappedUsers: User[] = data.map((user: any) => ({
         id: user.id,
         name: user.name,
         email: user.email,
@@ -292,6 +297,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error('Error fetching users:', error.message);
     }
+  };
+
+  const refetchUsers = async () => {
+    // Clear cache and force refresh
+    delete apiCache['users'];
+    await fetchUsers();
   };
 
   const refetchCompanies = async () => {
