@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 
 interface CaseDiscussionProps {
@@ -89,7 +90,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   
   const [replyContent, setReplyContent] = useState('');
   const [isInternalReply, setIsInternalReply] = useState(false);
-  const [noteContent, setNoteContent] = useState('');
   const [attachments, setAttachments] = useState<FileList | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isRefetching, setIsRefetching] = useState(false);
@@ -272,60 +272,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     }
   };
   
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!noteContent.trim()) return;
-    
-    try {
-      // Create optimistic update
-      const tempId = `temp-${Date.now()}`;
-      const optimisticNote = {
-        id: tempId,
-        caseId,
-        userId: currentUser!.id,
-        content: noteContent,
-        createdAt: new Date().toISOString(),
-        isOptimistic: true
-      };
-      
-      // Add to local state for immediate feedback
-      setLocalNotes(prev => [...prev, optimisticNote]);
-      
-      // Attempt to save to server
-      await addNote({
-        caseId,
-        userId: currentUser!.id,
-        content: noteContent,
-      });
-      
-      toast({
-        title: "Note added",
-        description: "Your internal note has been added.",
-      });
-      
-      setNoteContent('');
-      
-      // Refresh data after successful submission, but with a small delay
-      setTimeout(() => debouncedFetch(caseId), 300);
-    } catch (error) {
-      console.error('Error adding note:', error);
-      
-      // Store for later submission
-      storePendingSubmission('note', {
-        caseId,
-        userId: currentUser!.id,
-        content: noteContent
-      });
-      
-      toast({
-        title: "Network issue",
-        description: "Your note is saved and will be sent when connection improves.",
-        variant: "destructive",
-      });
-    }
-  };
-  
   // Function to retry sending pending submissions
   const retryPendingSubmissions = useCallback(async () => {
     try {
@@ -455,8 +401,18 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     );
   }
   
+  // Calculate initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
   return (
-    <div className="space-y-6">
+    <div>
       <Card>
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">
@@ -481,14 +437,14 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-4">
+        <CardContent>
           {allItems.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {allItems.map((item) => {
+            <div className="space-y-6">
+              {allItems.map((item, index) => {
                 const author = users.find(u => u.id === item.userId);
                 
                 if (item.type === 'note' && !isConsultant) {
@@ -496,51 +452,56 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                   return null;
                 }
                 
-                const isUserMessage = item.userId === currentUser?.id;
                 const isOptimistic = (item as any).isOptimistic;
+                const initials = author?.name ? getInitials(author.name) : "??";
                 
                 return (
                   <div 
                     key={`${item.type}-${item.id}`}
-                    className={`flex ${isUserMessage ? 'justify-end' : 'justify-start'}`}
+                    className="flex gap-4"
                   >
-                    <div 
-                      className={`max-w-[80%] ${
-                        item.type === 'note' 
-                          ? 'bg-orange-50 border-orange-200' 
-                          : (item as any).isInternal 
-                            ? 'bg-gray-50 border-gray-200'
-                            : isUserMessage
-                              ? 'bg-primary-foreground border-primary/20'
-                              : 'bg-muted border-muted-foreground/20'
-                      } border rounded-lg p-3 ${isOptimistic ? 'opacity-70' : ''}`}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">
-                            {author?.name || 'Unknown'}
-                          </span>
-                          {item.type === 'note' && (
-                            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
-                              Internal Note
-                            </Badge>
-                          )}
-                          {item.type === 'reply' && (item as any).isInternal && (
-                            <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
-                              <Lock className="h-3 w-3" /> Internal
-                            </Badge>
-                          )}
-                          {isOptimistic && (
-                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
-                              Sending...
-                            </Badge>
-                          )}
-                        </div>
+                    <Avatar className="h-10 w-10 flex-shrink-0">
+                      <AvatarFallback>{initials}</AvatarFallback>
+                    </Avatar>
+                    
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {author?.name || 'Unknown'}
+                        </span>
+                        
                         <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(item.createdAt, { addSuffix: true })}
                         </span>
+                        
+                        {item.type === 'note' && (
+                          <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
+                            Internal Note
+                          </Badge>
+                        )}
+                        
+                        {item.type === 'reply' && (item as any).isInternal && (
+                          <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
+                            <Lock className="h-3 w-3" /> Internal
+                          </Badge>
+                        )}
+                        
+                        {isOptimistic && (
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+                            Sending...
+                          </Badge>
+                        )}
                       </div>
-                      <p className="whitespace-pre-wrap text-sm">{item.content}</p>
+                      
+                      <div className={`p-3 rounded-md ${
+                        item.type === 'note' 
+                          ? 'bg-orange-50 border border-orange-200' 
+                          : (item as any).isInternal 
+                            ? 'bg-gray-50 border border-gray-200'
+                            : 'bg-white border border-gray-200'
+                      } ${isOptimistic ? 'opacity-70' : ''}`}>
+                        <p className="whitespace-pre-wrap">{item.content}</p>
+                      </div>
                     </div>
                   </div>
                 );
@@ -548,71 +509,49 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
             </div>
           )}
           
-          <form onSubmit={handleAddReply} className="pt-4">
-            <Textarea 
-              placeholder="Type your reply..." 
-              value={replyContent}
-              onChange={(e) => setReplyContent(e.target.value)}
-              rows={4}
-              className="mb-3"
-            />
-            
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Input 
-                  type="file" 
-                  multiple 
-                  onChange={handleAttachmentChange}
-                  className="max-w-xs"
-                />
-              </div>
-              
-              <div className="flex flex-wrap items-center gap-4">
-                {isConsultant && (
-                  <div className="flex items-center gap-2">
-                    <Switch 
-                      id="internal" 
-                      checked={isInternalReply}
-                      onCheckedChange={setIsInternalReply}
-                    />
-                    <Label htmlFor="internal" className="text-sm">Internal reply</Label>
-                  </div>
-                )}
-                
-                <Button type="submit" className="gap-2">
-                  <SendHorizontal className="h-4 w-4" />
-                  Send Reply
-                </Button>
-              </div>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-      
-      {isConsultant && (
-        <Card>
-          <CardHeader className="pb-3">
-            <h3 className="text-lg font-semibold">Internal Notes</h3>
-            <p className="text-sm text-muted-foreground">
-              Notes are only visible to consultants
-            </p>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddNote} className="space-y-3">
+          <div className="mt-8 pt-4 border-t border-gray-200">
+            <form onSubmit={handleAddReply} className="space-y-4">
               <Textarea 
-                placeholder="Add internal note..." 
-                value={noteContent}
-                onChange={(e) => setNoteContent(e.target.value)}
+                placeholder="Type your reply..." 
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
                 rows={4}
+                className="w-full"
               />
               
-              <div className="flex justify-end">
-                <Button type="submit">Add Note</Button>
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                <div className="flex items-center">
+                  <Input 
+                    type="file" 
+                    multiple 
+                    onChange={handleAttachmentChange}
+                    id="file-upload"
+                    className="max-w-xs"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  {isConsultant && (
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="internal" 
+                        checked={isInternalReply}
+                        onCheckedChange={setIsInternalReply}
+                      />
+                      <Label htmlFor="internal" className="text-sm">Internal reply</Label>
+                    </div>
+                  )}
+                  
+                  <Button type="submit" className="gap-2">
+                    <SendHorizontal className="h-4 w-4" />
+                    Send Reply
+                  </Button>
+                </div>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
