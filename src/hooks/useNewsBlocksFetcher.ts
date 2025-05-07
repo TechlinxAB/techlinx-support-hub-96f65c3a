@@ -1,8 +1,7 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CompanyNewsBlock } from '@/types/companyNews';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 
 export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
@@ -149,7 +148,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       
       // Only show fetch success toast if it was forced
       if (force && fetchForced.current) {
-        toast.success("Content refreshed", { duration: 2000 });
+        toast("Content refreshed", { duration: 2000 });
       }
     } catch (err: any) {
       // Ignore aborted requests
@@ -164,7 +163,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         
         // Only show toast for forced fetches to avoid spamming the user
         if (force && fetchForced.current) {
-          toast.error("Failed to load news content", {
+          toast("Failed to load news content", {
             description: err.message || "Please try again"
           });
         }

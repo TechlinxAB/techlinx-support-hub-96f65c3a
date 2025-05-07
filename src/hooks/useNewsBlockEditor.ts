@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 
 interface UseNewsBlockEditorOptions {
   onSaveSuccess?: () => void; 
@@ -214,9 +214,8 @@ export const useNewsBlockEditor = (
       );
     } catch (error) {
       console.error('Error saving block:', error);
-      toast.error("Could not save changes", { 
-        description: "Please try again",
-        duration: 5000
+      toast("Could not save changes", { 
+        description: "Please try again"
       });
       options?.onSaveError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {

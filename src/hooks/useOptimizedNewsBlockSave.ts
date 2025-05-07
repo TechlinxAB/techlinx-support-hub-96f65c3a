@@ -1,6 +1,5 @@
-
 import { useState, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface SaveOptions {
@@ -72,10 +71,7 @@ export const useOptimizedNewsBlockSave = () => {
       let toastId: string | number | undefined;
       if (options?.showToast !== false) {
         // Using toast.loading which returns string or number
-        toastId = toast.loading("Saving changes...", {
-          id: `save-${blockId}`,
-          duration: 30000 // Long duration in case save takes time
-        });
+        toastId = toast.loading("Saving changes...");
       }
       
       // Log save operation details for debugging
@@ -111,9 +107,8 @@ export const useOptimizedNewsBlockSave = () => {
       
       // Update toast status if it was shown
       if (toastId && options?.showToast !== false) {
-        toast.success("Changes saved", {
-          id: toastId,
-          duration: 3000
+        toast("Changes saved", {
+          id: toastId
         });
       }
       
@@ -123,7 +118,7 @@ export const useOptimizedNewsBlockSave = () => {
       if (error.name === 'AbortError') {
         console.log('Save operation was cancelled');
         if (options?.showToast !== false) {
-          toast.error("Save cancelled", { duration: 3000 });
+          toast("Save cancelled");
         }
         return;
       }
@@ -132,9 +127,8 @@ export const useOptimizedNewsBlockSave = () => {
       console.error('Error saving news block:', error);
       
       if (options?.showToast !== false) {
-        toast.error("Failed to save changes", {
-          description: error.message || "Please try again",
-          duration: 5000
+        toast("Failed to save changes", {
+          description: error.message || "Please try again"
         });
       }
       
