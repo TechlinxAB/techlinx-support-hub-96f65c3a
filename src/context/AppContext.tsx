@@ -401,12 +401,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchCases = async () => {
     setLoadingCases(true);
     try {
-      const data = await fetchWithRetry(
-        () => supabase.from('cases').select('*')
-      );
+      // Fix the type issue by using the proper async/await pattern
+      const { data, error } = await supabase.from('cases').select('*');
+      
+      if (error) {
+        throw error;
+      }
       
       if (data) {
-        const mappedCases: Case[] = data.map(caseItem => ({
+        const mappedCases: Case[] = data.map((caseItem: any) => ({
           id: caseItem.id,
           title: caseItem.title,
           description: caseItem.description,
