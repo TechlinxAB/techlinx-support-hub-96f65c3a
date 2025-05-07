@@ -1,28 +1,29 @@
+
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/Layout';
-import { Index } from './pages/Index';
-import { AuthPage } from './pages/AuthPage';
-import { Dashboard } from './pages/Dashboard';
-import { CasesPage } from './pages/CasesPage';
-import { CaseDetailPage } from './pages/CaseDetailPage';
-import { NewCasePage } from './pages/NewCasePage';
-import { SettingsPage } from './pages/SettingsPage';
-import { SearchPage } from './pages/SearchPage';
-import { CompaniesPage } from './pages/CompaniesPage';
-import { CompanyDocumentationPage } from './pages/CompanyDocumentationPage';
-import { CompanyDashboardPage } from './pages/CompanyDashboardPage';
-import { CompanyDashboardBuilderPage } from './pages/CompanyDashboardBuilderPage';
-import { CompanySettingsPage } from './pages/CompanySettingsPage';
-import { UserManagementPage } from './pages/UserManagementPage';
-import { CompanyManagementPage } from './pages/CompanyManagementPage';
-import { NotFound } from './pages/NotFound';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import Layout from './components/layout/Layout';
+import Index from './pages/Index';
+import AuthPage from './pages/AuthPage';
+import Dashboard from './pages/Dashboard';
+import CasesPage from './pages/CasesPage';
+import CaseDetailPage from './pages/CaseDetailPage';
+import NewCasePage from './pages/NewCasePage';
+import SettingsPage from './pages/SettingsPage';
+import SearchPage from './pages/SearchPage';
+import CompaniesPage from './pages/CompaniesPage';
+import CompanyDocumentationPage from './pages/CompanyDocumentationPage';
+import CompanyDashboardPage from './pages/CompanyDashboardPage';
+import CompanyDashboardBuilderPage from './pages/CompanyDashboardBuilderPage';
+import CompanySettingsPage from './pages/CompanySettingsPage';
+import UserManagementPage from './pages/UserManagementPage';
+import CompanyManagementPage from './pages/CompanyManagementPage';
+import NotFound from './pages/NotFound';
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from '@/components/ui/use-toast';
-import { CompanyNewsBuilderPage } from './pages/CompanyNewsBuilderPage';
+import CompanyNewsBuilderPage from './pages/CompanyNewsBuilderPage';
 
 function App() {
   const [isHydrated, setIsHydrated] = useState(false);
@@ -37,7 +38,7 @@ function App() {
       toast({
         title: "Warning",
         description: "The app is running in a non-browser environment.",
-        variant: "warning",
+        variant: "default",
       });
     }
   }, [toast]);

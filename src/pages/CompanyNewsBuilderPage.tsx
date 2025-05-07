@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 // Define types for news blocks
 type NewsBlockType = 'headline' | 'paragraph' | 'image' | 'quote' | 'list';
@@ -37,7 +36,7 @@ const CompanyNewsBuilderPage = () => {
   const { toast } = useToast();
   
   const [newsBlocks, setNewsBlocks] = useState<NewsBlock[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<NewsBlock | null>(null);
   const [selectedBlockType, setSelectedBlockType] = useState<NewsBlockType>('paragraph');
@@ -47,6 +46,8 @@ const CompanyNewsBuilderPage = () => {
   // Find the company
   const company = companies.find(c => c.id === companyId);
   
+  // Temporarily disabled fetchNewsBlocks functionality
+  /* 
   useEffect(() => {
     fetchNewsBlocks();
   }, [companyId]);
@@ -56,31 +57,8 @@ const CompanyNewsBuilderPage = () => {
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('company_news_blocks')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('position', { ascending: true });
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Transform the data to match our interface
-      const transformedData: NewsBlock[] = data.map((block: any) => ({
-        id: block.id,
-        companyId: block.company_id,
-        title: block.title,
-        type: block.type as NewsBlockType,
-        content: block.content,
-        position: block.position,
-        createdAt: new Date(block.created_at),
-        updatedAt: new Date(block.updated_at),
-        createdBy: block.created_by,
-        isPublished: block.is_published
-      }));
-      
-      setNewsBlocks(transformedData);
+      // This will be implemented once the company_news_blocks table exists
+      setNewsBlocks([]);
     } catch (error) {
       console.error('Error fetching news blocks:', error);
       toast({
@@ -92,6 +70,7 @@ const CompanyNewsBuilderPage = () => {
       setLoading(false);
     }
   };
+  */
   
   const handleAddBlock = () => {
     setEditingBlock(null);
@@ -111,20 +90,13 @@ const CompanyNewsBuilderPage = () => {
     if (!confirm('Are you sure you want to delete this news block?')) return;
     
     try {
-      const { error } = await supabase
-        .from('company_news_blocks')
-        .delete()
-        .eq('id', blockId);
-      
-      if (error) throw error;
+      // This will be implemented once the company_news_blocks table exists
+      setNewsBlocks(newsBlocks.filter(block => block.id !== blockId));
       
       toast({
         title: "Success",
         description: "News block deleted successfully"
       });
-      
-      // Refresh the list
-      fetchNewsBlocks();
     } catch (error) {
       console.error('Error deleting block:', error);
       toast({
@@ -140,102 +112,77 @@ const CompanyNewsBuilderPage = () => {
     const currentIndex = blocksCopy.findIndex(b => b.id === block.id);
     
     if (direction === 'up' && currentIndex > 0) {
-      const previousBlock = blocksCopy[currentIndex - 1];
+      // Swap positions with the previous block
+      const tempBlocksCopy = [...blocksCopy];
+      const temp = tempBlocksCopy[currentIndex];
+      tempBlocksCopy[currentIndex] = tempBlocksCopy[currentIndex - 1];
+      tempBlocksCopy[currentIndex - 1] = temp;
       
-      try {
-        await supabase.from('company_news_blocks')
-          .update({ position: previousBlock.position })
-          .eq('id', block.id);
-          
-        await supabase.from('company_news_blocks')
-          .update({ position: block.position })
-          .eq('id', previousBlock.id);
-          
-        toast({
-          title: "Success",
-          description: "Block moved successfully"
-        });
-        
-        fetchNewsBlocks();
-      } catch (error) {
-        console.error('Error moving block:', error);
-        toast({
-          title: "Error",
-          description: "Failed to move block",
-          variant: "destructive"
-        });
-      }
+      // Update the state
+      setNewsBlocks(tempBlocksCopy);
+      
+      toast({
+        title: "Success",
+        description: "Block moved successfully"
+      });
     }
     
     if (direction === 'down' && currentIndex < blocksCopy.length - 1) {
-      const nextBlock = blocksCopy[currentIndex + 1];
+      // Swap positions with the next block
+      const tempBlocksCopy = [...blocksCopy];
+      const temp = tempBlocksCopy[currentIndex];
+      tempBlocksCopy[currentIndex] = tempBlocksCopy[currentIndex + 1];
+      tempBlocksCopy[currentIndex + 1] = temp;
       
-      try {
-        await supabase.from('company_news_blocks')
-          .update({ position: nextBlock.position })
-          .eq('id', block.id);
-          
-        await supabase.from('company_news_blocks')
-          .update({ position: block.position })
-          .eq('id', nextBlock.id);
-          
-        toast({
-          title: "Success",
-          description: "Block moved successfully"
-        });
-        
-        fetchNewsBlocks();
-      } catch (error) {
-        console.error('Error moving block:', error);
-        toast({
-          title: "Error",
-          description: "Failed to move block",
-          variant: "destructive"
-        });
-      }
+      // Update the state
+      setNewsBlocks(tempBlocksCopy);
+      
+      toast({
+        title: "Success",
+        description: "Block moved successfully"
+      });
     }
   };
   
   const handleSaveBlock = async () => {
     try {
       if (editingBlock) {
-        // Update existing block
-        const { error } = await supabase
-          .from('company_news_blocks')
-          .update({
-            title: formData.title || editingBlock.title,
-            type: selectedBlockType,
-            content: formData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingBlock.id);
+        // Update existing block (in-memory only for now)
+        const updatedBlocks = newsBlocks.map(block => {
+          if (block.id === editingBlock.id) {
+            return {
+              ...block,
+              title: formData.title || editingBlock.title,
+              type: selectedBlockType,
+              content: formData,
+              updatedAt: new Date()
+            };
+          }
+          return block;
+        });
         
-        if (error) throw error;
+        setNewsBlocks(updatedBlocks);
         
         toast({
           title: "Success",
           description: "News block updated successfully"
         });
       } else {
-        // Create new block
-        // Get max position for new block
-        const maxPosition = newsBlocks.length > 0
-          ? Math.max(...newsBlocks.map(b => b.position)) + 1
-          : 0;
+        // Create new block (in-memory only for now)
+        const newBlock: NewsBlock = {
+          id: `temp-${Date.now()}`, // Temporary ID
+          companyId: companyId || '',
+          title: formData.title || `New ${selectedBlockType}`,
+          type: selectedBlockType,
+          content: formData,
+          position: newsBlocks.length,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          createdBy: currentUser?.id || '',
+          isPublished: false
+        };
         
-        const { error } = await supabase
-          .from('company_news_blocks')
-          .insert({
-            company_id: companyId,
-            title: formData.title || `New ${selectedBlockType}`,
-            type: selectedBlockType,
-            content: formData,
-            position: maxPosition,
-            created_by: currentUser?.id,
-            is_published: false
-          });
-        
-        if (error) throw error;
+        setNewsBlocks([...newsBlocks, newBlock]);
         
         toast({
           title: "Success",
@@ -244,7 +191,6 @@ const CompanyNewsBuilderPage = () => {
       }
       
       setDialogOpen(false);
-      fetchNewsBlocks();
     } catch (error) {
       console.error('Error saving block:', error);
       toast({
@@ -257,22 +203,24 @@ const CompanyNewsBuilderPage = () => {
   
   const handleTogglePublish = async (blockId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('company_news_blocks')
-        .update({
-          is_published: !currentStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', blockId);
+      // Update in-memory only for now
+      const updatedBlocks = newsBlocks.map(block => {
+        if (block.id === blockId) {
+          return {
+            ...block,
+            isPublished: !currentStatus,
+            updatedAt: new Date()
+          };
+        }
+        return block;
+      });
       
-      if (error) throw error;
+      setNewsBlocks(updatedBlocks);
       
       toast({
         title: "Success",
         description: `News block ${!currentStatus ? "published" : "unpublished"} successfully`
       });
-      
-      fetchNewsBlocks();
     } catch (error) {
       console.error('Error toggling publish status:', error);
       toast({
@@ -571,6 +519,13 @@ const CompanyNewsBuilderPage = () => {
       </div>
       
       <Separator />
+      
+      <Alert>
+        <AlertDescription>
+          Note: Company news feature is under development. News blocks will be stored in-memory only for now. 
+          Please contact an administrator to enable persistent storage for news blocks.
+        </AlertDescription>
+      </Alert>
       
       {loading ? (
         <div className="flex items-center justify-center p-12">
