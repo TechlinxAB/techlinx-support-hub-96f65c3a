@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -76,9 +75,12 @@ const CompanyNewsBuilderPage = () => {
   // Update editedBlockData when selected block changes
   useEffect(() => {
     if (selectedBlock) {
+      // Initialize with default content based on block type if content is undefined
+      const defaultContent = getDefaultContent(selectedBlock.type);
+      
       setEditedBlockData({
         title: selectedBlock.title,
-        content: { ...selectedBlock.content },
+        content: selectedBlock.content || defaultContent,
         isPublished: selectedBlock.isPublished
       });
       setHasUnsavedChanges(false);
@@ -362,7 +364,10 @@ const CompanyNewsBuilderPage = () => {
 
   // Content editor based on block type
   const renderBlockEditor = () => {
-    if (!selectedBlock || !editedBlockData) return null;
+    if (!selectedBlock || !editedBlockData || !editedBlockData.content) return null;
+
+    // Make sure we have the necessary content structure for each block type
+    const content = editedBlockData.content || getDefaultContent(selectedBlock.type);
 
     switch (selectedBlock.type) {
       case 'heading':
@@ -371,7 +376,7 @@ const CompanyNewsBuilderPage = () => {
             <div className="space-y-2">
               <Label htmlFor="heading-level">Heading Level</Label>
               <Select 
-                value={editedBlockData.content.level?.toString() || "2"} 
+                value={String(content.level || "2")} 
                 onValueChange={(value) => handleFormChange('content.level', parseInt(value))}
               >
                 <SelectTrigger>
@@ -391,7 +396,7 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="heading-text">Heading Text</Label>
               <Input 
                 id="heading-text" 
-                value={editedBlockData.content.text || ''} 
+                value={content.text || ''} 
                 onChange={(e) => handleFormChange('content.text', e.target.value)}
               />
             </div>
@@ -406,7 +411,7 @@ const CompanyNewsBuilderPage = () => {
               <Textarea 
                 id="text-content" 
                 rows={10}
-                value={editedBlockData.content.text || ''} 
+                value={content.text || ''} 
                 onChange={(e) => handleFormChange('content.text', e.target.value)}
               />
             </div>
@@ -420,7 +425,7 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="card-title">Card Title</Label>
               <Input 
                 id="card-title" 
-                value={editedBlockData.content.title || ''} 
+                value={content.title || ''} 
                 onChange={(e) => handleFormChange('content.title', e.target.value)}
               />
             </div>
@@ -429,7 +434,7 @@ const CompanyNewsBuilderPage = () => {
               <Textarea 
                 id="card-content" 
                 rows={5}
-                value={editedBlockData.content.content || ''} 
+                value={content.content || ''} 
                 onChange={(e) => handleFormChange('content.content', e.target.value)}
               />
             </div>
@@ -438,7 +443,7 @@ const CompanyNewsBuilderPage = () => {
               <Input 
                 id="card-icon" 
                 placeholder="Icon name or URL"
-                value={editedBlockData.content.icon || ''} 
+                value={content.icon || ''} 
                 onChange={(e) => handleFormChange('content.icon', e.target.value)}
               />
             </div>
@@ -446,7 +451,7 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="action-label">Action Button Label</Label>
               <Input 
                 id="action-label" 
-                value={editedBlockData.content.action?.label || ''} 
+                value={content.action?.label || ''} 
                 onChange={(e) => handleNestedContentChange(['action', 'label'], e.target.value)}
               />
             </div>
@@ -454,7 +459,7 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="action-link">Action Button Link</Label>
               <Input 
                 id="action-link" 
-                value={editedBlockData.content.action?.link || ''} 
+                value={content.action?.link || ''} 
                 onChange={(e) => handleNestedContentChange(['action', 'link'], e.target.value)}
               />
             </div>
@@ -468,7 +473,7 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="image-url">Image URL</Label>
               <Input 
                 id="image-url" 
-                value={editedBlockData.content.url || ''} 
+                value={content.url || ''} 
                 onChange={(e) => handleFormChange('content.url', e.target.value)}
               />
             </div>
@@ -476,7 +481,7 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="image-alt">Alt Text</Label>
               <Input 
                 id="image-alt" 
-                value={editedBlockData.content.alt || ''} 
+                value={content.alt || ''} 
                 onChange={(e) => handleFormChange('content.alt', e.target.value)}
               />
             </div>
@@ -484,20 +489,20 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="image-caption">Caption (optional)</Label>
               <Input 
                 id="image-caption" 
-                value={editedBlockData.content.caption || ''} 
+                value={content.caption || ''} 
                 onChange={(e) => handleFormChange('content.caption', e.target.value)}
               />
             </div>
-            {editedBlockData.content.url && (
+            {content.url && (
               <div className="mt-4 border rounded-md p-4">
                 <p className="text-sm text-muted-foreground mb-2">Preview:</p>
                 <img 
-                  src={editedBlockData.content.url} 
-                  alt={editedBlockData.content.alt} 
+                  src={content.url} 
+                  alt={content.alt} 
                   className="max-w-full h-auto rounded-md"
                 />
-                {editedBlockData.content.caption && (
-                  <p className="text-sm text-center mt-2">{editedBlockData.content.caption}</p>
+                {content.caption && (
+                  <p className="text-sm text-center mt-2">{content.caption}</p>
                 )}
               </div>
             )}
@@ -730,7 +735,7 @@ const CompanyNewsBuilderPage = () => {
         );
       
       default:
-        return <p>No editor available for this block type.</p>;
+        return <div>Select a block type</div>;
     }
   };
 
