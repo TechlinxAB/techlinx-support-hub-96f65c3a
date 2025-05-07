@@ -741,17 +741,23 @@ const CompanyNewsBuilderPage = () => {
 
   // Preview rendering based on block type
   const renderBlockPreview = (block: CompanyNewsBlock) => {
-    const content = selectedBlockId === block.id ? editedBlockData.content : block.content;
+    // Get content based on whether the block is selected or not
+    const content = selectedBlockId === block.id ? 
+      editedBlockData.content || getDefaultContent(block.type) : 
+      block.content || getDefaultContent(block.type);
     
     switch (block.type) {
-      case 'heading':
-        const HeadingTag = `h${content.level}` as keyof JSX.IntrinsicElements;
-        return <HeadingTag className={`mt-${content.level} font-bold`}>{content.text}</HeadingTag>;
+      case 'heading': {
+        // Safely handle the heading level with a default
+        const level = content.level || 2; // Default to h2 if level is undefined
+        const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+        return <HeadingTag className={`mt-${level} font-bold`}>{content.text || 'Heading Text'}</HeadingTag>;
+      }
       
       case 'text':
         return (
           <div className="prose max-w-none">
-            <p>{content.text}</p>
+            <p>{content.text || 'Text content goes here'}</p>
           </div>
         );
       
@@ -759,15 +765,15 @@ const CompanyNewsBuilderPage = () => {
         return (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>{content.title}</CardTitle>
+              <CardTitle>{content.title || 'Card Title'}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{content.content}</p>
+              <p>{content.content || 'Card content'}</p>
             </CardContent>
             {content.action && (
               <CardFooter>
                 <Button variant="outline" size="sm">
-                  {content.action.label}
+                  {content.action.label || 'Action'}
                 </Button>
               </CardFooter>
             )}
@@ -781,7 +787,7 @@ const CompanyNewsBuilderPage = () => {
               <>
                 <img 
                   src={content.url} 
-                  alt={content.alt} 
+                  alt={content.alt || 'Image'} 
                   className="max-w-full h-auto rounded-md"
                 />
                 {content.caption && (
@@ -796,12 +802,13 @@ const CompanyNewsBuilderPage = () => {
           </div>
         );
       
-      case 'notice':
+      case 'notice': {
+        const noticeType = content.type || 'info';
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
         let textColor = 'text-blue-800';
         
-        switch (content.type) {
+        switch (noticeType) {
           case 'warning':
             bgColor = 'bg-yellow-50';
             borderColor = 'border-yellow-300';
@@ -821,48 +828,72 @@ const CompanyNewsBuilderPage = () => {
         
         return (
           <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
-            <h4 className={`font-medium ${textColor}`}>{content.title}</h4>
-            <p className={`mt-2 ${textColor}`}>{content.message}</p>
+            <h4 className={`font-medium ${textColor}`}>{content.title || 'Notice Title'}</h4>
+            <p className={`mt-2 ${textColor}`}>{content.message || 'Notice message'}</p>
           </div>
         );
+      }
       
-      case 'faq':
+      case 'faq': {
+        const items = content.items || [];
         return (
           <div className="mt-4 space-y-4">
-            {content.items?.map((item: any, index: number) => (
+            {items.length > 0 ? items.map((item: any, index: number) => (
               <div key={index}>
-                <h4 className="font-medium">{item.question}</h4>
-                <p className="mt-1">{item.answer}</p>
+                <h4 className="font-medium">{item.question || `Question ${index + 1}`}</h4>
+                <p className="mt-1">{item.answer || `Answer ${index + 1}`}</p>
               </div>
-            ))}
+            )) : (
+              <div>
+                <h4 className="font-medium">Sample Question</h4>
+                <p className="mt-1">Sample Answer</p>
+              </div>
+            )}
           </div>
         );
+      }
       
-      case 'links':
+      case 'links': {
+        const links = content.links || [];
         return (
           <div className="mt-4 space-y-2">
-            {content.links?.map((link: any, index: number) => (
+            {links.length > 0 ? links.map((link: any, index: number) => (
               <div key={index} className="flex items-center">
-                <a href={link.url} className="text-blue-600 hover:underline">{link.label}</a>
+                <a href={link.url || '#'} className="text-blue-600 hover:underline">
+                  {link.label || `Link ${index + 1}`}
+                </a>
               </div>
-            ))}
+            )) : (
+              <div className="flex items-center">
+                <a href="#" className="text-blue-600 hover:underline">Sample Link</a>
+              </div>
+            )}
           </div>
         );
+      }
       
-      case 'dropdown':
+      case 'dropdown': {
+        const title = content.title || 'Dropdown Title';
+        const items = content.items || [];
         return (
           <div className="mt-4">
-            <h4 className="font-medium">{content.title}</h4>
+            <h4 className="font-medium">{title}</h4>
             <div className="space-y-2 mt-2">
-              {content.items?.map((item: any, index: number) => (
+              {items.length > 0 ? items.map((item: any, index: number) => (
                 <div key={index} className="border p-2 rounded-md">
-                  <p className="font-medium">{item.label}</p>
-                  <p className="text-sm">{item.content}</p>
+                  <p className="font-medium">{item.label || `Item ${index + 1}`}</p>
+                  <p className="text-sm">{item.content || 'Content here'}</p>
                 </div>
-              ))}
+              )) : (
+                <div className="border p-2 rounded-md">
+                  <p className="font-medium">Sample Item</p>
+                  <p className="text-sm">Sample content</p>
+                </div>
+              )}
             </div>
           </div>
         );
+      }
       
       default:
         return <p>Preview not available for this block type.</p>;
