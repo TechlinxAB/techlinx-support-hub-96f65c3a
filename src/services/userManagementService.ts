@@ -2,6 +2,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { UserRole, Language } from "@/context/AppContext";
 
+// Define the Supabase URL constant using the value from the client file
+const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
+
 // Service for user management operations
 export const userManagementService = {
   // Create a new user
@@ -28,11 +31,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Get the Supabase URL from the environment
-    const supabaseUrl = new URL(supabase.url).origin;
-    
     const response = await fetch(
-      `${supabaseUrl}/functions/v1/user-management`,
+      `${SUPABASE_URL}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
@@ -88,11 +88,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Get the Supabase URL from the environment
-    const supabaseUrl = new URL(supabase.url).origin;
-    
     const response = await fetch(
-      `${supabaseUrl}/functions/v1/user-management`,
+      `${SUPABASE_URL}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
@@ -131,11 +128,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Get the Supabase URL from the environment
-    const supabaseUrl = new URL(supabase.url).origin;
-    
     const response = await fetch(
-      `${supabaseUrl}/functions/v1/user-management`,
+      `${SUPABASE_URL}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
@@ -168,11 +162,8 @@ export const userManagementService = {
       throw new Error("Not authenticated");
     }
     
-    // Get the Supabase URL from the environment
-    const supabaseUrl = new URL(supabase.url).origin;
-    
     const response = await fetch(
-      `${supabaseUrl}/functions/v1/user-management`,
+      `${SUPABASE_URL}/functions/v1/user-management`,
       {
         method: "POST",
         headers: {
