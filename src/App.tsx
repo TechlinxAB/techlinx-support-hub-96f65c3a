@@ -1,87 +1,81 @@
 
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { AppProvider } from './context/AppContext';
-import ProtectedRoute from './components/auth/ProtectedRoute';
-import Layout from './components/layout/Layout';
-import Index from './pages/Index';
-import AuthPage from './pages/AuthPage';
-import Dashboard from './pages/Dashboard';
-import CasesPage from './pages/CasesPage';
-import CaseDetailPage from './pages/CaseDetailPage';
-import NewCasePage from './pages/NewCasePage';
-import SettingsPage from './pages/SettingsPage';
-import SearchPage from './pages/SearchPage';
-import CompaniesPage from './pages/CompaniesPage';
-import CompanyDocumentationPage from './pages/CompanyDocumentationPage';
-import CompanyDashboardPage from './pages/CompanyDashboardPage';
-import CompanyDashboardBuilderPage from './pages/CompanyDashboardBuilderPage';
-import CompanySettingsPage from './pages/CompanySettingsPage';
-import UserManagementPage from './pages/UserManagementPage';
-import CompanyManagementPage from './pages/CompanyManagementPage';
-import NotFound from './pages/NotFound';
-import { Toaster } from "@/components/ui/toaster"
-import { useToast } from '@/components/ui/use-toast';
-import CompanyNewsBuilderPage from './pages/CompanyNewsBuilderPage';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AppProvider } from "./context/AppContext";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import useModalManager from "./hooks/use-modal-manager";
+import ModalReset from "./components/ui/modal-reset";
+import SearchPage from "./pages/SearchPage";
 
-function App() {
-  const [isHydrated, setIsHydrated] = useState(false);
-  const { toast } = useToast();
+// Layouts
+import Layout from "./components/layout/Layout";
 
-  useEffect(() => {
-    // Check if running in a browser environment
-    if (typeof window !== 'undefined') {
-      setIsHydrated(true);
-    } else {
-      // Optionally, handle server-side or non-browser environment
-      toast({
-        title: "Warning",
-        description: "The app is running in a non-browser environment.",
-        variant: "default",
-      });
-    }
-  }, [toast]);
+// Pages
+import Dashboard from "./pages/Dashboard";
+import CasesPage from "./pages/CasesPage";
+import CaseDetailPage from "./pages/CaseDetailPage";
+import NewCasePage from "./pages/NewCasePage";
+import CompaniesPage from "./pages/CompaniesPage";
+import CompanyDashboardPage from "./pages/CompanyDashboardPage";
+import CompanyDashboardBuilderPage from "./pages/CompanyDashboardBuilderPage";
+import UserManagementPage from "./pages/UserManagementPage";
+import CompanyManagementPage from "./pages/CompanyManagementPage";
+import SettingsPage from "./pages/SettingsPage";
+import NotFound from "./pages/NotFound";
+import AuthPage from "./pages/AuthPage";
+import CompanySettingsPage from "./pages/CompanySettingsPage";
 
-  // Prevent hydration error
-  if (!isHydrated) {
-    return <div>Loading...</div>;
-  }
+const queryClient = new QueryClient();
 
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppProvider>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<AuthPage />} />
-            
-            {/* Protected routes */}
-            <Route element={<ProtectedRoute />}>
-              <Route element={<Layout />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/cases" element={<CasesPage />} />
-                <Route path="/cases/:caseId" element={<CaseDetailPage />} />
-                <Route path="/new-case" element={<NewCasePage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/companies" element={<CompaniesPage />} />
-                <Route path="/companies/:companyId" element={<CompanyDocumentationPage />} />
-                <Route path="/company-dashboard" element={<CompanyDashboardPage />} />
-                <Route path="/company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-                <Route path="/company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-                <Route path="/company/:companyId/settings" element={<CompanySettingsPage />} />
-                <Route path="/user-management" element={<UserManagementPage />} />
-                <Route path="/company-management" element={<CompanyManagementPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Route>
-          </Routes>
-          <Toaster />
-        </AppProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  );
-}
+// Modal Manager Component to initialize the modal manager hook
+const ModalManager = ({ children }: { children: React.ReactNode }) => {
+  // Initialize the modal manager to enable global cleanup functionality
+  useModalManager();
+  return <>{children}</>;
+};
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <AppProvider>
+        <TooltipProvider>
+          <ModalManager>
+            <Toaster />
+            <Sonner />
+            <ModalReset />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/auth" element={<AuthPage />} />
+                
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="cases" element={<CasesPage />} />
+                    <Route path="cases/new" element={<NewCasePage />} />
+                    <Route path="cases/:id" element={<CaseDetailPage />} />
+                    <Route path="companies" element={<CompaniesPage />} />
+                    <Route path="companies/:id" element={<CompaniesPage />} />
+                    <Route path="company/:id/settings" element={<CompanySettingsPage />} />
+                    <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+                    <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+                    <Route path="users" element={<UserManagementPage />} />
+                    <Route path="company-management" element={<CompanyManagementPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="search" element={<SearchPage />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </ModalManager>
+        </TooltipProvider>
+      </AppProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
 
 export default App;

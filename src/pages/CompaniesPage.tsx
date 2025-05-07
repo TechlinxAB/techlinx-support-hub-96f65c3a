@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -10,8 +11,7 @@ import {
   LayoutDashboard, 
   Plus,
   Trash2,
-  Settings,
-  Edit
+  Settings
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -229,18 +229,6 @@ const CompaniesPage = () => {
                       <MessageCircle className="h-4 w-4" />
                       Cases
                     </Button>
-
-                    {currentUser?.role === 'consultant' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex gap-1 items-center justify-center col-span-3 mt-2"
-                        onClick={() => navigate(`/company-news-builder/${company.id}`)}
-                      >
-                        <Edit className="h-4 w-4" />
-                        Edit News
-                      </Button>
-                    )}
                   </div>
                 </div>
               </CardContent>

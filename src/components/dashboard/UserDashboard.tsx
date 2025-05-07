@@ -13,12 +13,11 @@ const UserDashboard = () => {
   const { currentUser, cases } = useAppContext();
   
   // Get user's cases only and map to UserCaseItem format
-  // Limit to just 2 most recently updated cases
   const userCases: UserCaseItem[] = cases
     .filter(c => c.userId === currentUser?.id)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .filter(c => c.status !== 'completed')
-    .slice(0, 2)
+    .slice(0, 3)
     .map(c => ({
       id: c.id,
       title: c.title,
