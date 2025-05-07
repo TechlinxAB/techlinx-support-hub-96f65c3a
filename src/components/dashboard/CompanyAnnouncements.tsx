@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,8 +12,6 @@ interface CompanyAnnouncementsProps {
 }
 
 const CompanyAnnouncements = ({ announcements, settings }: CompanyAnnouncementsProps) => {
-  const navigate = useNavigate();
-  
   if (!settings.showCompanyNotices) {
     return null;
   }
@@ -44,7 +41,6 @@ const CompanyAnnouncements = ({ announcements, settings }: CompanyAnnouncementsP
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => navigate('/company-dashboard')}
                 >
                   Read More
                 </Button>
@@ -56,12 +52,6 @@ const CompanyAnnouncements = ({ announcements, settings }: CompanyAnnouncementsP
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-muted-foreground">No announcements at the moment.</p>
-            <Button 
-              variant="link" 
-              onClick={() => navigate('/company-dashboard')}
-            >
-              Visit Company Dashboard
-            </Button>
           </CardContent>
         </Card>
       )}
