@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
-import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save } from 'lucide-react';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -42,6 +42,10 @@ const CompanyNewsBuilderPage = () => {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('edit');
   const [loading, setLoading] = useState(false);
+  
+  // Form state for selected block (prevents auto-update)
+  const [editedBlockData, setEditedBlockData] = useState<any>({});
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Form state for new blocks
   const [newBlockType, setNewBlockType] = useState<NewsBlockType>('heading');
@@ -68,6 +72,18 @@ const CompanyNewsBuilderPage = () => {
       }
     }
   }, [companyNewsBlocks, companyId, loadingCompanyNewsBlocks, selectedBlockId]);
+
+  // Update editedBlockData when selected block changes
+  useEffect(() => {
+    if (selectedBlock) {
+      setEditedBlockData({
+        title: selectedBlock.title,
+        content: { ...selectedBlock.content },
+        isPublished: selectedBlock.isPublished
+      });
+      setHasUnsavedChanges(false);
+    }
+  }, [selectedBlockId, companyNewsBlocks]);
 
   const selectedBlock = blocks.find(block => block.id === selectedBlockId);
 
@@ -165,19 +181,27 @@ const CompanyNewsBuilderPage = () => {
     }
   };
 
-  const handleUpdateBlock = async (blockId: string, updates: Partial<CompanyNewsBlock>) => {
+  // New save block function
+  const handleSaveBlock = async () => {
+    if (!selectedBlockId || !selectedBlock) return;
+    
     setLoading(true);
     try {
-      await updateCompanyNewsBlock(blockId, updates);
+      await updateCompanyNewsBlock(selectedBlockId, {
+        title: editedBlockData.title,
+        content: editedBlockData.content
+      });
+      
       toast({
         title: "Success",
-        description: "Block updated successfully"
+        description: "Changes saved successfully"
       });
+      setHasUnsavedChanges(false);
     } catch (error) {
-      console.error('Error updating block:', error);
+      console.error('Error saving block:', error);
       toast({
         title: "Error",
-        description: "Failed to update block",
+        description: "Failed to save changes",
         variant: "destructive"
       });
     } finally {
@@ -285,9 +309,60 @@ const CompanyNewsBuilderPage = () => {
     }
   };
 
+  // Handle form input changes without immediately saving to database
+  const handleFormChange = (field: string, value: any) => {
+    setEditedBlockData((prev: any) => {
+      if (field.startsWith('content.')) {
+        const contentField = field.replace('content.', '');
+        return {
+          ...prev,
+          content: {
+            ...prev.content,
+            [contentField]: value
+          }
+        };
+      }
+      return {
+        ...prev,
+        [field]: value
+      };
+    });
+    setHasUnsavedChanges(true);
+  };
+
+  // Complex nested object change handler
+  const handleNestedContentChange = (path: string[], value: any) => {
+    setEditedBlockData((prev: any) => {
+      const newContent = { ...prev.content };
+      
+      let current = newContent;
+      for (let i = 0; i < path.length - 1; i++) {
+        const key = path[i];
+        if (Array.isArray(current[key])) {
+          // If it's an array, we need to make a copy of the array
+          current[key] = [...current[key]];
+          current = current[key];
+        } else {
+          // If it's an object, we need to make a copy of the object
+          current[key] = { ...current[key] };
+          current = current[key];
+        }
+      }
+      
+      current[path[path.length - 1]] = value;
+      
+      return {
+        ...prev,
+        content: newContent
+      };
+    });
+    
+    setHasUnsavedChanges(true);
+  };
+
   // Content editor based on block type
   const renderBlockEditor = () => {
-    if (!selectedBlock) return null;
+    if (!selectedBlock || !editedBlockData) return null;
 
     switch (selectedBlock.type) {
       case 'heading':
@@ -296,10 +371,8 @@ const CompanyNewsBuilderPage = () => {
             <div className="space-y-2">
               <Label htmlFor="heading-level">Heading Level</Label>
               <Select 
-                value={selectedBlock.content.level.toString()} 
-                onValueChange={(value) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, level: parseInt(value) }
-                })}
+                value={editedBlockData.content.level?.toString() || "2"} 
+                onValueChange={(value) => handleFormChange('content.level', parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select heading level" />
@@ -318,10 +391,8 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="heading-text">Heading Text</Label>
               <Input 
                 id="heading-text" 
-                value={selectedBlock.content.text} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, text: e.target.value }
-                })}
+                value={editedBlockData.content.text || ''} 
+                onChange={(e) => handleFormChange('content.text', e.target.value)}
               />
             </div>
           </div>
@@ -335,10 +406,8 @@ const CompanyNewsBuilderPage = () => {
               <Textarea 
                 id="text-content" 
                 rows={10}
-                value={selectedBlock.content.text} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, text: e.target.value }
-                })}
+                value={editedBlockData.content.text || ''} 
+                onChange={(e) => handleFormChange('content.text', e.target.value)}
               />
             </div>
           </div>
@@ -351,10 +420,8 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="card-title">Card Title</Label>
               <Input 
                 id="card-title" 
-                value={selectedBlock.content.title} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, title: e.target.value }
-                })}
+                value={editedBlockData.content.title || ''} 
+                onChange={(e) => handleFormChange('content.title', e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -362,10 +429,8 @@ const CompanyNewsBuilderPage = () => {
               <Textarea 
                 id="card-content" 
                 rows={5}
-                value={selectedBlock.content.content} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, content: e.target.value }
-                })}
+                value={editedBlockData.content.content || ''} 
+                onChange={(e) => handleFormChange('content.content', e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -373,45 +438,24 @@ const CompanyNewsBuilderPage = () => {
               <Input 
                 id="card-icon" 
                 placeholder="Icon name or URL"
-                value={selectedBlock.content.icon || ''} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { 
-                    ...selectedBlock.content, 
-                    icon: e.target.value || undefined 
-                  }
-                })}
+                value={editedBlockData.content.icon || ''} 
+                onChange={(e) => handleFormChange('content.icon', e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="action-label">Action Button Label</Label>
               <Input 
                 id="action-label" 
-                value={selectedBlock.content.action?.label || ''} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { 
-                    ...selectedBlock.content, 
-                    action: { 
-                      ...(selectedBlock.content.action || {}),
-                      label: e.target.value
-                    }
-                  }
-                })}
+                value={editedBlockData.content.action?.label || ''} 
+                onChange={(e) => handleNestedContentChange(['action', 'label'], e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="action-link">Action Button Link</Label>
               <Input 
                 id="action-link" 
-                value={selectedBlock.content.action?.link || ''} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { 
-                    ...selectedBlock.content, 
-                    action: { 
-                      ...(selectedBlock.content.action || {}),
-                      link: e.target.value
-                    }
-                  }
-                })}
+                value={editedBlockData.content.action?.link || ''} 
+                onChange={(e) => handleNestedContentChange(['action', 'link'], e.target.value)}
               />
             </div>
           </div>
@@ -424,45 +468,36 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="image-url">Image URL</Label>
               <Input 
                 id="image-url" 
-                value={selectedBlock.content.url} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, url: e.target.value }
-                })}
+                value={editedBlockData.content.url || ''} 
+                onChange={(e) => handleFormChange('content.url', e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="image-alt">Alt Text</Label>
               <Input 
                 id="image-alt" 
-                value={selectedBlock.content.alt} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, alt: e.target.value }
-                })}
+                value={editedBlockData.content.alt || ''} 
+                onChange={(e) => handleFormChange('content.alt', e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="image-caption">Caption (optional)</Label>
               <Input 
                 id="image-caption" 
-                value={selectedBlock.content.caption || ''} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { 
-                    ...selectedBlock.content, 
-                    caption: e.target.value || undefined 
-                  }
-                })}
+                value={editedBlockData.content.caption || ''} 
+                onChange={(e) => handleFormChange('content.caption', e.target.value)}
               />
             </div>
-            {selectedBlock.content.url && (
+            {editedBlockData.content.url && (
               <div className="mt-4 border rounded-md p-4">
                 <p className="text-sm text-muted-foreground mb-2">Preview:</p>
                 <img 
-                  src={selectedBlock.content.url} 
-                  alt={selectedBlock.content.alt} 
+                  src={editedBlockData.content.url} 
+                  alt={editedBlockData.content.alt} 
                   className="max-w-full h-auto rounded-md"
                 />
-                {selectedBlock.content.caption && (
-                  <p className="text-sm text-center mt-2">{selectedBlock.content.caption}</p>
+                {editedBlockData.content.caption && (
+                  <p className="text-sm text-center mt-2">{editedBlockData.content.caption}</p>
                 )}
               </div>
             )}
@@ -475,13 +510,8 @@ const CompanyNewsBuilderPage = () => {
             <div className="space-y-2">
               <Label htmlFor="notice-type">Notice Type</Label>
               <Select 
-                value={selectedBlock.content.type} 
-                onValueChange={(value) => handleUpdateBlock(selectedBlock.id, {
-                  content: { 
-                    ...selectedBlock.content, 
-                    type: value as 'info' | 'warning' | 'success' | 'error' 
-                  }
-                })}
+                value={editedBlockData.content.type || 'info'} 
+                onValueChange={(value) => handleFormChange('content.type', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select notice type" />
@@ -498,10 +528,8 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="notice-title">Notice Title</Label>
               <Input 
                 id="notice-title" 
-                value={selectedBlock.content.title} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, title: e.target.value }
-                })}
+                value={editedBlockData.content.title || ''} 
+                onChange={(e) => handleFormChange('content.title', e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -509,32 +537,27 @@ const CompanyNewsBuilderPage = () => {
               <Textarea 
                 id="notice-message" 
                 rows={5}
-                value={selectedBlock.content.message} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, message: e.target.value }
-                })}
+                value={editedBlockData.content.message || ''} 
+                onChange={(e) => handleFormChange('content.message', e.target.value)}
               />
             </div>
           </div>
         );
       
-      // Add other block type editors here (FAQ, Links, Dropdown)
       case 'faq':
         return (
           <div className="space-y-6">
-            {selectedBlock.content.items.map((item, index) => (
+            {editedBlockData.content.items?.map((item: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`faq-question-${index}`}>Question {index + 1}</Label>
                   <Input 
                     id={`faq-question-${index}`}
-                    value={item.question} 
+                    value={item.question || ''} 
                     onChange={(e) => {
-                      const newItems = [...selectedBlock.content.items];
+                      const newItems = [...editedBlockData.content.items];
                       newItems[index] = { ...newItems[index], question: e.target.value };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, items: newItems }
-                      });
+                      handleFormChange('content.items', newItems);
                     }}
                   />
                 </div>
@@ -543,13 +566,11 @@ const CompanyNewsBuilderPage = () => {
                   <Textarea 
                     id={`faq-answer-${index}`}
                     rows={3}
-                    value={item.answer} 
+                    value={item.answer || ''} 
                     onChange={(e) => {
-                      const newItems = [...selectedBlock.content.items];
+                      const newItems = [...editedBlockData.content.items];
                       newItems[index] = { ...newItems[index], answer: e.target.value };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, items: newItems }
-                      });
+                      handleFormChange('content.items', newItems);
                     }}
                   />
                 </div>
@@ -557,12 +578,10 @@ const CompanyNewsBuilderPage = () => {
                   variant="destructive" 
                   size="sm"
                   onClick={() => {
-                    const newItems = selectedBlock.content.items.filter((_, i) => i !== index);
-                    handleUpdateBlock(selectedBlock.id, {
-                      content: { ...selectedBlock.content, items: newItems }
-                    });
+                    const newItems = editedBlockData.content.items.filter((_: any, i: number) => i !== index);
+                    handleFormChange('content.items', newItems);
                   }}
-                  disabled={selectedBlock.content.items.length <= 1}
+                  disabled={editedBlockData.content.items.length <= 1}
                 >
                   Remove Question
                 </Button>
@@ -571,10 +590,8 @@ const CompanyNewsBuilderPage = () => {
             <Button 
               variant="outline"
               onClick={() => {
-                const newItems = [...selectedBlock.content.items, { question: 'New Question', answer: 'Answer here...' }];
-                handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, items: newItems }
-                });
+                const newItems = [...(editedBlockData.content.items || []), { question: 'New Question', answer: 'Answer here...' }];
+                handleFormChange('content.items', newItems);
               }}
             >
               Add Question
@@ -585,19 +602,17 @@ const CompanyNewsBuilderPage = () => {
       case 'links':
         return (
           <div className="space-y-6">
-            {selectedBlock.content.links.map((link, index) => (
+            {editedBlockData.content.links?.map((link: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`link-label-${index}`}>Link {index + 1} Label</Label>
                   <Input 
                     id={`link-label-${index}`}
-                    value={link.label} 
+                    value={link.label || ''} 
                     onChange={(e) => {
-                      const newLinks = [...selectedBlock.content.links];
+                      const newLinks = [...editedBlockData.content.links];
                       newLinks[index] = { ...newLinks[index], label: e.target.value };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, links: newLinks }
-                      });
+                      handleFormChange('content.links', newLinks);
                     }}
                   />
                 </div>
@@ -605,13 +620,11 @@ const CompanyNewsBuilderPage = () => {
                   <Label htmlFor={`link-url-${index}`}>Link {index + 1} URL</Label>
                   <Input 
                     id={`link-url-${index}`}
-                    value={link.url} 
+                    value={link.url || ''} 
                     onChange={(e) => {
-                      const newLinks = [...selectedBlock.content.links];
+                      const newLinks = [...editedBlockData.content.links];
                       newLinks[index] = { ...newLinks[index], url: e.target.value };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, links: newLinks }
-                      });
+                      handleFormChange('content.links', newLinks);
                     }}
                   />
                 </div>
@@ -621,11 +634,9 @@ const CompanyNewsBuilderPage = () => {
                     id={`link-icon-${index}`}
                     value={link.icon || ''} 
                     onChange={(e) => {
-                      const newLinks = [...selectedBlock.content.links];
+                      const newLinks = [...editedBlockData.content.links];
                       newLinks[index] = { ...newLinks[index], icon: e.target.value || undefined };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, links: newLinks }
-                      });
+                      handleFormChange('content.links', newLinks);
                     }}
                   />
                 </div>
@@ -633,12 +644,10 @@ const CompanyNewsBuilderPage = () => {
                   variant="destructive" 
                   size="sm"
                   onClick={() => {
-                    const newLinks = selectedBlock.content.links.filter((_, i) => i !== index);
-                    handleUpdateBlock(selectedBlock.id, {
-                      content: { ...selectedBlock.content, links: newLinks }
-                    });
+                    const newLinks = editedBlockData.content.links.filter((_: any, i: number) => i !== index);
+                    handleFormChange('content.links', newLinks);
                   }}
-                  disabled={selectedBlock.content.links.length <= 1}
+                  disabled={editedBlockData.content.links.length <= 1}
                 >
                   Remove Link
                 </Button>
@@ -647,10 +656,8 @@ const CompanyNewsBuilderPage = () => {
             <Button 
               variant="outline"
               onClick={() => {
-                const newLinks = [...selectedBlock.content.links, { label: 'New Link', url: '#' }];
-                handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, links: newLinks }
-                });
+                const newLinks = [...(editedBlockData.content.links || []), { label: 'New Link', url: '#' }];
+                handleFormChange('content.links', newLinks);
               }}
             >
               Add Link
@@ -665,26 +672,22 @@ const CompanyNewsBuilderPage = () => {
               <Label htmlFor="dropdown-title">Dropdown Title</Label>
               <Input 
                 id="dropdown-title" 
-                value={selectedBlock.content.title} 
-                onChange={(e) => handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, title: e.target.value }
-                })}
+                value={editedBlockData.content.title || ''} 
+                onChange={(e) => handleFormChange('content.title', e.target.value)}
               />
             </div>
             
-            {selectedBlock.content.items.map((item, index) => (
+            {editedBlockData.content.items?.map((item: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`dropdown-label-${index}`}>Item {index + 1} Label</Label>
                   <Input 
                     id={`dropdown-label-${index}`}
-                    value={item.label} 
+                    value={item.label || ''} 
                     onChange={(e) => {
-                      const newItems = [...selectedBlock.content.items];
+                      const newItems = [...editedBlockData.content.items];
                       newItems[index] = { ...newItems[index], label: e.target.value };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, items: newItems }
-                      });
+                      handleFormChange('content.items', newItems);
                     }}
                   />
                 </div>
@@ -693,13 +696,11 @@ const CompanyNewsBuilderPage = () => {
                   <Textarea 
                     id={`dropdown-content-${index}`}
                     rows={3}
-                    value={item.content} 
+                    value={item.content || ''} 
                     onChange={(e) => {
-                      const newItems = [...selectedBlock.content.items];
+                      const newItems = [...editedBlockData.content.items];
                       newItems[index] = { ...newItems[index], content: e.target.value };
-                      handleUpdateBlock(selectedBlock.id, {
-                        content: { ...selectedBlock.content, items: newItems }
-                      });
+                      handleFormChange('content.items', newItems);
                     }}
                   />
                 </div>
@@ -707,12 +708,10 @@ const CompanyNewsBuilderPage = () => {
                   variant="destructive" 
                   size="sm"
                   onClick={() => {
-                    const newItems = selectedBlock.content.items.filter((_, i) => i !== index);
-                    handleUpdateBlock(selectedBlock.id, {
-                      content: { ...selectedBlock.content, items: newItems }
-                    });
+                    const newItems = editedBlockData.content.items.filter((_: any, i: number) => i !== index);
+                    handleFormChange('content.items', newItems);
                   }}
-                  disabled={selectedBlock.content.items.length <= 1}
+                  disabled={editedBlockData.content.items.length <= 1}
                 >
                   Remove Item
                 </Button>
@@ -721,10 +720,8 @@ const CompanyNewsBuilderPage = () => {
             <Button 
               variant="outline"
               onClick={() => {
-                const newItems = [...selectedBlock.content.items, { label: 'New Item', content: 'Content here...' }];
-                handleUpdateBlock(selectedBlock.id, {
-                  content: { ...selectedBlock.content, items: newItems }
-                });
+                const newItems = [...(editedBlockData.content.items || []), { label: 'New Item', content: 'Content here...' }];
+                handleFormChange('content.items', newItems);
               }}
             >
               Add Item
@@ -739,15 +736,17 @@ const CompanyNewsBuilderPage = () => {
 
   // Preview rendering based on block type
   const renderBlockPreview = (block: CompanyNewsBlock) => {
+    const content = selectedBlockId === block.id ? editedBlockData.content : block.content;
+    
     switch (block.type) {
       case 'heading':
-        const HeadingTag = `h${block.content.level}` as keyof JSX.IntrinsicElements;
-        return <HeadingTag className={`mt-${block.content.level} font-bold`}>{block.content.text}</HeadingTag>;
+        const HeadingTag = `h${content.level}` as keyof JSX.IntrinsicElements;
+        return <HeadingTag className={`mt-${content.level} font-bold`}>{content.text}</HeadingTag>;
       
       case 'text':
         return (
           <div className="prose max-w-none">
-            <p>{block.content.text}</p>
+            <p>{content.text}</p>
           </div>
         );
       
@@ -755,15 +754,15 @@ const CompanyNewsBuilderPage = () => {
         return (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>{block.content.title}</CardTitle>
+              <CardTitle>{content.title}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{block.content.content}</p>
+              <p>{content.content}</p>
             </CardContent>
-            {block.content.action && (
+            {content.action && (
               <CardFooter>
                 <Button variant="outline" size="sm">
-                  {block.content.action.label}
+                  {content.action.label}
                 </Button>
               </CardFooter>
             )}
@@ -773,15 +772,15 @@ const CompanyNewsBuilderPage = () => {
       case 'image':
         return (
           <div className="mt-4">
-            {block.content.url ? (
+            {content.url ? (
               <>
                 <img 
-                  src={block.content.url} 
-                  alt={block.content.alt} 
+                  src={content.url} 
+                  alt={content.alt} 
                   className="max-w-full h-auto rounded-md"
                 />
-                {block.content.caption && (
-                  <p className="text-sm text-center mt-2">{block.content.caption}</p>
+                {content.caption && (
+                  <p className="text-sm text-center mt-2">{content.caption}</p>
                 )}
               </>
             ) : (
@@ -797,7 +796,7 @@ const CompanyNewsBuilderPage = () => {
         let borderColor = 'border-blue-300';
         let textColor = 'text-blue-800';
         
-        switch (block.content.type) {
+        switch (content.type) {
           case 'warning':
             bgColor = 'bg-yellow-50';
             borderColor = 'border-yellow-300';
@@ -817,16 +816,15 @@ const CompanyNewsBuilderPage = () => {
         
         return (
           <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
-            <h4 className={`font-medium ${textColor}`}>{block.content.title}</h4>
-            <p className={`mt-2 ${textColor}`}>{block.content.message}</p>
+            <h4 className={`font-medium ${textColor}`}>{content.title}</h4>
+            <p className={`mt-2 ${textColor}`}>{content.message}</p>
           </div>
         );
       
-      // Add other block type previews here
       case 'faq':
         return (
           <div className="mt-4 space-y-4">
-            {block.content.items.map((item, index) => (
+            {content.items?.map((item: any, index: number) => (
               <div key={index}>
                 <h4 className="font-medium">{item.question}</h4>
                 <p className="mt-1">{item.answer}</p>
@@ -838,7 +836,7 @@ const CompanyNewsBuilderPage = () => {
       case 'links':
         return (
           <div className="mt-4 space-y-2">
-            {block.content.links.map((link, index) => (
+            {content.links?.map((link: any, index: number) => (
               <div key={index} className="flex items-center">
                 <a href={link.url} className="text-blue-600 hover:underline">{link.label}</a>
               </div>
@@ -849,9 +847,9 @@ const CompanyNewsBuilderPage = () => {
       case 'dropdown':
         return (
           <div className="mt-4">
-            <h4 className="font-medium">{block.content.title}</h4>
+            <h4 className="font-medium">{content.title}</h4>
             <div className="space-y-2 mt-2">
-              {block.content.items.map((item, index) => (
+              {content.items?.map((item: any, index: number) => (
                 <div key={index} className="border p-2 rounded-md">
                   <p className="font-medium">{item.label}</p>
                   <p className="text-sm">{item.content}</p>
@@ -939,7 +937,21 @@ const CompanyNewsBuilderPage = () => {
                   className={`flex items-center justify-between p-2 rounded hover:bg-accent cursor-pointer ${
                     selectedBlockId === block.id ? 'bg-accent' : ''
                   }`}
-                  onClick={() => setSelectedBlockId(block.id)}
+                  onClick={() => {
+                    // Check for unsaved changes before switching blocks
+                    if (hasUnsavedChanges && selectedBlockId !== block.id) {
+                      if (confirm('You have unsaved changes. Do you want to save them before switching blocks?')) {
+                        handleSaveBlock().then(() => {
+                          setSelectedBlockId(block.id);
+                        });
+                      } else {
+                        setSelectedBlockId(block.id);
+                        setHasUnsavedChanges(false);
+                      }
+                    } else {
+                      setSelectedBlockId(block.id);
+                    }
+                  }}
                 >
                   <div className="flex items-center">
                     <div className={`w-2 h-2 rounded-full mr-2 ${block.isPublished ? 'bg-green-500' : 'bg-gray-300'}`}></div>
@@ -994,6 +1006,17 @@ const CompanyNewsBuilderPage = () => {
                   <TabsTrigger value="preview">Preview</TabsTrigger>
                 </TabsList>
                 <div className="flex items-center space-x-4">
+                  {/* Save button */}
+                  <Button 
+                    variant={hasUnsavedChanges ? "default" : "outline"}
+                    size="sm"
+                    onClick={handleSaveBlock}
+                    disabled={loading || !hasUnsavedChanges}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {hasUnsavedChanges ? "Save Changes" : "Saved"}
+                  </Button>
+                  
                   <div className="flex items-center space-x-2">
                     <Switch 
                       id="published" 
@@ -1039,8 +1062,8 @@ const CompanyNewsBuilderPage = () => {
                     <Label htmlFor="block-title">Block Title</Label>
                     <Input 
                       id="block-title"
-                      value={selectedBlock.title}
-                      onChange={(e) => handleUpdateBlock(selectedBlock.id, { title: e.target.value })}
+                      value={editedBlockData.title || ''}
+                      onChange={(e) => handleFormChange('title', e.target.value)}
                     />
                   </div>
                   
@@ -1052,7 +1075,7 @@ const CompanyNewsBuilderPage = () => {
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm text-muted-foreground">Block Preview</h3>
                   <div className="p-4 border rounded-lg">
-                    {renderBlockPreview(selectedBlock)}
+                    {selectedBlock && renderBlockPreview(selectedBlock)}
                   </div>
                 </div>
               </TabsContent>
