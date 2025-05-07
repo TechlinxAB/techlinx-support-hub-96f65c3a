@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,6 +47,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { UserRole, Language } from '@/context/AppContext'; // Import the type definitions
 
 const UserManagementPage = () => {
   const { users, companies, currentUser, refetchUsers } = useAppContext();
@@ -66,8 +66,8 @@ const UserManagementPage = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [companyId, setCompanyId] = useState('');
-  const [role, setRole] = useState('user');
-  const [preferredLanguage, setPreferredLanguage] = useState('en');
+  const [role, setRole] = useState<UserRole>('user');
+  const [preferredLanguage, setPreferredLanguage] = useState<Language>('en');
   const [password, setPassword] = useState('');
   const [userStatus, setUserStatus] = useState('active');
   
@@ -203,8 +203,8 @@ const UserManagementPage = () => {
           .update({
             name,
             phone,
-            role,
-            preferred_language: preferredLanguage,
+            role: role as UserRole,
+            preferred_language: preferredLanguage as Language,
             company_id: companyId || null
           })
           .eq('id', authData.user.id);
@@ -227,8 +227,8 @@ const UserManagementPage = () => {
             email,
             phone,
             company_id: companyId || null,
-            role,
-            preferred_language: preferredLanguage
+            role: role as UserRole,
+            preferred_language: preferredLanguage as Language
           })
           .eq('id', selectedUser);
           
@@ -354,7 +354,7 @@ const UserManagementPage = () => {
                   <Label htmlFor="role">Role</Label>
                   <Select 
                     value={role} 
-                    onValueChange={setRole}
+                    onValueChange={(value: UserRole) => setRole(value)}
                   >
                     <SelectTrigger id="role">
                       <SelectValue placeholder="Select Role" />
@@ -369,7 +369,7 @@ const UserManagementPage = () => {
                   <Label htmlFor="language">Preferred Language</Label>
                   <Select 
                     value={preferredLanguage} 
-                    onValueChange={setPreferredLanguage}
+                    onValueChange={(value: Language) => setPreferredLanguage(value)}
                   >
                     <SelectTrigger id="language">
                       <SelectValue placeholder="Select Language" />
@@ -467,7 +467,7 @@ const UserManagementPage = () => {
                   <Label htmlFor="role">Role</Label>
                   <Select 
                     value={role} 
-                    onValueChange={setRole}
+                    onValueChange={(value: UserRole) => setRole(value)}
                   >
                     <SelectTrigger id="role">
                       <SelectValue placeholder="Select Role" />
@@ -482,7 +482,7 @@ const UserManagementPage = () => {
                   <Label htmlFor="language">Preferred Language</Label>
                   <Select 
                     value={preferredLanguage} 
-                    onValueChange={setPreferredLanguage}
+                    onValueChange={(value: Language) => setPreferredLanguage(value)}
                   >
                     <SelectTrigger id="language">
                       <SelectValue placeholder="Select Language" />
