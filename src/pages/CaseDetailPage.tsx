@@ -74,7 +74,7 @@ const CaseDetailPage = () => {
         status: currentCase.status,
         priority: currentCase.priority,
         categoryId: currentCase.categoryId,
-        assignedToId: currentCase.assignedToId || ''
+        assignedToId: currentCase.assignedToId || 'unassigned' // Change empty string to 'unassigned'
       });
     }
   }, [currentCase]);
@@ -119,7 +119,8 @@ const CaseDetailPage = () => {
         status: editFormData.status as any,
         priority: editFormData.priority as any, 
         categoryId: editFormData.categoryId,
-        assignedToId: editFormData.assignedToId || undefined
+        // Handle the 'unassigned' value by converting it back to undefined
+        assignedToId: editFormData.assignedToId === 'unassigned' ? undefined : editFormData.assignedToId
       });
       
       setIsEditDialogOpen(false);
