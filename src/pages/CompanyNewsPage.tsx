@@ -25,6 +25,7 @@ const CompanyNewsPage = () => {
   const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
   const [fetchAttempted, setFetchAttempted] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
+  const [fetchInProgress, setFetchInProgress] = useState(false);
   
   const company = companies.find(c => c.id === companyId);
   const isConsultant = currentUser?.role === 'consultant';
@@ -36,14 +37,22 @@ const CompanyNewsPage = () => {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       
+      // Don't start a new fetch if one is in progress
+      if (fetchInProgress) return;
+      
+      setFetchInProgress(true);
       timeoutId = setTimeout(() => {
         if (companyId) {
           try {
-            refetchCompanyNewsBlocks(companyId);
-            setFetchAttempted(true);
+            refetchCompanyNewsBlocks(companyId)
+              .finally(() => {
+                setFetchInProgress(false);
+                setFetchAttempted(true);
+              });
           } catch (error) {
             console.error('Error refetching news blocks:', error);
             setFetchError(error instanceof Error ? error : new Error(String(error)));
+            setFetchInProgress(false);
             
             // Show toast only once for errors
             toast({
@@ -55,13 +64,13 @@ const CompanyNewsPage = () => {
         }
       }, 300);
     };
-  }, [companyId, refetchCompanyNewsBlocks, toast]);
+  }, [companyId, refetchCompanyNewsBlocks, toast, fetchInProgress]);
 
   useEffect(() => {
-    if (companyId && !fetchAttempted) {
+    if (companyId && !fetchAttempted && !fetchInProgress) {
       debouncedRefetch()();
     }
-  }, [companyId, debouncedRefetch, fetchAttempted]);
+  }, [companyId, debouncedRefetch, fetchAttempted, fetchInProgress]);
 
   useEffect(() => {
     if (!loadingCompanyNewsBlocks && companyId) {
@@ -239,6 +248,7 @@ const CompanyNewsPage = () => {
               onClick={() => {
                 setFetchAttempted(false);
                 setFetchError(null);
+                setFetchInProgress(false);
               }}
             >
               Retry
