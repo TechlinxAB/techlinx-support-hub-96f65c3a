@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -45,6 +46,7 @@ const CompanyNewsBuilderPage = () => {
   // Form state for selected block (prevents auto-update)
   const [editedBlockData, setEditedBlockData] = useState<any>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [initialSelectedBlockId, setInitialSelectedBlockId] = useState<string | null>(null);
 
   // Form state for new blocks
   const [newBlockType, setNewBlockType] = useState<NewsBlockType>('heading');
@@ -74,18 +76,23 @@ const CompanyNewsBuilderPage = () => {
 
   // Update editedBlockData when selected block changes
   useEffect(() => {
-    if (selectedBlock) {
+    // Only initialize data when the selectedBlockId changes or it's the first time loading
+    if (selectedBlock && selectedBlockId !== initialSelectedBlockId) {
       // Initialize with default content based on block type if content is undefined
       const defaultContent = getDefaultContent(selectedBlock.type);
       
+      // Make sure we have content with the correct structure
+      const blockContent = selectedBlock.content || defaultContent;
+      
       setEditedBlockData({
         title: selectedBlock.title,
-        content: selectedBlock.content || defaultContent,
+        content: blockContent,
         isPublished: selectedBlock.isPublished
       });
       setHasUnsavedChanges(false);
+      setInitialSelectedBlockId(selectedBlockId);
     }
-  }, [selectedBlockId, companyNewsBlocks]);
+  }, [selectedBlockId, initialSelectedBlockId]);
 
   const selectedBlock = blocks.find(block => block.id === selectedBlockId);
 
@@ -743,21 +750,25 @@ const CompanyNewsBuilderPage = () => {
   const renderBlockPreview = (block: CompanyNewsBlock) => {
     // Get content based on whether the block is selected or not
     const content = selectedBlockId === block.id ? 
-      editedBlockData.content || getDefaultContent(block.type) : 
-      block.content || getDefaultContent(block.type);
+      editedBlockData.content || {} : 
+      block.content || {};
+    
+    // Apply default content when needed
+    const defaultContent = getDefaultContent(block.type);
+    const displayContent = { ...defaultContent, ...content };
     
     switch (block.type) {
       case 'heading': {
         // Safely handle the heading level with a default
-        const level = content.level || 2; // Default to h2 if level is undefined
+        const level = displayContent.level || 2; // Default to h2 if level is undefined
         const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
-        return <HeadingTag className={`mt-${level} font-bold`}>{content.text || 'Heading Text'}</HeadingTag>;
+        return <HeadingTag className={`mt-${level} font-bold`}>{displayContent.text || 'Heading Text'}</HeadingTag>;
       }
       
       case 'text':
         return (
           <div className="prose max-w-none">
-            <p>{content.text || 'Text content goes here'}</p>
+            <p>{displayContent.text || 'Text content goes here'}</p>
           </div>
         );
       
@@ -765,15 +776,15 @@ const CompanyNewsBuilderPage = () => {
         return (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>{content.title || 'Card Title'}</CardTitle>
+              <CardTitle>{displayContent.title || 'Card Title'}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{content.content || 'Card content'}</p>
+              <p>{displayContent.content || 'Card content'}</p>
             </CardContent>
-            {content.action && (
+            {displayContent.action && (
               <CardFooter>
                 <Button variant="outline" size="sm">
-                  {content.action.label || 'Action'}
+                  {displayContent.action.label || 'Action'}
                 </Button>
               </CardFooter>
             )}
@@ -783,15 +794,15 @@ const CompanyNewsBuilderPage = () => {
       case 'image':
         return (
           <div className="mt-4">
-            {content.url ? (
+            {displayContent.url ? (
               <>
                 <img 
-                  src={content.url} 
-                  alt={content.alt || 'Image'} 
+                  src={displayContent.url} 
+                  alt={displayContent.alt || 'Image'} 
                   className="max-w-full h-auto rounded-md"
                 />
-                {content.caption && (
-                  <p className="text-sm text-center mt-2">{content.caption}</p>
+                {displayContent.caption && (
+                  <p className="text-sm text-center mt-2">{displayContent.caption}</p>
                 )}
               </>
             ) : (
@@ -803,7 +814,7 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'notice': {
-        const noticeType = content.type || 'info';
+        const noticeType = displayContent.type || 'info';
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
         let textColor = 'text-blue-800';
@@ -828,14 +839,14 @@ const CompanyNewsBuilderPage = () => {
         
         return (
           <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
-            <h4 className={`font-medium ${textColor}`}>{content.title || 'Notice Title'}</h4>
-            <p className={`mt-2 ${textColor}`}>{content.message || 'Notice message'}</p>
+            <h4 className={`font-medium ${textColor}`}>{displayContent.title || 'Notice Title'}</h4>
+            <p className={`mt-2 ${textColor}`}>{displayContent.message || 'Notice message'}</p>
           </div>
         );
       }
       
       case 'faq': {
-        const items = content.items || [];
+        const items = displayContent.items || [];
         return (
           <div className="mt-4 space-y-4">
             {items.length > 0 ? items.map((item: any, index: number) => (
@@ -854,7 +865,7 @@ const CompanyNewsBuilderPage = () => {
       }
       
       case 'links': {
-        const links = content.links || [];
+        const links = displayContent.links || [];
         return (
           <div className="mt-4 space-y-2">
             {links.length > 0 ? links.map((link: any, index: number) => (
@@ -873,8 +884,8 @@ const CompanyNewsBuilderPage = () => {
       }
       
       case 'dropdown': {
-        const title = content.title || 'Dropdown Title';
-        const items = content.items || [];
+        const title = displayContent.title || 'Dropdown Title';
+        const items = displayContent.items || [];
         return (
           <div className="mt-4">
             <h4 className="font-medium">{title}</h4>
