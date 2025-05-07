@@ -71,11 +71,11 @@ export const useOptimizedNewsBlockSave = () => {
       // Show a loading toast only if requested
       let toastId: string | undefined;
       if (options?.showToast !== false) {
-        // Fixed the type error by ensuring toastId is treated as a string
+        // Cast to string to fix the type error
         toastId = toast.loading("Saving changes...", {
           id: `save-${blockId}`,
           duration: 30000 // Long duration in case save takes time
-        }) as string; // Cast to string to fix the type error
+        }) as string;
       }
       
       // Log save operation details for debugging
@@ -118,7 +118,7 @@ export const useOptimizedNewsBlockSave = () => {
       }
       
       options?.onSuccess?.();
-    } catch (error) {
+    } catch (error: any) { // Fixed: Properly type error parameter
       // Check if this was an abort error, which we can ignore
       if (error.name === 'AbortError') {
         console.log('Save operation was cancelled');
@@ -128,7 +128,9 @@ export const useOptimizedNewsBlockSave = () => {
         return;
       }
       
+      // Properly log the error for debugging
       console.error('Error saving news block:', error);
+      
       if (options?.showToast !== false) {
         toast.error("Failed to save changes", {
           description: error.message || "Please try again",
@@ -136,7 +138,13 @@ export const useOptimizedNewsBlockSave = () => {
         });
       }
       
-      options?.onError?.(error instanceof Error ? error : new Error(String(error)));
+      // Create a proper Error object if it isn't already one
+      const errorObject = error instanceof Error ? error : new Error(String(error));
+      
+      // Call onError callback with the proper error object
+      if (options?.onError) {
+        options.onError(errorObject);
+      }
     } finally {
       setSaving(false);
       saveInProgress.current = false;

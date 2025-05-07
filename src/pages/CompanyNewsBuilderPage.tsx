@@ -174,6 +174,9 @@ const CompanyNewsBuilderPage = () => {
     const newBlocks = [...blocks];
     const block = newBlocks[blockIndex];
     
+    // Prevent multiple move operations at once
+    if (loading) return;
+    
     if (direction === 'up' && blockIndex > 0) {
       const targetBlock = newBlocks[blockIndex - 1];
       
@@ -188,31 +191,35 @@ const CompanyNewsBuilderPage = () => {
         // Optimistically update local state
         const updatedBlocks = newBlocks.sort((a, b) => a.position - b.position);
         
-        // Make database updates
-        await updateCompanyNewsBlock(block.id, { position: block.position });
-        await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
-        
-        // Use local update instead of refetch
+        // Apply optimistic update first for better UI feedback
         updatedBlocks.forEach(b => {
           updateLocalBlock({
             id: b.id,
             position: b.position
           });
         });
-      } catch (error) {
+        
+        // Then make database updates
+        const promise1 = updateCompanyNewsBlock(block.id, { position: block.position });
+        const promise2 = updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
+        
+        // Wait for both updates to complete
+        await Promise.all([promise1, promise2]);
+        
+        toast.success("Block position updated");
+      } catch (error: any) {
         console.error('Error moving block:', error);
         toast.error("Failed to move block", {
           description: error.message || "Please try again"
         });
         
-        // Only refetch on error
+        // Only refetch on error to restore correct state
         refetchCompanyNewsBlocks(true);
       } finally {
         setLoading(false);
       }
     } 
     else if (direction === 'down' && blockIndex < newBlocks.length - 1) {
-      // Same pattern as moving up
       const targetBlock = newBlocks[blockIndex + 1];
       
       const temp = targetBlock.position;
@@ -224,18 +231,23 @@ const CompanyNewsBuilderPage = () => {
         // Sort by position to simulate the update
         const updatedBlocks = newBlocks.sort((a, b) => a.position - b.position);
         
-        // Database updates
-        await updateCompanyNewsBlock(block.id, { position: block.position });
-        await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
-        
-        // Update local state without full refetch
+        // Apply optimistic update first for better UI feedback
         updatedBlocks.forEach(b => {
           updateLocalBlock({
             id: b.id,
             position: b.position
           });
         });
-      } catch (error) {
+        
+        // Then make database updates
+        const promise1 = updateCompanyNewsBlock(block.id, { position: block.position });
+        const promise2 = updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
+        
+        // Wait for both updates to complete
+        await Promise.all([promise1, promise2]);
+        
+        toast.success("Block position updated");
+      } catch (error: any) {
         console.error('Error moving block:', error);
         toast.error("Failed to move block", {
           description: error.message || "Please try again"
