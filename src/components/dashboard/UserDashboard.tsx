@@ -7,16 +7,23 @@ import ActiveCasesList from './ActiveCasesList';
 import CompanyAnnouncements from './CompanyAnnouncements';
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 import { useCompanyAnnouncements } from '@/hooks/useCompanyAnnouncements';
+import { UserCaseItem } from '@/types/dashboardTypes';
 
 const UserDashboard = () => {
   const { currentUser, cases } = useAppContext();
   
-  // Get user's cases only
-  const userCases = cases
+  // Get user's cases only and map to UserCaseItem format
+  const userCases: UserCaseItem[] = cases
     .filter(c => c.userId === currentUser?.id)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .filter(c => c.status !== 'completed')
-    .slice(0, 3);
+    .slice(0, 3)
+    .map(c => ({
+      id: c.id,
+      title: c.title,
+      status: c.status,
+      updatedAt: c.updatedAt.toISOString() // Convert Date to string
+    }));
   
   // Fetch company settings and announcements
   const { settings, loading: settingsLoading } = useDashboardSettings(currentUser?.companyId);

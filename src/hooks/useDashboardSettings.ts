@@ -28,8 +28,9 @@ export const useDashboardSettings = (companyId: string | undefined) => {
       setLoading(true);
       
       try {
-        // We need to use 'from' with a string argument for tables not in the typed schema
-        const { data, error: settingsError } = await supabase
+        // We need to use a direct query with 'any' type casting to bypass TypeScript limitations
+        // since 'company_settings' isn't in the generated Supabase types
+        const { data, error: settingsError } = await (supabase as any)
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)

@@ -49,7 +49,8 @@ const CompanySettingsPage = () => {
       
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        // Use type casting to bypass TypeScript limitations
+        const { data, error } = await (supabase as any)
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)
@@ -92,8 +93,8 @@ const CompanySettingsPage = () => {
     
     setIsSaving(true);
     try {
-      // Cast as unknown to any to bypass type checking for this specific call
-      const { data, error } = await supabase
+      // Use type casting to bypass TypeScript limitations
+      const { data, error } = await (supabase as any)
         .from('company_settings')
         .upsert({
           company_id: companyId,
@@ -104,7 +105,7 @@ const CompanySettingsPage = () => {
           show_company_dashboard_button: settings.showCompanyDashboardButton,
           show_active_cases: settings.showActiveCases,
           show_company_notices: settings.showCompanyNotices,
-        } as any)
+        })
         .select();
       
       if (error) throw error;
