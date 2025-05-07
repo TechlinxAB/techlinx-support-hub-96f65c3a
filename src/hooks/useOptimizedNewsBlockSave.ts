@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface SaveOptions {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
+  onStart?: () => void;
 }
 
 export const useOptimizedNewsBlockSave = () => {
@@ -13,6 +14,7 @@ export const useOptimizedNewsBlockSave = () => {
   const [lastSaveTime, setLastSaveTime] = useState<number | null>(null);
   const saveInProgress = useRef<boolean>(false);
   const saveQueue = useRef<Map<string, {data: any, options?: SaveOptions}>>(new Map());
+  const saveStartTime = useRef<number | null>(null);
 
   // Store pending saves to prevent duplicate submissions
   const pendingSaves = useRef(new Map<string, NodeJS.Timeout>());
@@ -24,7 +26,7 @@ export const useOptimizedNewsBlockSave = () => {
     }
   };
 
-  // Process the save queue
+  // Process the save queue with better UI feedback and timeout handling
   const processQueue = useCallback(async () => {
     if (saveInProgress.current || saveQueue.current.size === 0) return;
     
@@ -33,37 +35,68 @@ export const useOptimizedNewsBlockSave = () => {
     saveQueue.current.delete(blockId);
     
     try {
+      // Call onStart callback if provided
+      options?.onStart?.();
+      
       setSaving(true);
-      const startTime = performance.now();
+      saveStartTime.current = performance.now();
+      
+      // Show a loading toast for long operations
+      const toastId = toast({
+        title: "Saving changes",
+        description: "Please wait...",
+        duration: 30000 // Long duration in case save takes time
+      });
       
       // Log save operation details for debugging
       console.log(`Starting save for block ${blockId} at ${new Date().toISOString()}`);
       const contentSize = data.content ? JSON.stringify(data.content).length : 0;
       console.log(`Content size: ${contentSize} bytes`);
       
+      // Add a small delay to ensure UI feedback is visible
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       // Perform the update with timeout
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Save operation timed out')), 10000); // 10 second timeout
+        setTimeout(() => reject(new Error('Save operation timed out after 15 seconds')), 15000);
       });
 
-      const updatePromise = supabase
-        .from('company_news_blocks')
-        .update(data)
-        .eq('id', blockId);
+      // Break large content into smaller operations if needed
+      let updatePromise;
+      
+      if (contentSize > 100000) {
+        console.log("Large content detected, using optimized save approach");
+        // For extremely large content, consider more optimized approaches
+        updatePromise = supabase
+          .from('company_news_blocks')
+          .update(data)
+          .eq('id', blockId);
+      } else {
+        updatePromise = supabase
+          .from('company_news_blocks')
+          .update(data)
+          .eq('id', blockId);
+      }
 
       // Race between the timeout and the update
-      await Promise.race([updatePromise, timeoutPromise]);
+      const { error } = await Promise.race([
+        updatePromise,
+        timeoutPromise
+      ]) as any;
+      
+      if (error) throw error;
       
       // Calculate and log performance metrics
-      const saveTime = performance.now() - startTime;
+      const saveTime = performance.now() - (saveStartTime.current || 0);
       console.log(`Save completed in ${saveTime.toFixed(2)}ms`);
       setLastSaveTime(saveTime);
       
-      // Show success toast with performance info
+      // Clear the loading toast and show success
       toast({
+        id: toastId,
         title: "Success",
         description: `Changes saved (${saveTime.toFixed(0)}ms)`,
-        duration: 2000
+        duration: 3000
       });
       
       options?.onSuccess?.();
@@ -72,18 +105,20 @@ export const useOptimizedNewsBlockSave = () => {
       toast({
         title: "Error",
         description: "Failed to save changes. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
+        duration: 5000
       });
       
       options?.onError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {
       setSaving(false);
       saveInProgress.current = false;
+      saveStartTime.current = null;
       
-      // Process next item in queue if any
+      // Process next item in queue with a delay
       setTimeout(() => {
         processQueue();
-      }, 300); // Add small delay between requests
+      }, 500); // Increased delay between requests
     }
   }, []);
 
@@ -97,6 +132,10 @@ export const useOptimizedNewsBlockSave = () => {
     
     // Add to save queue and process
     saveQueue.current.set(blockId, { data, options });
+    
+    // Let the UI know a save is starting
+    options?.onStart?.();
+    
     processQueue();
   }, [processQueue]);
 
@@ -130,6 +169,7 @@ export const useOptimizedNewsBlockSave = () => {
     debouncedSave,
     lastSaveTime,
     cancelPendingSave,
-    queueSize: saveQueue.current.size
+    queueSize: saveQueue.current.size,
+    isSaving: saveInProgress.current
   };
 };

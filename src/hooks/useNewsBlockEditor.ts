@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
+import { toast } from '@/components/ui/use-toast';
 
 interface UseNewsBlockEditorOptions {
   onSaveSuccess?: () => void; 
@@ -18,9 +19,13 @@ export const useNewsBlockEditor = (
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [initialSelectedBlockId, setInitialSelectedBlockId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('edit');
+  const [localSaving, setLocalSaving] = useState(false);
+  
+  // Track manual save in progress
+  const manualSaveInProgress = useRef(false);
 
   // Get the save function from our optimized hook
-  const { saving, debouncedSave, saveNewsBlock } = useOptimizedNewsBlockSave();
+  const { saving, debouncedSave, saveNewsBlock, isSaving } = useOptimizedNewsBlockSave();
 
   // Selected block
   const selectedBlock = blocks.find(block => block.id === selectedBlockId);
@@ -167,11 +172,21 @@ export const useNewsBlockEditor = (
     setHasUnsavedChanges(true);
   };
 
-  // Save current block
+  // Save current block with enhanced feedback
   const saveCurrentBlock = async () => {
     if (!selectedBlockId || !selectedBlock || !hasUnsavedChanges) return;
+    if (manualSaveInProgress.current) return;
+    
+    manualSaveInProgress.current = true;
+    setLocalSaving(true);
     
     try {
+      const toastId = toast({
+        title: "Saving changes",
+        description: "Please wait while your changes are being saved...",
+        duration: 30000 // Long duration for potentially slow saves
+      });
+      
       await saveNewsBlock(
         selectedBlockId, 
         {
@@ -179,22 +194,47 @@ export const useNewsBlockEditor = (
           content: editedBlockData.content
         }, 
         {
+          onStart: () => {
+            setLocalSaving(true);
+          },
           onSuccess: () => {
             setHasUnsavedChanges(false);
+            toast({
+              id: toastId,
+              title: "Success",
+              description: "Changes saved successfully",
+              duration: 3000
+            });
             options?.onSaveSuccess?.();
           },
           onError: (error) => {
+            toast({
+              id: toastId,
+              title: "Error",
+              description: `Failed to save: ${error.message}`,
+              variant: "destructive",
+              duration: 5000
+            });
             options?.onSaveError?.(error);
           }
         }
       );
     } catch (error) {
       console.error('Error saving block:', error);
+      toast({
+        title: "Error",
+        description: "Could not save changes. Please try again.",
+        variant: "destructive",
+        duration: 5000
+      });
       options?.onSaveError?.(error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      setLocalSaving(false);
+      manualSaveInProgress.current = false;
     }
   };
 
-  // Auto-save when changes are made
+  // Auto-save when changes are made with optimized debounce
   useEffect(() => {
     if (selectedBlockId && hasUnsavedChanges) {
       const cleanup = debouncedSave(
@@ -203,13 +243,18 @@ export const useNewsBlockEditor = (
           title: editedBlockData.title,
           content: editedBlockData.content
         },
-        1500,
+        1800, // Slightly longer debounce time
         {
+          onStart: () => {
+            console.log("Auto-save starting...");
+          },
           onSuccess: () => {
             setHasUnsavedChanges(false);
+            console.log("Auto-save completed successfully");
             options?.onSaveSuccess?.();
           },
           onError: (error) => {
+            console.error("Auto-save failed:", error.message);
             options?.onSaveError?.(error);
           }
         }
@@ -225,7 +270,7 @@ export const useNewsBlockEditor = (
     selectedBlock,
     editedBlockData,
     hasUnsavedChanges,
-    saving,
+    saving: saving || localSaving || isSaving,
     activeTab,
     setActiveTab,
     handleFormChange,
