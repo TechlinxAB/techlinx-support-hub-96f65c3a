@@ -38,7 +38,9 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
       duration: props?.duration || 3000,
       id: props?.id,
       className: `custom-toast ${props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`
+               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
+      // Custom render function to put close button inside
+      unstyled: true
     });
     
     // Remove from active toasts when dismissed or duration ends
@@ -68,7 +70,9 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     duration: duration || 3000,
     id,
     className: `custom-toast ${variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-             variant === "success" ? "bg-green-500 text-white" : "bg-white"}`
+             variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
+    // Custom render function to put close button inside
+    unstyled: true
   });
   
   // Remove from active toasts when dismissed or duration ends
@@ -95,7 +99,8 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
   // Create the loading toast with className for custom styling
   const toastId = sonnerToast.loading(message, {
     ...options,
-    className: "custom-toast"
+    className: "custom-toast",
+    unstyled: true
   });
   
   // Set timeout to remove from active toasts after duration or default 30 seconds for loading

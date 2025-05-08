@@ -15,10 +15,13 @@ export function Toaster() {
           border: '1px solid var(--border)',
           opacity: 1,
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Add shadow for better visibility
-          position: 'relative', // Ensure proper positioning context for the close button
-          paddingRight: '36px', // Ensure enough space for the close button
+          position: 'relative', // Ensure proper positioning context
           borderRadius: '6px', // Slightly rounded corners for better aesthetics
-          overflow: 'hidden' // Ensure no content spills out
+          padding: '16px', // Uniform padding
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '80px', // Ensure minimum height for consistent appearance
+          width: '100%'
         },
         duration: 3000,
         className: "custom-toast"
