@@ -375,7 +375,7 @@ const CaseDetailPage = () => {
                                 <SelectValue placeholder="Select Consultant" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Unassigned</SelectItem>
+                                <SelectItem value="unassigned">Unassigned</SelectItem>
                                 {users
                                   .filter(u => u.role === 'consultant')
                                   .map(user => (
