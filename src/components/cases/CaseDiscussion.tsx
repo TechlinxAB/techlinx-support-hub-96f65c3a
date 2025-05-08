@@ -1,18 +1,40 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw } from 'lucide-react';
+import { 
+  Paperclip, 
+  SendHorizontal, 
+  Lock, 
+  RefreshCw, 
+  File, 
+  FileText, 
+  X, 
+  Trash2
+} from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Progress } from '@/components/ui/progress';
 
 interface CaseDiscussionProps {
   caseId: string;
@@ -38,10 +60,10 @@ const discussionCache = {
     }
   },
   
-  set: (caseId: string, replies: any[], notes: any[]) => {
+  set: (caseId: string, replies: any[], notes: any[], attachments: any[]) => {
     try {
       localStorage.setItem(`discussion-cache-${caseId}`, JSON.stringify({
-        data: { replies, notes },
+        data: { replies, notes, attachments },
         timestamp: Date.now()
       }));
     } catch (error) {
@@ -74,6 +96,23 @@ const retryOperation = async (operation: () => Promise<any>, maxRetries = 3, ini
   }
 };
 
+// Get file size in human readable format
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// Get file icon based on mime type
+const getFileIcon = (mimeType: string) => {
+  if (mimeType.startsWith('image/')) return <File className="h-4 w-4" />;
+  if (mimeType.startsWith('text/')) return <FileText className="h-4 w-4" />;
+  if (mimeType.startsWith('application/pdf')) return <FileText className="h-4 w-4" />;
+  return <Paperclip className="h-4 w-4" />;
+};
+
 const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const { 
     currentUser, 
@@ -81,27 +120,36 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     notes, 
     addReply, 
     addNote, 
+    deleteReply,
     users, 
     loadingReplies, 
     loadingNotes, 
     refetchReplies,
-    refetchNotes 
+    refetchNotes,
+    caseAttachments,
+    loadingAttachments,
+    refetchAttachments,
+    uploadAttachment
   } = useAppContext();
   
   const [replyContent, setReplyContent] = useState('');
   const [isInternalReply, setIsInternalReply] = useState(false);
-  const [attachments, setAttachments] = useState<FileList | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isRefetching, setIsRefetching] = useState(false);
   const [localReplies, setLocalReplies] = useState<any[]>([]);
   const [localNotes, setLocalNotes] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+  const [isUploading, setIsUploading] = useState(false);
   const [offlineMode, setOfflineMode] = useState(false);
-  const [dataFetched, setDataFetched] = useState(false); // Add this to track if initial data fetch is done
+  const [dataFetched, setDataFetched] = useState(false);
+  const [replyToDelete, setReplyToDelete] = useState<string | null>(null);
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
   const lastFetchTimeRef = useRef<number>(0);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Initialize with cached data if available
   useEffect(() => {
@@ -140,21 +188,23 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     
     Promise.all([
       retryOperation(() => refetchReplies(caseId)),
-      retryOperation(() => refetchNotes(caseId))
+      retryOperation(() => refetchNotes(caseId)),
+      retryOperation(() => refetchAttachments(caseId))
     ])
       .then(() => {
         setOfflineMode(false);
         // Update the cache with fresh data
         const caseReplies = replies.filter(r => r.caseId === caseId);
         const caseNotes = notes.filter(n => n.caseId === caseId);
-        discussionCache.set(caseId, caseReplies, caseNotes);
-        setDataFetched(true); // Mark data as fetched
+        const caseFiles = caseAttachments.filter(a => a.caseId === caseId);
+        discussionCache.set(caseId, caseReplies, caseNotes, caseFiles);
+        setDataFetched(true);
       })
       .catch(error => {
         console.error('Error fetching discussion data:', error);
         setFetchError('Failed to load discussion data. Using cached data if available.');
         setOfflineMode(true);
-        setDataFetched(true); // Mark data as fetched even if it failed
+        setDataFetched(true);
         
         toast({
           title: "Connection issue",
@@ -165,7 +215,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       .finally(() => {
         setIsRefetching(false);
       });
-  }, [caseId, refetchReplies, refetchNotes, replies, notes, toast]);
+  }, [caseId, refetchReplies, refetchNotes, refetchAttachments, replies, notes, caseAttachments, toast]);
   
   // Initial data fetch with limited frequency, but only ONCE
   useEffect(() => {
@@ -178,23 +228,12 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [caseId, debouncedFetch, dataFetched]); // Add dataFetched to dependencies
-  
-  // Store pending submissions
-  const storePendingSubmission = useCallback((type: 'reply' | 'note', data: any) => {
-    try {
-      const storageKey = type === 'reply' ? 'pendingReplies' : 'pendingNotes';
-      const pending = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      pending.push({ ...data, timestamp: Date.now() });
-      localStorage.setItem(storageKey, JSON.stringify(pending));
-    } catch (error) {
-      console.error(`Error storing pending ${type}:`, error);
-    }
-  }, []);
+  }, [caseId, debouncedFetch, dataFetched]);
   
   // Merge replies and notes from context and local state (for optimistic updates)
   const mergedReplies = [...(offlineMode ? localReplies : replies.filter(r => r.caseId === caseId))];
   const mergedNotes = [...(offlineMode ? localNotes : notes.filter(n => n.caseId === caseId))];
+  const caseFiles = caseAttachments.filter(a => a.caseId === caseId);
   
   // Combine all items for display, sorted by date
   const allItems = [
@@ -211,151 +250,151 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   
   const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setAttachments(e.target.files);
+    if (e.target.files && e.target.files.length > 0) {
+      // Convert FileList to array for easier management
+      const filesArray = Array.from(e.target.files);
+      setAttachments(prev => [...prev, ...filesArray]);
+    }
+  };
+  
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // Upload a single file and return its path
+  const uploadFile = async (file: File, replyId: string): Promise<string | null> => {
+    try {
+      // Generate a unique file path to prevent overwriting
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `${caseId}/${replyId}/${fileName}`;
+      
+      // Start tracking upload progress for this file
+      const uploadId = `${file.name}-${Date.now()}`;
+      setUploadProgress(prev => ({ ...prev, [uploadId]: 0 }));
+      
+      // Upload the file to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('case-attachments')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          onUploadProgress: (progress) => {
+            const percent = Math.round((progress.loaded / progress.total) * 100);
+            setUploadProgress(prev => ({ ...prev, [uploadId]: percent }));
+          }
+        });
+      
+      if (error) {
+        console.error('Error uploading file:', error);
+        return null;
+      }
+      
+      return filePath;
+    } catch (error) {
+      console.error('Exception during file upload:', error);
+      return null;
     }
   };
   
   const handleAddReply = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!replyContent.trim()) return;
-    
-    try {
-      // Create optimistic update
-      const tempId = `temp-${Date.now()}`;
-      const optimisticReply = {
-        id: tempId,
-        caseId,
-        userId: currentUser!.id,
-        content: replyContent,
-        createdAt: new Date().toISOString(),
-        isInternal: isInternalReply,
-        isOptimistic: true
-      };
-      
-      // Add to local state for immediate feedback
-      setLocalReplies(prev => [...prev, optimisticReply]);
-      
-      // Attempt to save to server
-      await addReply({
-        caseId,
-        userId: currentUser!.id,
-        content: replyContent,
-        isInternal: isInternalReply
-      });
-      
-      toast("Reply sent", {
-        description: "Your reply has been added successfully."
-      });
-      
-      setReplyContent('');
-      setIsInternalReply(false);
-      setAttachments(null);
-      
-      // Refresh data after successful submission, but with a small delay
-      setTimeout(() => debouncedFetch(caseId), 300);
-    } catch (error) {
-      console.error('Error adding reply:', error);
-      
-      // Store for later submission
-      storePendingSubmission('reply', {
-        caseId,
-        userId: currentUser!.id,
-        content: replyContent,
-        isInternal: isInternalReply
-      });
-      
-      toast("Network issue", {
-        description: "Your reply is saved and will be sent when connection improves.",
+    if (!replyContent.trim() && attachments.length === 0) {
+      toast({
+        title: "Empty reply",
+        description: "Please add some text or attach files to send a reply.",
         variant: "destructive"
       });
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    try {
+      // First, add the reply to get a reply ID
+      const reply = await addReply({
+        caseId,
+        userId: currentUser!.id,
+        content: replyContent || "(No message)", // Use placeholder if only attachments
+        isInternal: isInternalReply
+      });
+      
+      // If there are attachments, upload them
+      if (attachments.length > 0 && reply?.id) {
+        for (const file of attachments) {
+          // Upload the file
+          const filePath = await uploadFile(file, reply.id);
+          
+          if (filePath) {
+            // Save attachment metadata in the database
+            await uploadAttachment({
+              caseId,
+              replyId: reply.id,
+              fileName: file.name,
+              filePath,
+              contentType: file.type,
+              size: file.size,
+              createdBy: currentUser!.id
+            });
+          }
+        }
+      }
+      
+      toast({
+        title: "Reply sent",
+        description: attachments.length > 0 
+          ? `Your reply with ${attachments.length} attachment(s) has been added.` 
+          : "Your reply has been added successfully."
+      });
+      
+      // Clear form
+      setReplyContent('');
+      setIsInternalReply(false);
+      setAttachments([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+      // Refresh data after successful submission
+      debouncedFetch(caseId);
+      
+    } catch (error) {
+      console.error('Error adding reply with attachments:', error);
+      
+      toast({
+        title: "Failed to send",
+        description: "There was an error sending your reply. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+      setUploadProgress({});
     }
   };
   
-  // Function to retry sending pending submissions
-  const retryPendingSubmissions = useCallback(async () => {
+  const handleDeleteReply = async (replyId: string) => {
     try {
-      // Check for pending replies
-      const pendingReplies = JSON.parse(localStorage.getItem('pendingReplies') || '[]');
-      const thisItemReplies = pendingReplies.filter((item: any) => item.caseId === caseId);
+      await deleteReply(replyId);
       
-      if (thisItemReplies.length > 0) {
-        for (const item of thisItemReplies) {
-          try {
-            await addReply({
-              caseId: item.caseId,
-              userId: item.userId,
-              content: item.content,
-              isInternal: item.isInternal
-            });
-          } catch (error) {
-            console.error('Failed to submit pending reply:', error);
-            // Will keep in localStorage for next attempt
-            continue;
-          }
-        }
-        
-        // Remove successfully processed items
-        const remainingReplies = pendingReplies.filter((item: any) => item.caseId !== caseId);
-        localStorage.setItem('pendingReplies', JSON.stringify(remainingReplies));
-      }
-      
-      // Check for pending notes
-      const pendingNotes = JSON.parse(localStorage.getItem('pendingNotes') || '[]');
-      const thisItemNotes = pendingNotes.filter((item: any) => item.caseId === caseId);
-      
-      if (thisItemNotes.length > 0) {
-        for (const item of thisItemNotes) {
-          try {
-            await addNote({
-              caseId: item.caseId,
-              userId: item.userId,
-              content: item.content
-            });
-          } catch (error) {
-            console.error('Failed to submit pending note:', error);
-            // Will keep in localStorage for next attempt
-            continue;
-          }
-        }
-        
-        // Remove successfully processed items
-        const remainingNotes = pendingNotes.filter((item: any) => item.caseId !== caseId);
-        localStorage.setItem('pendingNotes', JSON.stringify(remainingNotes));
-      }
-      
-      if (thisItemReplies.length > 0 || thisItemNotes.length > 0) {
-        toast({
-          title: "Sync completed",
-          description: "Your pending messages have been sent.",
-        });
-        
-        // Refresh discussions
-        debouncedFetch(caseId);
-      }
-    } catch (error) {
-      console.error('Error syncing pending submissions:', error);
       toast({
-        title: "Sync failed",
-        description: "Unable to sync your pending messages. Will retry later.",
-        variant: "destructive",
+        title: "Reply deleted",
+        description: "The reply has been deleted successfully."
       });
-    }
-  }, [caseId, addReply, addNote, debouncedFetch, toast]);
-  
-  // Try to submit pending items when connection is restored
-  useEffect(() => {
-    if (!offlineMode) {
-      const hasPendingItems = 
-        (localStorage.getItem('pendingReplies') && localStorage.getItem('pendingReplies') !== '[]') || 
-        (localStorage.getItem('pendingNotes') && localStorage.getItem('pendingNotes') !== '[]');
       
-      if (hasPendingItems) {
-        retryPendingSubmissions();
-      }
+      debouncedFetch(caseId);
+    } catch (error) {
+      console.error('Error deleting reply:', error);
+      
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the reply. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setReplyToDelete(null);
     }
-  }, [offlineMode, retryPendingSubmissions]);
+  };
   
   const handleRefresh = () => {
     setIsRefetching(true);
@@ -363,6 +402,87 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     debouncedFetch(caseId);
   };
   
+  // Get attachments for a specific reply
+  const getReplyAttachments = (replyId: string) => {
+    return caseAttachments.filter(attachment => attachment.replyId === replyId);
+  };
+  
+  // Calculate initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+  
+  // Generate a download URL for an attachment
+  const getDownloadUrl = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('case-attachments')
+        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
+      
+      if (error || !data?.signedUrl) {
+        console.error('Error creating signed URL:', error);
+        return null;
+      }
+      
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Exception getting download URL:', error);
+      return null;
+    }
+  };
+  
+  const handleDownload = async (attachment: any) => {
+    try {
+      const url = await getDownloadUrl(attachment.filePath);
+      
+      if (!url) {
+        toast({
+          title: "Download failed",
+          description: "Could not generate download link. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Create a temporary link and simulate click to download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      toast({
+        title: "Download failed",
+        description: "There was an error downloading the file.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Preview for image attachments
+  const renderAttachmentPreview = (attachment: any) => {
+    if (attachment.contentType?.startsWith('image/')) {
+      return (
+        <img
+          src={`https://uaoeabhtbynyfzyfzogp.supabase.co/storage/v1/object/public/case-attachments/${attachment.filePath}`}
+          alt={attachment.fileName}
+          className="mt-2 max-h-60 rounded-md object-contain bg-gray-50"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
   // If there's an error and no cached data
   if (fetchError && !offlineMode && localReplies.length === 0 && localNotes.length === 0) {
     return (
@@ -389,7 +509,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   }
   
   // Show loading state only when we have no data at all
-  if ((loadingReplies || loadingNotes || isRefetching) && allItems.length === 0) {
+  if ((loadingReplies || loadingNotes || loadingAttachments || isRefetching) && allItems.length === 0) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
@@ -401,16 +521,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       </Card>
     );
   }
-  
-  // Calculate initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
-  };
 
   return (
     <div>
@@ -456,6 +566,11 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 const isOptimistic = (item as any).isOptimistic;
                 const initials = author?.name ? getInitials(author.name) : "??";
                 
+                // Get attachments for this reply
+                const replyAttachments = item.type === 'reply' 
+                  ? getReplyAttachments(item.id) 
+                  : [];
+                
                 return (
                   <div 
                     key={`${item.type}-${item.id}`}
@@ -466,31 +581,72 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                     </Avatar>
                     
                     <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          {author?.name || 'Unknown'}
-                        </span>
+                      <div className="flex items-center gap-2 justify-between">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">
+                            {author?.name || 'Unknown'}
+                          </span>
+                          
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(item.createdAt, { addSuffix: true })}
+                          </span>
+                          
+                          {item.type === 'note' && (
+                            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
+                              Internal Note
+                            </Badge>
+                          )}
+                          
+                          {item.type === 'reply' && (item as any).isInternal && (
+                            <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
+                              <Lock className="h-3 w-3" /> Internal
+                            </Badge>
+                          )}
+                          
+                          {isOptimistic && (
+                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+                              Sending...
+                            </Badge>
+                          )}
+                        </div>
                         
-                        <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(item.createdAt, { addSuffix: true })}
-                        </span>
-                        
-                        {item.type === 'note' && (
-                          <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
-                            Internal Note
-                          </Badge>
-                        )}
-                        
-                        {item.type === 'reply' && (item as any).isInternal && (
-                          <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
-                            <Lock className="h-3 w-3" /> Internal
-                          </Badge>
-                        )}
-                        
-                        {isOptimistic && (
-                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
-                            Sending...
-                          </Badge>
+                        {isConsultant && item.type === 'reply' && !isOptimistic && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReplyToDelete(item.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Reply</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this reply? 
+                                  This will also remove any attached files.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteReply(item.id);
+                                  }}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         )}
                       </div>
                       
@@ -502,6 +658,35 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                             : 'bg-white border border-gray-200'
                       } ${isOptimistic ? 'opacity-70' : ''}`}>
                         <p className="whitespace-pre-wrap">{item.content}</p>
+                        
+                        {/* Display attachments */}
+                        {replyAttachments.length > 0 && (
+                          <div className="mt-3 pt-2 border-t border-gray-200 space-y-2">
+                            <p className="text-xs font-medium text-gray-500">Attachments:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {replyAttachments.map((attachment: any) => (
+                                <div 
+                                  key={attachment.id} 
+                                  className="flex flex-col border rounded-md overflow-hidden"
+                                >
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs justify-start gap-2 p-2 h-auto"
+                                    onClick={() => handleDownload(attachment)}
+                                  >
+                                    {getFileIcon(attachment.contentType)}
+                                    <span className="truncate max-w-40">{attachment.fileName}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      ({formatFileSize(attachment.size)})
+                                    </span>
+                                  </Button>
+                                  {renderAttachmentPreview(attachment)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -518,7 +703,54 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 onChange={(e) => setReplyContent(e.target.value)}
                 rows={4}
                 className="w-full"
+                disabled={isUploading}
               />
+              
+              {/* Display selected file previews */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((file, index) => (
+                    <div 
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-2 bg-gray-50 border rounded-md p-2"
+                    >
+                      {file.type.startsWith('image/') ? (
+                        <div className="h-8 w-8 relative">
+                          <img 
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="h-full w-full object-cover rounded"
+                          />
+                        </div>
+                      ) : (
+                        getFileIcon(file.type) 
+                      )}
+                      <span className="text-sm truncate max-w-36">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">({formatFileSize(file.size)})</span>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 w-7 p-0 ml-auto"
+                        onClick={() => removeAttachment(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Upload progress */}
+              {isUploading && Object.keys(uploadProgress).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm">Uploading files...</p>
+                  <Progress value={
+                    Object.values(uploadProgress).reduce((sum, current) => sum + current, 0) / 
+                    (Object.values(uploadProgress).length * 100) * 100
+                  } />
+                </div>
+              )}
               
               <div className="flex flex-wrap justify-between items-center gap-3">
                 <div className="flex items-center">
@@ -527,7 +759,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                     multiple 
                     onChange={handleAttachmentChange}
                     id="file-upload"
+                    ref={fileInputRef}
                     className="max-w-xs"
+                    disabled={isUploading}
                   />
                 </div>
                 
@@ -538,14 +772,28 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                         id="internal" 
                         checked={isInternalReply}
                         onCheckedChange={setIsInternalReply}
+                        disabled={isUploading}
                       />
                       <Label htmlFor="internal" className="text-sm">Internal reply</Label>
                     </div>
                   )}
                   
-                  <Button type="submit" className="gap-2">
-                    <SendHorizontal className="h-4 w-4" />
-                    Send Reply
+                  <Button 
+                    type="submit" 
+                    className="gap-2"
+                    disabled={isUploading || (!replyContent.trim() && attachments.length === 0)}
+                  >
+                    {isUploading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <SendHorizontal className="h-4 w-4" />
+                        Send Reply
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

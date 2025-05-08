@@ -6,6 +6,7 @@ import { Case, CaseCategory, Company, User, useAppContext } from '@/context/AppC
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface CaseCardProps {
   caseItem: Case;
@@ -45,6 +46,18 @@ const CaseCard = ({ caseItem }: CaseCardProps) => {
     }
   };
   
+  // Get initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
+  const userInitials = user?.name ? getInitials(user.name) : "?";
+  
   return (
     <Card 
       className="cursor-pointer hover:shadow-md transition-shadow border-2 border-primary/10 hover:border-primary/30"
@@ -64,7 +77,12 @@ const CaseCard = ({ caseItem }: CaseCardProps) => {
       <CardFooter className="pt-0">
         <div className="w-full flex flex-col gap-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{user?.name || 'Unknown User'}</span>
+            <div className="flex items-center gap-2">
+              <Avatar className="h-5 w-5">
+                <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
+              </Avatar>
+              <span>{user?.name || 'Unknown User'}</span>
+            </div>
             <span>{company?.name || 'Unknown Company'}</span>
           </div>
           <div className="flex justify-between items-center">

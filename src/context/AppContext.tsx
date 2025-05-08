@@ -64,6 +64,19 @@ export interface Note {
   createdAt: Date;
 }
 
+// CaseAttachment type
+export type CaseAttachment = {
+  id: string;
+  caseId: string;
+  replyId?: string;  // Add this field to link to replies
+  fileName: string;
+  filePath: string;
+  contentType: string;
+  size: number;
+  createdBy: string;
+  createdAt: Date;
+};
+
 // Utility function for API requests with retry logic
 const fetchWithRetry = async <T,>(
   apiCall: () => Promise<{ data: T | null; error: any }>,
@@ -153,11 +166,21 @@ interface AppContextType {
   
   // User management
   refetchUsers: () => Promise<void>;
+  
+  // Add these properties for case attachments
+  caseAttachments: CaseAttachment[];
+  loadingAttachments: boolean;
+  refetchAttachments: (caseId?: string) => Promise<void>;
+  uploadAttachment: (attachment: Omit<CaseAttachment, 'id' | 'createdAt'>) => Promise<CaseAttachment | null>;
+  deleteAttachment: (attachmentId: string) => Promise<void>;
+  
+  // Add this for reply deletion
+  deleteReply: (replyId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export function AppProvider({ children }: { children: ReactNode }) {
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [casesData, setCasesData] = useState<Case[]>([]);
@@ -166,6 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<CaseCategory[]>([]);
   const [dashboardBlocks, setDashboardBlocks] = useState<DashboardBlock[]>([]);
   const [companyNewsBlocks, setCompanyNewsBlocks] = useState<CompanyNewsBlock[]>([]);
+  const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([]);
   const [loadingDashboardBlocks, setLoadingDashboardBlocks] = useState<boolean>(true);
   const [loadingCompanyNewsBlocks, setLoadingCompanyNewsBlocks] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -173,6 +197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loadingCases, setLoadingCases] = useState<boolean>(true);
   const [loadingReplies, setLoadingReplies] = useState<boolean>(true);
   const [loadingNotes, setLoadingNotes] = useState<boolean>(true);
+  const [loadingAttachments, setLoadingAttachments] = useState<boolean>(false);
   
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -238,6 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fetchCases(),
       fetchDashboardBlocks(),
       fetchCompanyNewsBlocks(),
+      fetchAttachments(),
     ]);
   };
 
@@ -1006,49 +1032,245 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Fetch attachments
+  const fetchAttachments = async (caseId?: string) => {
+    setLoadingAttachments(true);
+    
+    try {
+      let query = supabase
+        .from('case_attachments')
+        .select('*');
+        
+      if (caseId) {
+        query = query.eq('case_id', caseId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching attachments:', error);
+        return;
+      }
+      
+      // Map data to CaseAttachment type
+      const formattedAttachments: CaseAttachment[] = data.map(a => ({
+        id: a.id,
+        caseId: a.case_id,
+        replyId: a.reply_id,
+        fileName: a.file_name,
+        filePath: a.file_path,
+        contentType: a.content_type || '',
+        size: a.size || 0,
+        createdBy: a.created_by,
+        createdAt: new Date(a.created_at)
+      }));
+      
+      setCaseAttachments(formattedAttachments);
+    } catch (err) {
+      console.error('Exception fetching attachments:', err);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+  
+  // Upload attachment
+  const uploadAttachment = async (attachment: Omit<CaseAttachment, 'id' | 'createdAt'>): Promise<CaseAttachment | null> => {
+    try {
+      // Insert the attachment metadata into the database
+      const { data, error } = await supabase
+        .from('case_attachments')
+        .insert({
+          case_id: attachment.caseId,
+          reply_id: attachment.replyId,
+          file_name: attachment.fileName,
+          file_path: attachment.filePath,
+          content_type: attachment.contentType,
+          size: attachment.size,
+          created_by: attachment.createdBy
+        })
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error inserting attachment:', error);
+        return null;
+      }
+      
+      // Format the returned data
+      const newAttachment: CaseAttachment = {
+        id: data.id,
+        caseId: data.case_id,
+        replyId: data.reply_id,
+        fileName: data.file_name,
+        filePath: data.file_path,
+        contentType: data.content_type || '',
+        size: data.size || 0,
+        createdBy: data.created_by,
+        createdAt: new Date(data.created_at)
+      };
+      
+      // Update state
+      setCaseAttachments(prev => [...prev, newAttachment]);
+      
+      return newAttachment;
+    } catch (err) {
+      console.error('Exception uploading attachment:', err);
+      return null;
+    }
+  };
+  
+  // Delete attachment
+  const deleteAttachment = async (attachmentId: string) => {
+    try {
+      // First, get the file path so we can delete from storage
+      const attachment = caseAttachments.find(a => a.id === attachmentId);
+      
+      if (!attachment) {
+        console.error('Attachment not found:', attachmentId);
+        return;
+      }
+      
+      // Delete the file from storage
+      const { error: storageError } = await supabase.storage
+        .from('case-attachments')
+        .remove([attachment.filePath]);
+        
+      if (storageError) {
+        console.error('Error deleting file from storage:', storageError);
+        // Continue with database deletion anyway
+      }
+      
+      // Delete metadata from database
+      const { error } = await supabase
+        .from('case_attachments')
+        .delete()
+        .eq('id', attachmentId);
+        
+      if (error) {
+        console.error('Error deleting attachment metadata:', error);
+        return;
+      }
+      
+      // Update state
+      setCaseAttachments(prev => prev.filter(a => a.id !== attachmentId));
+    } catch (err) {
+      console.error('Exception deleting attachment:', err);
+    }
+  };
+  
+  // Delete reply (and associated attachments)
+  const deleteReply = async (replyId: string) => {
+    try {
+      // First delete any attachments associated with this reply
+      const replyAttachments = caseAttachments.filter(a => a.replyId === replyId);
+      
+      if (replyAttachments.length > 0) {
+        // Delete files from storage
+        const filePaths = replyAttachments.map(a => a.filePath);
+        
+        if (filePaths.length > 0) {
+          const { error: storageError } = await supabase.storage
+            .from('case-attachments')
+            .remove(filePaths);
+            
+          if (storageError) {
+            console.error('Error deleting files from storage:', storageError);
+          }
+        }
+        
+        // Delete attachment metadata from database
+        const { error: attachmentsError } = await supabase
+          .from('case_attachments')
+          .delete()
+          .eq('reply_id', replyId);
+          
+        if (attachmentsError) {
+          console.error('Error deleting attachments metadata:', attachmentsError);
+        }
+      }
+      
+      // Delete the reply
+      const { error } = await supabase
+        .from('replies')
+        .delete()
+        .eq('id', replyId);
+        
+      if (error) {
+        console.error('Error deleting reply:', error);
+        return;
+      }
+      
+      // Update state
+      setReplies(prev => prev.filter(r => r.id !== replyId));
+      setCaseAttachments(prev => prev.filter(a => a.replyId !== replyId));
+    } catch (err) {
+      console.error('Exception deleting reply:', err);
+    }
+  };
+  
+  // Add refetchAttachments
+  const refetchAttachments = async (caseId?: string) => {
+    await fetchAttachments(caseId);
+  };
+  
+  // Load initial data
+  useEffect(() => {
+    fetchCases();
+    fetchCompanies();
+    fetchUsers();
+    fetchCategories();
+    fetchAttachments();
+  }, []);
+  
+  const contextValue: AppContextType = {
+    companies,
+    users,
+    cases: casesData,
+    categories,
+    replies: repliesData,
+    notes: notesData,
+    dashboardBlocks,
+    companyNewsBlocks,
+    currentUser,
+    language,
+    setCurrentUser,
+    setLanguage,
+    addCase,
+    updateCase,
+    addReply,
+    addNote,
+    loadingCases,
+    loadingReplies,
+    loadingNotes,
+    loadingDashboardBlocks,
+    loadingCompanyNewsBlocks,
+    refetchCases,
+    refetchReplies,
+    refetchNotes,
+    addDashboardBlock,
+    updateDashboardBlock,
+    deleteDashboardBlock,
+    refetchDashboardBlocks,
+    addCompanyNewsBlock,
+    updateCompanyNewsBlock,
+    deleteCompanyNewsBlock,
+    publishCompanyNewsBlock,
+    refetchCompanyNewsBlocks,
+    addCompany,
+    updateCompany,
+    deleteCompany,
+    refetchCompanies,
+    refetchUsers,
+    caseAttachments,
+    loadingAttachments,
+    refetchAttachments,
+    uploadAttachment,
+    deleteAttachment,
+    deleteReply,
+  };
+  
   return (
-    <AppContext.Provider
-      value={{
-        companies,
-        users,
-        cases: casesData,
-        categories,
-        replies: repliesData,
-        notes: notesData,
-        dashboardBlocks,
-        companyNewsBlocks,
-        currentUser,
-        language,
-        setCurrentUser,
-        setLanguage,
-        addCase,
-        updateCase,
-        addReply,
-        addNote,
-        loadingCases,
-        loadingReplies,
-        loadingNotes,
-        loadingDashboardBlocks,
-        loadingCompanyNewsBlocks,
-        refetchCases,
-        refetchReplies,
-        refetchNotes,
-        addDashboardBlock,
-        updateDashboardBlock,
-        deleteDashboardBlock,
-        refetchDashboardBlocks,
-        addCompanyNewsBlock,
-        updateCompanyNewsBlock,
-        deleteCompanyNewsBlock,
-        publishCompanyNewsBlock,
-        refetchCompanyNewsBlocks,
-        addCompany,
-        updateCompany,
-        deleteCompany,
-        refetchCompanies,
-        refetchUsers
-      }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
