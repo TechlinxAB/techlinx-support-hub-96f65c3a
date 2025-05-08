@@ -62,11 +62,11 @@
   position: relative !important;
 }
 
-/* Toast close button styling - properly positioned inside the box */
+/* Toast close button styling - positioned correctly inside the box at the top right corner */
 [data-sonner-toast] [data-close-button] {
   position: absolute !important;
-  top: 14px !important;  /* Moved further down */
-  right: 14px !important; /* Moved further right */
+  top: 8px !important;  /* Adjusted position to be inside the top edge */
+  right: 8px !important; /* Adjusted position to be inside the right edge */
   background-color: transparent !important;
   opacity: 0.7 !important;
   padding: 4px !important;
