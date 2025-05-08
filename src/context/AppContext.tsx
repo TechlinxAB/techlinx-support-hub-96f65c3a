@@ -134,8 +134,8 @@ interface AppContextType {
   setLanguage: (language: Language) => void;
   addCase: (newCase: Omit<Case, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string | undefined>;
   updateCase: (caseId: string, updates: Partial<Case>) => Promise<void>;
-  addReply: (reply: Omit<Reply, 'id' | 'createdAt'>) => Promise<void>;
-  addNote: (note: Omit<Note, 'id' | 'createdAt'>) => Promise<void>;
+  addReply: (reply: Omit<Reply, 'id' | 'createdAt'>) => Promise<Reply | null>;
+  addNote: (note: Omit<Note, 'id' | 'createdAt'>) => Promise<Note | null>;
   loadingCases: boolean;
   loadingReplies: boolean;
   loadingNotes: boolean;
@@ -983,20 +983,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addReply = async (reply: Omit<Reply, 'id' | 'createdAt'>) => {
+  const addReply = async (reply: Omit<Reply, 'id' | 'createdAt'>): Promise<Reply | null> => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('replies')
         .insert({
           case_id: reply.caseId,
           user_id: reply.userId,
           content: reply.content,
           is_internal: reply.isInternal
-        });
+        })
+        .select('*')
+        .single();
       
       if (error) throw error;
       
-      await refetchReplies(reply.caseId);
+      if (data) {
+        // Map response to Reply type
+        const newReply: Reply = {
+          id: data.id,
+          caseId: data.case_id,
+          userId: data.user_id,
+          content: data.content,
+          createdAt: new Date(data.created_at),
+          isInternal: data.is_internal
+        };
+        
+        // Update local state
+        setRepliesData(prev => [...prev, newReply]);
+        
+        // Fetch updated data
+        await refetchReplies(reply.caseId);
+        
+        return newReply;
+      }
+      
+      return null;
     } catch (error: any) {
       console.error('Error adding reply:', error.message);
       toast({
@@ -1004,23 +1026,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: error.message,
         variant: "destructive",
       });
-      throw error; // Re-throw to allow caller to handle
+      
+      return null;
     }
   };
 
-  const addNote = async (note: Omit<Note, 'id' | 'createdAt'>) => {
+  const addNote = async (note: Omit<Note, 'id' | 'createdAt'>): Promise<Note | null> => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('notes')
         .insert({
           case_id: note.caseId,
           user_id: note.userId,
           content: note.content
-        });
+        })
+        .select('*')
+        .single();
       
       if (error) throw error;
       
-      await refetchNotes(note.caseId);
+      if (data) {
+        // Map response to Note type
+        const newNote: Note = {
+          id: data.id,
+          caseId: data.case_id,
+          userId: data.user_id,
+          content: data.content,
+          createdAt: new Date(data.created_at)
+        };
+        
+        // Update local state
+        setNotesData(prev => [...prev, newNote]);
+        
+        // Fetch updated data
+        await refetchNotes(note.caseId);
+        
+        return newNote;
+      }
+      
+      return null;
     } catch (error: any) {
       console.error('Error adding note:', error.message);
       toast({
@@ -1028,7 +1072,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: error.message,
         variant: "destructive",
       });
-      throw error; // Re-throw to allow caller to handle
+      
+      return null;
     }
   };
 
