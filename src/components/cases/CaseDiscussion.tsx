@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,16 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CaseDiscussionProps {
   caseId: string;
@@ -85,7 +96,8 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     loadingReplies, 
     loadingNotes, 
     refetchReplies,
-    refetchNotes 
+    refetchNotes,
+    deleteReply 
   } = useAppContext();
   
   const [replyContent, setReplyContent] = useState('');
@@ -96,7 +108,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const [localReplies, setLocalReplies] = useState<any[]>([]);
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [offlineMode, setOfflineMode] = useState(false);
-  const [dataFetched, setDataFetched] = useState(false); // Add this to track if initial data fetch is done
+  const [dataFetched, setDataFetched] = useState(false); 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [replyToDelete, setReplyToDelete] = useState<string | null>(null);
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
@@ -270,6 +284,37 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         description: "Your reply is saved and will be sent when connection improves.",
         variant: "destructive"
       });
+    }
+  };
+  
+  const handleDeleteReply = async (replyId: string) => {
+    try {
+      // Optimistic UI update - remove from local state immediately
+      setLocalReplies(prev => prev.filter(r => r.id !== replyId));
+      
+      // Attempt to delete from server
+      await deleteReply(replyId);
+      
+      toast({
+        title: "Reply deleted",
+        description: "The reply has been successfully removed.",
+      });
+      
+      // Refresh data after successful deletion
+      setTimeout(() => debouncedFetch(caseId), 300);
+    } catch (error) {
+      console.error('Error deleting reply:', error);
+      
+      toast({
+        title: "Delete failed",
+        description: "Could not delete the reply. Please try again.",
+        variant: "destructive"
+      });
+      
+      // Refresh to restore the correct state
+      debouncedFetch(caseId);
+    } finally {
+      setReplyToDelete(null);
     }
   };
   
@@ -455,6 +500,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 
                 const isOptimistic = (item as any).isOptimistic;
                 const initials = author?.name ? getInitials(author.name) : "??";
+                const canDeleteReply = isConsultant && item.type === 'reply';
                 
                 return (
                   <div 
@@ -501,7 +547,24 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                             ? 'bg-gray-50 border border-gray-200'
                             : 'bg-white border border-gray-200'
                       } ${isOptimistic ? 'opacity-70' : ''}`}>
-                        <p className="whitespace-pre-wrap">{item.content}</p>
+                        <div className="flex justify-between items-start">
+                          <p className="whitespace-pre-wrap">{item.content}</p>
+                          
+                          {canDeleteReply && !isOptimistic && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 w-6 p-0 ml-2 text-muted-foreground hover:text-destructive"
+                              onClick={() => {
+                                setReplyToDelete(item.id);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete reply</span>
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -553,6 +616,27 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Reply</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this reply? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReplyToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => replyToDelete && handleDeleteReply(replyToDelete)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -153,6 +153,9 @@ interface AppContextType {
   
   // User management
   refetchUsers: () => Promise<void>;
+  
+  // Function to delete a reply
+  deleteReply: (replyId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -1006,49 +1009,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Function to delete a reply
+  const deleteReply = async (replyId: string): Promise<void> => {
+    try {
+      // Make the API call to delete the reply
+      await supabase.from('replies').delete().match({ id: replyId });
+      
+      // Update the local state
+      setReplies(prev => prev.filter(reply => reply.id !== replyId));
+    } catch (error) {
+      console.error('Error deleting reply:', error);
+      throw error;
+    }
+  };
+
+  // Make sure to include the new function in the context value
+  const contextValue: AppContextType = {
+    companies,
+    users,
+    cases: casesData,
+    categories,
+    replies: repliesData,
+    notes: notesData,
+    dashboardBlocks,
+    companyNewsBlocks,
+    currentUser,
+    language,
+    setCurrentUser,
+    setLanguage,
+    addCase,
+    updateCase,
+    addReply,
+    addNote,
+    loadingCases,
+    loadingReplies,
+    loadingNotes,
+    loadingDashboardBlocks,
+    loadingCompanyNewsBlocks,
+    refetchCases,
+    refetchReplies,
+    refetchNotes,
+    addDashboardBlock,
+    updateDashboardBlock,
+    deleteDashboardBlock,
+    refetchDashboardBlocks,
+    addCompanyNewsBlock,
+    updateCompanyNewsBlock,
+    deleteCompanyNewsBlock,
+    publishCompanyNewsBlock,
+    refetchCompanyNewsBlocks,
+    addCompany,
+    updateCompany,
+    deleteCompany,
+    refetchCompanies,
+    refetchUsers,
+    deleteReply,
+  };
+
   return (
-    <AppContext.Provider
-      value={{
-        companies,
-        users,
-        cases: casesData,
-        categories,
-        replies: repliesData,
-        notes: notesData,
-        dashboardBlocks,
-        companyNewsBlocks,
-        currentUser,
-        language,
-        setCurrentUser,
-        setLanguage,
-        addCase,
-        updateCase,
-        addReply,
-        addNote,
-        loadingCases,
-        loadingReplies,
-        loadingNotes,
-        loadingDashboardBlocks,
-        loadingCompanyNewsBlocks,
-        refetchCases,
-        refetchReplies,
-        refetchNotes,
-        addDashboardBlock,
-        updateDashboardBlock,
-        deleteDashboardBlock,
-        refetchDashboardBlocks,
-        addCompanyNewsBlock,
-        updateCompanyNewsBlock,
-        deleteCompanyNewsBlock,
-        publishCompanyNewsBlock,
-        refetchCompanyNewsBlocks,
-        addCompany,
-        updateCompany,
-        deleteCompany,
-        refetchCompanies,
-        refetchUsers
-      }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
