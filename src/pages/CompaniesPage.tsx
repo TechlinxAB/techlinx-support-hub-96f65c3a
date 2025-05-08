@@ -12,7 +12,8 @@ import {
   Plus,
   Trash2,
   Settings,
-  Edit
+  Edit,
+  Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -46,6 +47,7 @@ const CompaniesPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // If user is not a consultant, redirect them to the company dashboard
   if (currentUser?.role !== 'consultant' && currentUser?.companyId) {
@@ -119,6 +121,11 @@ const CompaniesPage = () => {
     setCompanyToDelete(companyId);
     setIsDeleteDialogOpen(true);
   };
+
+  // Filter companies based on search query
+  const filteredCompanies = companies.filter(company => 
+    company.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
   
   return (
     <div className="space-y-6">
@@ -132,8 +139,20 @@ const CompaniesPage = () => {
         )}
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {companies.map(company => {
+      {/* Search bar */}
+      <div className="relative w-full">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search companies..."
+          className="w-full pl-9"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+      
+      <div className="grid grid-cols-1 gap-4">
+        {filteredCompanies.map(company => {
           // Find cases for this company
           const companyCases = cases.filter(c => c.companyId === company.id);
           const activeCases = companyCases.filter(c => c.status !== 'completed').length;
@@ -185,7 +204,7 @@ const CompaniesPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm">
                       <MessageCircle className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">Active Cases:</span>
@@ -197,11 +216,12 @@ const CompaniesPage = () => {
                       <span>{companyCases.length}</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  
+                  {/* First row of full-width buttons */}
+                  <div className="grid grid-cols-1 gap-2">
                     <Button 
                       variant="outline" 
-                      size="sm"
-                      className="flex gap-1 items-center justify-center"
+                      className="flex gap-2 items-center justify-center w-full"
                       onClick={() => navigate(`/companies/${company.id}`)}
                     >
                       <FileText className="h-4 w-4" />
@@ -210,8 +230,7 @@ const CompaniesPage = () => {
                     
                     <Button 
                       variant="outline" 
-                      size="sm"
-                      className="flex gap-1 items-center justify-center"
+                      className="flex gap-2 items-center justify-center w-full"
                       onClick={() => navigate(`/company-dashboard-builder/${company.id}`)}
                     >
                       <LayoutDashboard className="h-4 w-4" />
@@ -220,8 +239,7 @@ const CompaniesPage = () => {
                     
                     <Button 
                       variant="outline" 
-                      size="sm"
-                      className="flex gap-1 items-center justify-center"
+                      className="flex gap-2 items-center justify-center w-full"
                       onClick={() => {
                         navigate('/cases');
                         // Here we would implement filtering by company
@@ -232,13 +250,12 @@ const CompaniesPage = () => {
                     </Button>
                   </div>
 
-                  {/* New row for company news */}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* News buttons row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {currentUser?.role === 'consultant' && (
                       <Button 
                         variant="outline" 
-                        size="sm"
-                        className="flex gap-1 items-center justify-center"
+                        className="flex gap-2 items-center justify-center w-full"
                         onClick={() => navigate(`/company-news-builder/${company.id}`)}
                       >
                         <Edit className="h-4 w-4" />
@@ -247,8 +264,7 @@ const CompaniesPage = () => {
                     )}
                     <Button 
                       variant="outline" 
-                      size="sm"
-                      className="flex gap-1 items-center justify-center"
+                      className={`flex gap-2 items-center justify-center w-full ${currentUser?.role !== 'consultant' ? 'sm:col-span-2' : ''}`}
                       onClick={() => navigate(`/company-news/${company.id}`)}
                     >
                       <MessageCircle className="h-4 w-4" />
@@ -260,6 +276,12 @@ const CompaniesPage = () => {
             </Card>
           );
         })}
+
+        {filteredCompanies.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No companies found matching "{searchQuery}"</p>
+          </div>
+        )}
       </div>
       
       {/* Add Company Dialog */}
