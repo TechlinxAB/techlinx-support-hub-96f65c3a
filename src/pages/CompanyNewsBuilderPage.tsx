@@ -1,24 +1,20 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { 
-  Select, 
-  SelectTrigger, 
-  SelectValue, 
-  SelectContent, 
-  SelectItem 
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
-import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader, PlusCircle, Trash, MoveUp, MoveDown, Edit, Eye, EyeOff } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { toast } from 'sonner';
 import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
 
@@ -26,32 +22,24 @@ const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
   const { 
-    companies, 
-    addCompanyNewsBlock, 
+    currentUser,
+    companies,
+    addCompanyNewsBlock,
     updateCompanyNewsBlock,
-    deleteCompanyNewsBlock, 
-    publishCompanyNewsBlock,
-    currentUser
+    deleteCompanyNewsBlock,
+    publishCompanyNewsBlock
   } = useAppContext();
-
-  // Get blocks using our optimized fetcher 
+  
   const { 
     blocks, 
-    loading: loadingCompanyNewsBlocks, 
-    refetch: refetchCompanyNewsBlocks,
+    loading, 
+    error, 
+    refetch, 
     updateLocalBlock 
   } = useNewsBlocksFetcher(companyId);
-
-  // State
-  const [newBlockType, setNewBlockType] = useState<NewsBlockType>('heading');
-  const [newBlockTitle, setNewBlockTitle] = useState('');
-  const [loading, setLoading] = useState(false);
   
-  const company = companies.find(c => c.id === companyId);
-
-  // Use our newsblock editor with optimistic updates
-  const { 
-    selectedBlockId, 
+  const {
+    selectedBlockId,
     setSelectedBlockId,
     selectedBlock,
     editedBlockData,
@@ -60,271 +48,143 @@ const CompanyNewsBuilderPage = () => {
     activeTab,
     setActiveTab,
     handleFormChange,
-    handleNestedContentChange, 
+    handleNestedContentChange,
     saveCurrentBlock,
     getDefaultContent
   } = useNewsBlockEditor(blocks, {
-    updateLocalBlock, // Pass the optimistic update function
-    onSaveSuccess: () => {
-      // Don't refetch after save - we already updated local state
-      console.log('Save successful, updated local state');
-    },
-    onSaveError: (error) => {
-      console.error('Error during save:', error);
-      // Only refetch on error to recover correct state
-      refetchCompanyNewsBlocks(true);
-    }
+    updateLocalBlock: updateLocalBlock
   });
-
-  const handleAddBlock = async () => {
-    if (!companyId || !newBlockType || !newBlockTitle.trim()) {
-      toast.error("Error", {
-        description: "Company ID, block type and title are required"
-      });
-      return;
+  
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedBlockType, setSelectedBlockType] = useState<NewsBlockType>('text');
+  const [formData, setFormData] = useState<any>({});
+  const [isPreview, setIsPreview] = useState(false);
+  
+  // Find the company
+  const company = companies.find(c => c.id === companyId);
+  
+  const handleAddBlock = () => {
+    setFormData({});
+    setDialogOpen(true);
+  };
+  
+  const handleEditBlock = (block: CompanyNewsBlock) => {
+    setSelectedBlockId(block.id);
+  };
+  
+  const handleDeleteBlock = async (blockId: string) => {
+    if (confirm('Are you sure you want to delete this block?')) {
+      await deleteCompanyNewsBlock(blockId);
+      toast.success("Block deleted successfully");
     }
-
-    setLoading(true);
+  };
+  
+  const handleMoveBlock = async (block: CompanyNewsBlock, direction: 'up' | 'down') => {
+    const blocksAtSameLevel = blocks
+      .filter(b => 
+        (b.parentId === block.parentId || (!b.parentId && !block.parentId)) && 
+        b.companyId === block.companyId
+      )
+      .sort((a, b) => a.position - b.position);
+    
+    const currentIndex = blocksAtSameLevel.findIndex(b => b.id === block.id);
+    
+    if (direction === 'up' && currentIndex > 0) {
+      const previousBlock = blocksAtSameLevel[currentIndex - 1];
+      await updateCompanyNewsBlock(block.id, { position: previousBlock.position });
+      await updateCompanyNewsBlock(previousBlock.id, { position: block.position });
+    }
+    
+    if (direction === 'down' && currentIndex < blocksAtSameLevel.length - 1) {
+      const nextBlock = blocksAtSameLevel[currentIndex + 1];
+      await updateCompanyNewsBlock(block.id, { position: nextBlock.position });
+      await updateCompanyNewsBlock(nextBlock.id, { position: block.position });
+    }
+  };
+  
+  const handleSaveBlock = async () => {
     try {
-      // Calculate new position as last position + 1
-      const position = blocks.length > 0 
-        ? Math.max(...blocks.map(b => b.position)) + 1 
-        : 0;
-
-      const newBlockId = await addCompanyNewsBlock({
-        companyId,
-        title: newBlockTitle,
-        type: newBlockType,
-        content: getDefaultContent(newBlockType),
-        position,
-        isPublished: false
-      });
-
-      if (newBlockId) {
-        // Add block to local state optimistically
-        const newBlock = {
-          id: newBlockId,
-          companyId,
-          title: newBlockTitle,
-          type: newBlockType,
-          content: getDefaultContent(newBlockType),
-          position,
-          isPublished: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          createdBy: currentUser?.id || '' // Fixed: added createdBy field
-        };
+      if (!companyId) {
+        toast.error("Company ID is missing");
+        return;
+      }
+      
+      if (selectedBlock) {
+        // Update existing block
+        await updateCompanyNewsBlock(selectedBlock.id, {
+          title: formData.title || selectedBlock.title,
+          content: formData,
+          type: selectedBlockType
+        });
+        toast.success("Block updated successfully");
+      } else {
+        // Create new block
+        const maxPosition = blocks.length > 0
+          ? Math.max(...blocks.map(b => b.position)) + 1
+          : 0;
         
-        // Only refetch when adding a new block - we need the server-generated ID
-        await refetchCompanyNewsBlocks(true);
-        
-        // After refetch, select the new block
-        setSelectedBlockId(newBlockId);
-        setNewBlockTitle('');
-        
+        await addCompanyNewsBlock({
+          companyId: companyId!,
+          title: formData.title || `New ${selectedBlockType}`,
+          content: formData,
+          type: selectedBlockType,
+          position: maxPosition
+        });
         toast.success("Block added successfully");
       }
+      
+      setDialogOpen(false);
+      refetch();
     } catch (error) {
-      console.error('Error adding block:', error);
-      toast.error("Failed to add block");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteBlock = async (blockId: string) => {
-    setLoading(true);
-    try {
-      // Optimistically remove from local state
-      const deletedBlock = blocks.find(b => b.id === blockId);
-      const updatedBlocks = blocks.filter(b => b.id !== blockId);
-      
-      // If the deleted block is selected, select another one
-      if (selectedBlockId === blockId) {
-        setSelectedBlockId(updatedBlocks.length > 0 ? updatedBlocks[0].id : null);
-      }
-      
-      // Delete from database
-      await deleteCompanyNewsBlock(blockId);
-      
-      // Trigger refetch to ensure local state is consistent
-      refetchCompanyNewsBlocks(true);
-      
-      toast.success("Block deleted successfully");
-    } catch (error) {
-      console.error('Error deleting block:', error);
-      toast.error("Failed to delete block", {
+      console.error('Error saving block:', error);
+      toast.error("Failed to save block", {
         description: error.message || "Please try again"
       });
-      
-      // Refetch to ensure state is correct after error
-      refetchCompanyNewsBlocks(true);
-    } finally {
-      setLoading(false);
     }
   };
-
-  const handleMoveBlock = async (blockId: string, direction: 'up' | 'down') => {
-    const blockIndex = blocks.findIndex(b => b.id === blockId);
-    if (blockIndex === -1) return;
-
-    const newBlocks = [...blocks];
-    const block = newBlocks[blockIndex];
-    
-    // Prevent multiple move operations at once
-    if (loading) return;
-    
-    if (direction === 'up' && blockIndex > 0) {
-      const targetBlock = newBlocks[blockIndex - 1];
-      
-      // Swap positions 
-      const temp = targetBlock.position;
-      targetBlock.position = block.position;
-      block.position = temp;
-      
-      // Update positions in database with improved local state management
-      setLoading(true);
-      try {
-        // Create a temporary sorted array for visual feedback
-        const tempSortedBlocks = newBlocks.map(b => ({...b})).sort((a, b) => a.position - b.position);
-        
-        // Apply optimistic updates to local state FIRST for immediate visual feedback
-        tempSortedBlocks.forEach(b => {
-          updateLocalBlock({
-            id: b.id,
-            position: b.position
-          });
-        });
-        
-        // Show toast indicating the operation is in progress
-        const toastId = toast.loading("Updating block position...");
-        
-        // Then make database updates
-        await updateCompanyNewsBlock(block.id, { position: block.position });
-        await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
-        
-        // Force a refetch to ensure server and client state are in sync
-        await refetchCompanyNewsBlocks(true);
-        
-        toast.success("Block position updated", { id: toastId });
-      } catch (error: any) {
-        console.error('Error moving block:', error);
-        toast.error("Failed to move block", {
-          description: error.message || "Please try again"
-        });
-        
-        // Always refetch on error or success to ensure state consistency
-        refetchCompanyNewsBlocks(true);
-      } finally {
-        setLoading(false);
-      }
-    } 
-    else if (direction === 'down' && blockIndex < newBlocks.length - 1) {
-      const targetBlock = newBlocks[blockIndex + 1];
-      
-      const temp = targetBlock.position;
-      targetBlock.position = block.position;
-      block.position = temp;
-      
-      setLoading(true);
-      try {
-        // Create a temporary sorted array for visual feedback
-        const tempSortedBlocks = newBlocks.map(b => ({...b})).sort((a, b) => a.position - b.position);
-        
-        // Apply optimistic updates to local state FIRST
-        tempSortedBlocks.forEach(b => {
-          updateLocalBlock({
-            id: b.id,
-            position: b.position
-          });
-        });
-        
-        // Show toast indicating the operation is in progress
-        const toastId = toast.loading("Updating block position...");
-        
-        // Then make database updates
-        await updateCompanyNewsBlock(block.id, { position: block.position });
-        await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
-        
-        // Force a refetch to ensure server and client state are in sync
-        await refetchCompanyNewsBlocks(true);
-        
-        toast.success("Block position updated", { id: toastId });
-      } catch (error: any) {
-        console.error('Error moving block:', error);
-        toast.error("Failed to move block", {
-          description: error.message || "Please try again"
-        });
-        
-        // Always refetch on error to ensure state consistency
-        refetchCompanyNewsBlocks(true);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
-    setLoading(true);
+  
+  const handlePublishToggle = async (blockId: string, isPublished: boolean) => {
     try {
-      // Optimistic update
+      
+      // Update local state optimistically
       updateLocalBlock({
         id: blockId,
-        isPublished
+        isPublished: isPublished
       });
       
-      // Database update - passing only the blockId here, not the second argument
+      // Database update - calling with just blockId
       await publishCompanyNewsBlock(blockId);
       
       toast.success(isPublished ? "Published" : "Unpublished", {
         description: `Block ${isPublished ? 'published' : 'unpublished'} successfully`
       });
     } catch (error) {
-      console.error('Error toggling publish status:', error);
-      toast.error("Error", {
-        description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
-      });
+      console.error('Error publishing block:', error);
       
-      // Only refetch on error
-      refetchCompanyNewsBlocks(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNewsBlockAction = async (blockId: string, actionType: string) => {
-    try {
-      if (actionType === 'publish') {
-        await publishCompanyNewsBlock!(blockId);
-        toast({
-          title: "Published",
-          description: "News block published successfully",
-        });
-      }
-    } catch (error) {
-      console.error('Error during action:', error);
-      toast.error("Failed to perform action", {
-        description: error.message || "Please try again"
+      toast.error("Failed to update", {
+        description: "Could not update publish status"
       });
     }
   };
-
-  // Content editor based on block type
-  const renderBlockEditor = () => {
-    if (!selectedBlock || !editedBlockData || !editedBlockData.content) return null;
-
-    // Make sure we have the necessary content structure for each block type
-    const content = editedBlockData.content || getDefaultContent(selectedBlock.type);
-
-    switch (selectedBlock.type) {
+  
+  const renderBlockForm = () => {
+    switch (selectedBlockType) {
       case 'heading':
         return (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="heading-level">Heading Level</Label>
+            <div>
+              <label className="text-sm font-medium">Text</label>
+              <Input 
+                value={formData.text || ''} 
+                onChange={e => setFormData({ ...formData, text: e.target.value })} 
+                placeholder="Heading text"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Level</label>
               <Select 
-                value={String(content.level || "2")} 
-                onValueChange={(value) => handleFormChange('content.level', parseInt(value))}
+                value={String(formData.level || '2')} 
+                onValueChange={value => setFormData({ ...formData, level: Number(value) })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select heading level" />
@@ -333,715 +193,733 @@ const CompanyNewsBuilderPage = () => {
                   <SelectItem value="1">Heading 1 (Largest)</SelectItem>
                   <SelectItem value="2">Heading 2</SelectItem>
                   <SelectItem value="3">Heading 3</SelectItem>
-                  <SelectItem value="4">Heading 4</SelectItem>
-                  <SelectItem value="5">Heading 5</SelectItem>
-                  <SelectItem value="6">Heading 6 (Smallest)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="heading-text">Heading Text</Label>
-              <Input 
-                id="heading-text" 
-                value={content.text || ''} 
-                onChange={(e) => handleFormChange('content.text', e.target.value)}
-              />
-            </div>
           </div>
         );
-      
+        
       case 'text':
         return (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="text-content">Text Content</Label>
+            <div>
+              <label className="text-sm font-medium">Text</label>
               <Textarea 
-                id="text-content" 
-                rows={10}
-                value={content.text || ''} 
-                onChange={(e) => handleFormChange('content.text', e.target.value)}
+                value={formData.text || ''} 
+                onChange={e => setFormData({ ...formData, text: e.target.value })} 
+                placeholder="Content text"
+                rows={6}
               />
             </div>
           </div>
         );
-      
+        
       case 'card':
         return (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="card-title">Card Title</Label>
+            <div>
+              <label className="text-sm font-medium">Title</label>
               <Input 
-                id="card-title" 
-                value={content.title || ''} 
-                onChange={(e) => handleFormChange('content.title', e.target.value)}
+                value={formData.title || ''} 
+                onChange={e => setFormData({ ...formData, title: e.target.value })} 
+                placeholder="Card title"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="card-content">Card Content</Label>
+            <div>
+              <label className="text-sm font-medium">Content</label>
               <Textarea 
-                id="card-content" 
-                rows={5}
-                value={content.content || ''} 
-                onChange={(e) => handleFormChange('content.content', e.target.value)}
+                value={formData.content || ''} 
+                onChange={e => setFormData({ ...formData, content: e.target.value })} 
+                placeholder="Card content"
+                rows={4}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="card-icon">Icon (optional)</Label>
+              <label className="text-sm font-medium">Action (Optional)</label>
               <Input 
-                id="card-icon" 
-                placeholder="Icon name or URL"
-                value={content.icon || ''} 
-                onChange={(e) => handleFormChange('content.icon', e.target.value)}
+                value={formData.action?.label || ''} 
+                onChange={e => setFormData({ 
+                  ...formData, 
+                  action: { ...formData.action, label: e.target.value } 
+                })} 
+                placeholder="Button label"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="action-label">Action Button Label</Label>
               <Input 
-                id="action-label" 
-                value={content.action?.label || ''} 
-                onChange={(e) => handleNestedContentChange(['action', 'label'], e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="action-link">Action Button Link</Label>
-              <Input 
-                id="action-link" 
-                value={content.action?.link || ''} 
-                onChange={(e) => handleNestedContentChange(['action', 'link'], e.target.value)}
+                value={formData.action?.link || ''} 
+                onChange={e => setFormData({ 
+                  ...formData, 
+                  action: { ...formData.action, link: e.target.value } 
+                })} 
+                placeholder="Button link URL"
               />
             </div>
           </div>
         );
-      
-      case 'image':
+        
+      case 'faq':
+        const items = formData.items || [{ question: '', answer: '' }];
+        
         return (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="image-url">Image URL</Label>
-              <Input 
-                id="image-url" 
-                value={content.url || ''} 
-                onChange={(e) => handleFormChange('content.url', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="image-alt">Alt Text</Label>
-              <Input 
-                id="image-alt" 
-                value={content.alt || ''} 
-                onChange={(e) => handleFormChange('content.alt', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="image-caption">Caption (optional)</Label>
-              <Input 
-                id="image-caption" 
-                value={content.caption || ''} 
-                onChange={(e) => handleFormChange('content.caption', e.target.value)}
-              />
-            </div>
-            {content.url && (
-              <div className="mt-4 border rounded-md p-4">
-                <p className="text-sm text-muted-foreground mb-2">Preview:</p>
-                <img 
-                  src={content.url} 
-                  alt={content.alt} 
-                  className="max-w-full h-auto rounded-md"
-                />
-                {content.caption && (
-                  <p className="text-sm text-center mt-2">{content.caption}</p>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      
-      case 'notice': {
-        const noticeType = content.type || 'info';  // Fixed: changed displayContent to content
-        let bgColor = 'bg-blue-50';
-        let borderColor = 'border-blue-300';
-        let textColor = 'text-blue-800';
-        
-        switch (noticeType) {
-          case 'warning':
-            bgColor = 'bg-yellow-50';
-            borderColor = 'border-yellow-300';
-            textColor = 'text-yellow-800';
-            break;
-          case 'success':
-            bgColor = 'bg-green-50';
-            borderColor = 'border-green-300';
-            textColor = 'text-green-800';
-            break;
-          case 'error':
-            bgColor = 'bg-red-50';
-            borderColor = 'border-red-300';
-            textColor = 'text-red-800';
-            break;
-        }
-        
-        return (
-          <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
-            <h4 className={`font-medium ${textColor}`}>{content.title || 'Notice Title'}</h4>
-            <p className={`mt-2 ${textColor}`}>{content.message || 'Notice message'}</p>
-          </div>
-        );
-      }
-      
-      case 'faq': {
-        const items = content.items || []; // Fixed: changed displayContent to content
-        return (
-          <div className="mt-4 space-y-6">
-            {items.length > 0 ? items.map((item: any, index: number) => (
-              <div key={index} className="space-y-4 border-b pb-4">
-                <div className="space-y-2">
-                  <Label htmlFor={`faq-question-${index}`}>Question {index + 1}</Label>
+            {items.map((item: any, index: number) => (
+              <div key={index} className="space-y-2 pb-4 border-b">
+                <div>
+                  <label className="text-sm font-medium">Question {index + 1}</label>
                   <Input 
-                    id={`faq-question-${index}`}
-                    value={item.question || ''} 
-                    onChange={(e) => {
-                      const newItems = [...editedBlockData.content.items];
-                      newItems[index] = { ...newItems[index], question: e.target.value };
-                      handleFormChange('content.items', newItems);
-                    }}
+                    value={item.question} 
+                    onChange={e => {
+                      const newItems = [...items];
+                      newItems[index].question = e.target.value;
+                      setFormData({ ...formData, items: newItems });
+                    }} 
+                    placeholder="FAQ question"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`faq-answer-${index}`}>Answer {index + 1}</Label>
+                <div>
+                  <label className="text-sm font-medium">Answer {index + 1}</label>
                   <Textarea 
-                    id={`faq-answer-${index}`}
+                    value={item.answer} 
+                    onChange={e => {
+                      const newItems = [...items];
+                      newItems[index].answer = e.target.value;
+                      setFormData({ ...formData, items: newItems });
+                    }} 
+                    placeholder="FAQ answer"
                     rows={3}
-                    value={item.answer || ''} 
-                    onChange={(e) => {
-                      const newItems = [...editedBlockData.content.items];
-                      newItems[index] = { ...newItems[index], answer: e.target.value };
-                      handleFormChange('content.items', newItems);
-                    }}
                   />
                 </div>
-                <Button 
-                  variant="destructive" 
+                <Button
+                  type="button"
+                  variant="destructive"
                   size="sm"
                   onClick={() => {
-                    const newItems = editedBlockData.content.items.filter((_: any, i: number) => i !== index);
-                    handleFormChange('content.items', newItems);
+                    const newItems = items.filter((_: any, i: number) => i !== index);
+                    setFormData({ ...formData, items: newItems.length ? newItems : [{ question: '', answer: '' }] });
                   }}
-                  disabled={editedBlockData.content.items.length <= 1}
                 >
-                  Remove Question
+                  <Trash className="h-4 w-4 mr-1" /> Remove
                 </Button>
               </div>
-            )) : (
-              <div>
-                <h4 className="font-medium">Sample Question</h4>
-                <p className="mt-1">Sample Answer</p>
-              </div>
-            )}
-            <Button 
-              variant="outline"
+            ))}
+            <Button
+              type="button"
               onClick={() => {
-                const newItems = [...(editedBlockData.content.items || []), { question: 'New Question', answer: 'Answer here...' }];
-                handleFormChange('content.items', newItems);
+                setFormData({ ...formData, items: [...items, { question: '', answer: '' }] });
               }}
             >
-              Add Question
+              <PlusCircle className="h-4 w-4 mr-1" /> Add FAQ Item
             </Button>
           </div>
         );
-      }
-      
-      case 'links': {
-        const links = content.links || []; // Fixed: changed displayContent to content
-        return (
-          <div className="mt-4 space-y-6">
-            {links.length > 0 ? links.map((link: any, index: number) => (
-              <div key={index} className="space-y-4 border-b pb-4">
-                <div className="space-y-2">
-                  <Label htmlFor={`link-label-${index}`}>Link {index + 1} Label</Label>
-                  <Input 
-                    id={`link-label-${index}`}
-                    value={link.label || ''} 
-                    onChange={(e) => {
-                      const newLinks = [...editedBlockData.content.links];
-                      newLinks[index] = { ...newLinks[index], label: e.target.value };
-                      handleFormChange('content.links', newLinks);
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`link-url-${index}`}>Link {index + 1} URL</Label>
-                  <Input 
-                    id={`link-url-${index}`}
-                    value={link.url || ''} 
-                    onChange={(e) => {
-                      const newLinks = [...editedBlockData.content.links];
-                      newLinks[index] = { ...newLinks[index], url: e.target.value };
-                      handleFormChange('content.links', newLinks);
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`link-icon-${index}`}>Icon (optional)</Label>
-                  <Input 
-                    id={`link-icon-${index}`}
-                    value={link.icon || ''} 
-                    onChange={(e) => {
-                      const newLinks = [...editedBlockData.content.links];
-                      newLinks[index] = { ...newLinks[index], icon: e.target.value || undefined };
-                      handleFormChange('content.links', newLinks);
-                    }}
-                  />
-                </div>
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => {
-                    const newLinks = editedBlockData.content.links.filter((_: any, i: number) => i !== index);
-                    handleFormChange('content.links', newLinks);
-                  }}
-                  disabled={editedBlockData.content.links.length <= 1}
-                >
-                  Remove Link
-                </Button>
-              </div>
-            )) : (
-              <div className="flex items-center">
-                <a href="#" className="text-blue-600 hover:underline">Sample Link</a>
-              </div>
-            )}
-            <Button 
-              variant="outline"
-              onClick={() => {
-                const newLinks = [...(editedBlockData.content.links || []), { label: 'New Link', url: '#' }];
-                handleFormChange('content.links', newLinks);
-              }}
-            >
-              Add Link
-            </Button>
-          </div>
-        );
-      }
-      
-      case 'dropdown': {
-        const title = content.title || 'Dropdown Title'; // Fixed: changed displayContent to content
-        const items = content.items || []; // Fixed: changed displayContent to content
+        
+      case 'links':
+        const links = formData.links || [{ label: '', url: '' }];
         
         return (
-          <div className="mt-4">
-            <h3 className="font-medium">{title}</h3>
-            <div className="mt-2 border rounded-md divide-y">
-              {items.length > 0 ? items.map((item: any, index: number) => (
-                <div key={index} className="p-3">
-                  <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
-                  {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
+          <div className="space-y-4">
+            {links.map((link: any, index: number) => (
+              <div key={index} className="space-y-2 pb-4 border-b">
+                <div>
+                  <label className="text-sm font-medium">Label {index + 1}</label>
+                  <Input 
+                    value={link.label} 
+                    onChange={e => {
+                      const newLinks = [...links];
+                      newLinks[index].label = e.target.value;
+                      setFormData({ ...formData, links: newLinks });
+                    }} 
+                    placeholder="Link label"
+                  />
                 </div>
-              )) : (
-                <div className="p-3">
-                  <h4 className="text-sm font-medium">Sample Item</h4>
-                  <p className="mt-1 text-sm text-muted-foreground">Sample content</p>
+                <div>
+                  <label className="text-sm font-medium">URL {index + 1}</label>
+                  <Input 
+                    value={link.url} 
+                    onChange={e => {
+                      const newLinks = [...links];
+                      newLinks[index].url = e.target.value;
+                      setFormData({ ...formData, links: newLinks });
+                    }} 
+                    placeholder="Link URL"
+                  />
                 </div>
-              )}
-            </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    const newLinks = links.filter((_: any, i: number) => i !== index);
+                    setFormData({ ...formData, links: newLinks.length ? newLinks : [{ label: '', url: '' }] });
+                  }}
+                >
+                  <Trash className="h-4 w-4 mr-1" /> Remove
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              onClick={() => {
+                setFormData({ ...formData, links: [...links, { label: '', url: '' }] });
+              }}
+            >
+              <PlusCircle className="h-4 w-4 mr-1" /> Add Link
+            </Button>
           </div>
         );
-      }
-      
+        
+      case 'dropdown':
+        const dropdownItems = formData.items || [{ label: '', content: '' }];
+        
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Title</label>
+              <Input 
+                value={formData.title || ''} 
+                onChange={e => setFormData({ ...formData, title: e.target.value })} 
+                placeholder="Dropdown title"
+              />
+            </div>
+            {dropdownItems.map((item: any, index: number) => (
+              <div key={index} className="space-y-2 pb-4 border-b">
+                <div>
+                  <label className="text-sm font-medium">Tab Label {index + 1}</label>
+                  <Input 
+                    value={item.label} 
+                    onChange={e => {
+                      const newItems = [...dropdownItems];
+                      newItems[index].label = e.target.value;
+                      setFormData({ ...formData, items: newItems });
+                    }} 
+                    placeholder="Tab label"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Tab Content {index + 1}</label>
+                  <Textarea 
+                    value={item.content} 
+                    onChange={e => {
+                      const newItems = [...dropdownItems];
+                      newItems[index].content = e.target.value;
+                      setFormData({ ...formData, items: newItems });
+                    }} 
+                    placeholder="Tab content"
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    const newItems = dropdownItems.filter((_: any, i: number) => i !== index);
+                    setFormData({ ...formData, items: newItems.length ? newItems : [{ label: '', content: '' }] });
+                  }}
+                >
+                  <Trash className="h-4 w-4 mr-1" /> Remove
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              onClick={() => {
+                setFormData({ ...formData, items: [...dropdownItems, { label: '', content: '' }] });
+              }}
+            >
+              <PlusCircle className="h-4 w-4 mr-1" /> Add Tab Item
+            </Button>
+          </div>
+        );
+        
       default:
         return <div>Select a block type</div>;
     }
   };
-
-  // Preview rendering based on block type
+  
+  // Render a preview of a dashboard block
   const renderBlockPreview = (block: CompanyNewsBlock) => {
-    // Get content based on whether the block is selected or not
-    const content = selectedBlockId === block.id ? 
-      editedBlockData.content || {} : 
-      block.content || {};
-    
-    // Apply default content when needed
-    const defaultContent = getDefaultContent(block.type);
-    const displayContent = { ...defaultContent, ...content };
-    
-    switch (block.type) {
-      case 'heading': {
-        // Safely handle the heading level with a default
-        const level = displayContent.level || 2; // Default to h2 if level is undefined
-        const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
-        return <HeadingTag className={`mt-${level} font-bold`}>{displayContent.text || 'Heading Text'}</HeadingTag>;
-      }
-      
-      case 'text':
-        return (
-          <div className="prose max-w-none">
-            <p>{displayContent.text || 'Text content goes here'}</p>
-          </div>
-        );
-      
-      case 'card':
-        return (
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>{displayContent.title || 'Card Title'}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>{displayContent.content || 'Card content'}</p>
-            </CardContent>
-            {displayContent.action && (
-              <CardFooter>
-                <Button variant="outline" size="sm">
-                  {displayContent.action.label || 'Action'}
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-        );
-      
-      case 'image':
-        return (
-          <div className="mt-4">
-            {displayContent.url ? (
-              <>
-                <img 
-                  src={displayContent.url} 
-                  alt={displayContent.alt || 'Image'} 
-                  className="max-w-full h-auto rounded-md"
-                />
-                {displayContent.caption && (
-                  <p className="text-sm text-center mt-2">{displayContent.caption}</p>
-                )}
-              </>
-            ) : (
-              <div className="h-40 bg-muted flex items-center justify-center rounded-md">
-                <p className="text-muted-foreground">Image placeholder</p>
-              </div>
-            )}
-          </div>
-        );
-      
-      case 'notice': {
-        const noticeType = displayContent.type || 'info';
-        let bgColor = 'bg-blue-50';
-        let borderColor = 'border-blue-300';
-        let textColor = 'text-blue-800';
-        
-        switch (noticeType) {
-          case 'warning':
-            bgColor = 'bg-yellow-50';
-            borderColor = 'border-yellow-300';
-            textColor = 'text-yellow-800';
-            break;
-          case 'success':
-            bgColor = 'bg-green-50';
-            borderColor = 'border-green-300';
-            textColor = 'text-green-800';
-            break;
-          case 'error':
-            bgColor = 'bg-red-50';
-            borderColor = 'border-red-300';
-            textColor = 'text-red-800';
-            break;
-        }
-        
-        return (
-          <div className={`mt-4 ${bgColor} ${borderColor} border-l-4 p-4 rounded`}>
-            <h4 className={`font-medium ${textColor}`}>{displayContent.title || 'Notice Title'}</h4>
-            <p className={`mt-2 ${textColor}`}>{displayContent.message || 'Notice message'}</p>
-          </div>
-        );
-      }
-      
-      case 'faq': {
-        const items = displayContent.items || [];
-        return (
-          <div className="mt-4 space-y-4">
-            {items.length > 0 ? items.map((item: any, index: number) => (
-              <div key={index}>
-                <h4 className="font-medium">{item.question || `Question ${index + 1}`}</h4>
-                <p className="mt-1">{item.answer || `Answer ${index + 1}`}</p>
-              </div>
-            )) : (
-              <div>
-                <h4 className="font-medium">Sample Question</h4>
-                <p className="mt-1">Sample Answer</p>
-              </div>
-            )}
-          </div>
-        );
-      }
-      
-      case 'links': {
-        const links = displayContent.links || [];
-        return (
-          <div className="mt-4 space-y-2">
-            {links.length > 0 ? links.map((link: any, index: number) => (
-              <div key={index} className="flex items-center">
-                <a href={link.url || '#'} className="text-blue-600 hover:underline">
-                  {link.label || `Link ${index + 1}`}
-                </a>
-              </div>
-            )) : (
-              <div className="flex items-center">
-                <a href="#" className="text-blue-600 hover:underline">Sample Link</a>
-              </div>
-            )}
-          </div>
-        );
-      }
-      
-      case 'dropdown': {
-        const title = displayContent.title || 'Dropdown Title';
-        const items = displayContent.items || [];
-        
-        return (
-          <div className="mt-4">
-            <h3 className="font-medium">{title}</h3>
-            <div className="mt-2 border rounded-md divide-y">
-              {items.length > 0 ? items.map((item: any, index: number) => (
-                <div key={index} className="p-3">
-                  <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
-                  {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
-                </div>
-              )) : (
-                <div className="p-3">
-                  <h4 className="text-sm font-medium">Sample Item</h4>
-                  <p className="mt-1 text-sm text-muted-foreground">Sample content</p>
-                </div>
-              )}
+    return (
+      <Card className="mb-4">
+        <CardHeader className="pb-2 pt-4 flex flex-row justify-between items-center">
+          <div>
+            <div className="text-xs font-medium uppercase text-muted-foreground">
+              {block.type}
             </div>
+            <CardTitle className="text-lg">{block.title}</CardTitle>
           </div>
-        );
-      }
-      
-      default:
-        return null;
-    }
+          
+          {!isPreview && (
+            <div className="flex items-center space-x-2">
+              <Button variant="ghost" size="sm" onClick={() => handleMoveBlock(block, 'up')}>
+                <MoveUp className="h-4 w-4" />
+                <span className="sr-only">Move up</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleMoveBlock(block, 'down')}>
+                <MoveDown className="h-4 w-4" />
+                <span className="sr-only">Move down</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleEditBlock(block)}>
+                <Edit className="h-4 w-4" />
+                <span className="sr-only">Edit</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleDeleteBlock(block.id)}>
+                <Trash className="h-4 w-4" />
+                <span className="sr-only">Delete</span>
+              </Button>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          <pre className="bg-muted p-2 rounded-md text-xs overflow-auto max-h-32">
+            {JSON.stringify(block.content, null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
+    );
   };
-
+  
+  if (!currentUser || currentUser.role !== 'consultant') {
+    navigate('/');
+    return null;
+  }
+  
+  if (!company) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>
+          Company not found. Please check the company ID.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Button variant="ghost" onClick={() => navigate(`/company-news/${companyId}`)}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to News
-          </Button>
-          <h1 className="text-2xl font-bold">
-            {company ? `${company.name} - News Builder` : 'News Builder'}
-          </h1>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* Sidebar with blocks list */}
-        <div className="md:col-span-3 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>News Blocks</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {blocks.length > 0 ? (
-                <div className="space-y-2">
-                  {blocks.map((block, index) => (
-                    <div
-                      key={block.id}
-                      className={`flex items-center justify-between p-2 rounded-md border ${
-                        selectedBlockId === block.id ? 'bg-muted border-primary' : 'hover:bg-accent'
-                      } cursor-pointer`}
-                      onClick={() => setSelectedBlockId(block.id)}
-                    >
-                      <div className="truncate flex-1">
-                        <div className="text-sm font-medium">{block.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {block.type} {block.isPublished ? '(Published)' : '(Draft)'}
-                        </div>
-                      </div>
-                      <div className="flex space-x-1">
-                        <Button 
-                          size="icon"
-                          variant="ghost"
-                          disabled={index === 0 || loading}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoveBlock(block.id, 'up');
-                          }}
-                          className="h-7 w-7"
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          size="icon"
-                          variant="ghost"
-                          disabled={index === blocks.length - 1 || loading}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoveBlock(block.id, 'down');
-                          }}
-                          className="h-7 w-7"
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-muted-foreground">{loadingCompanyNewsBlocks ? 'Loading...' : 'No blocks created yet'}</p>
-                </div>
-              )}
-              
-              <div className="pt-4 space-y-4 border-t">
-                <div className="space-y-3">
-                  <Label htmlFor="new-block-type">Add New Block</Label>
-                  <Select 
-                    value={newBlockType} 
-                    onValueChange={setNewBlockType as any}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select block type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="heading">Heading</SelectItem>
-                      <SelectItem value="text">Text</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                      <SelectItem value="image">Image</SelectItem>
-                      <SelectItem value="notice">Notice</SelectItem>
-                      <SelectItem value="faq">FAQ</SelectItem>
-                      <SelectItem value="links">Links</SelectItem>
-                      <SelectItem value="dropdown">Dropdown</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-3">
-                  <Label htmlFor="new-block-title">Block Title</Label>
-                  <Input 
-                    id="new-block-title" 
-                    placeholder="Enter block title"
-                    value={newBlockTitle}
-                    onChange={(e) => setNewBlockTitle(e.target.value)}
-                  />
-                </div>
-                
-                <Button 
-                  className="w-full"
-                  onClick={handleAddBlock}
-                  disabled={!newBlockTitle.trim() || loading}
-                >
-                  {loading ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...</>
-                  ) : (
-                    <><Plus className="mr-2 h-4 w-4" /> Add Block</>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{company.name} - News Builder</h1>
+          <p className="text-muted-foreground">Create and manage news content for this company</p>
         </div>
         
-        {/* Editor area */}
-        <div className="md:col-span-9 space-y-4">
-          {selectedBlock ? (
-            <>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>{selectedBlock.title}</CardTitle>
-                  <div className="flex items-center space-x-2">
-                    <div className="flex items-center space-x-1">
-                      <Label htmlFor="published" className="text-sm">Publish</Label>
-                      <Switch 
-                        id="published"
-                        checked={editedBlockData?.isPublished || false}
-                        onCheckedChange={(checked) => {
-                          handleTogglePublish(selectedBlock.id, checked);
-                        }}
-                      />
-                    </div>
-                    
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm">
-                          <Trash2 className="h-4 w-4 mr-1" /> Delete
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete this news block.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleDeleteBlock(selectedBlock.id)}
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="mt-4">
-                    <div className="mb-4">
-                      <Label htmlFor="edit-title">Title</Label>
-                      <Input 
-                        id="edit-title"
-                        value={editedBlockData?.title || ''}
-                        onChange={(e) => handleFormChange('title', e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-                    
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="edit">
-                          <Edit className="h-4 w-4 mr-2" /> Edit
-                        </TabsTrigger>
-                        <TabsTrigger value="preview">
-                          <Eye className="h-4 w-4 mr-2" /> Preview
-                        </TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="edit" className="mt-4">
-                        {renderBlockEditor()}
-                        
-                        <div className="mt-6 flex items-center justify-end space-x-2">
-                          <Button
-                            variant="default"
-                            onClick={saveCurrentBlock}
-                            disabled={!hasUnsavedChanges || saving}
-                          >
-                            {saving ? (
-                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
-                            ) : (
-                              <><Save className="mr-2 h-4 w-4" /> Save Changes</>
-                            )}
-                          </Button>
-                        </div>
-                      </TabsContent>
-                      <TabsContent value="preview" className="mt-4">
-                        <div className="p-4 border rounded-lg">
-                          {renderBlockPreview(selectedBlock)}
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <Card className="h-[400px] flex items-center justify-center">
-              <CardContent className="text-center text-muted-foreground">
-                {blocks.length > 0 ? 'Select a block to edit' : 'Create a new block to get started'}
-              </CardContent>
-            </Card>
+        <div className="flex space-x-2">
+          <Button 
+            variant={isPreview ? "outline" : "default"}
+            className="flex items-center gap-1"
+            onClick={() => setIsPreview(!isPreview)}
+          >
+            {isPreview ? (
+              <>
+                <Edit className="h-4 w-4" /> Edit Mode
+              </>
+            ) : (
+              <>
+                <Eye className="h-4 w-4" /> Preview Mode
+              </>
+            )}
+          </Button>
+          
+          {!isPreview && (
+            <Button onClick={handleAddBlock}>
+              <PlusCircle className="h-4 w-4 mr-2" /> Add Block
+            </Button>
           )}
         </div>
       </div>
-    </div>
-  );
-};
-
-export default CompanyNewsBuilderPage;
+      
+      <Separator />
+      
+      {loading ? (
+        <div className="flex items-center justify-center p-12">
+          <Loader className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Block List */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle>News Blocks</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {blocks.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    No news blocks yet. Add your first block to get started.
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {blocks.map(block => (
+                      <Button
+                        key={block.id}
+                        variant={selectedBlockId === block.id ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        onClick={() => setSelectedBlockId(block.id)}
+                      >
+                        {block.title}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Block Editor */}
+          <div className="lg:col-span-2">
+            {selectedBlock ? (
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <CardTitle>Edit Block</CardTitle>
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="publish-status"
+                      checked={editedBlockData.isPublished}
+                      onCheckedChange={(checked) => {
+                        handlePublishToggle(selectedBlock.id, checked);
+                        handleFormChange('isPublished', checked);
+                      }}
+                    />
+                    <Label htmlFor="publish-status">
+                      {editedBlockData.isPublished ? 'Published' : 'Draft'}
+                    </Label>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="edit" className="space-y-4">
+                    <TabsList>
+                      <TabsTrigger value="edit" onClick={() => setActiveTab('edit')}>Edit</TabsTrigger>
+                      <TabsTrigger value="preview" onClick={() => setActiveTab('preview')}>Preview</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="edit">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-sm font-medium">Title</label>
+                          <Input 
+                            value={editedBlockData.title || ''} 
+                            onChange={e => handleFormChange('title', e.target.value)} 
+                            placeholder="Block title"
+                          />
+                        </div>
+                        
+                        {/* Render block-specific form */}
+                        {selectedBlock.type && (
+                          <div className="border rounded-md p-4 bg-muted/10">
+                            {(() => {
+                              switch (selectedBlock.type) {
+                                case 'heading':
+                                  return (
+                                    <div className="space-y-4">
+                                      <div>
+                                        <label className="text-sm font-medium">Text</label>
+                                        <Input
+                                          value={editedBlockData.content?.text || ''}
+                                          onChange={e => handleFormChange('content.text', e.target.value)}
+                                          placeholder="Heading text"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-sm font-medium">Level</label>
+                                        <Select
+                                          value={String(editedBlockData.content?.level || '2')}
+                                          onValueChange={value => handleFormChange('content.level', Number(value))}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select heading level" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="1">Heading 1 (Largest)</SelectItem>
+                                            <SelectItem value="2">Heading 2</SelectItem>
+                                            <SelectItem value="3">Heading 3</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                  );
+                                  
+                                case 'text':
+                                  return (
+                                    <div className="space-y-4">
+                                      <div>
+                                        <label className="text-sm font-medium">Text</label>
+                                        <Textarea
+                                          value={editedBlockData.content?.text || ''}
+                                          onChange={e => handleFormChange('content.text', e.target.value)}
+                                          placeholder="Content text"
+                                          rows={6}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                  
+                                case 'card':
+                                  return (
+                                    <div className="space-y-4">
+                                      <div>
+                                        <label className="text-sm font-medium">Title</label>
+                                        <Input
+                                          value={editedBlockData.content?.title || ''}
+                                          onChange={e => handleFormChange('content.title', e.target.value)}
+                                          placeholder="Card title"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-sm font-medium">Content</label>
+                                        <Textarea
+                                          value={editedBlockData.content?.content || ''}
+                                          onChange={e => handleFormChange('content.content', e.target.value)}
+                                          placeholder="Card content"
+                                          rows={4}
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-sm font-medium">Action (Optional)</label>
+                                        <Input
+                                          value={editedBlockData.content?.action?.label || ''}
+                                          onChange={e => handleNestedContentChange(['action', 'label'], e.target.value)}
+                                          placeholder="Button label"
+                                        />
+                                        <Input
+                                          value={editedBlockData.content?.action?.link || ''}
+                                          onChange={e => handleNestedContentChange(['action', 'link'], e.target.value)}
+                                          placeholder="Button link URL"
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                  
+                                case 'faq':
+                                  const items = editedBlockData.content?.items || [{ question: '', answer: '' }];
+                                  
+                                  return (
+                                    <div className="space-y-4">
+                                      {items.map((item: any, index: number) => (
+                                        <div key={index} className="space-y-2 pb-4 border-b">
+                                          <div>
+                                            <label className="text-sm font-medium">Question {index + 1}</label>
+                                            <Input
+                                              value={item.question}
+                                              onChange={e => handleNestedContentChange(['items', index, 'question'], e.target.value)}
+                                              placeholder="FAQ question"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-sm font-medium">Answer {index + 1}</label>
+                                            <Textarea
+                                              value={item.answer}
+                                              onChange={e => handleNestedContentChange(['items', index, 'answer'], e.target.value)}
+                                              placeholder="FAQ answer"
+                                              rows={3}
+                                            />
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => {
+                                              const newItems = items.filter((_: any, i: number) => i !== index);
+                                              handleNestedContentChange(['items'], newItems.length ? newItems : [{ question: '', answer: '' }]);
+                                            }}
+                                          >
+                                            <Trash className="h-4 w-4 mr-1" /> Remove
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        onClick={() => {
+                                          handleNestedContentChange(['items'], [...items, { question: '', answer: '' }]);
+                                        }}
+                                      >
+                                        <PlusCircle className="h-4 w-4 mr-1" /> Add FAQ Item
+                                      </Button>
+                                    </div>
+                                  );
+                                  
+                                case 'links':
+                                  const links = editedBlockData.content?.links || [{ label: '', url: '' }];
+                                  
+                                  return (
+                                    <div className="space-y-4">
+                                      {links.map((link: any, index: number) => (
+                                        <div key={index} className="space-y-2 pb-4 border-b">
+                                          <div>
+                                            <label className="text-sm font-medium">Label {index + 1}</label>
+                                            <Input
+                                              value={link.label}
+                                              onChange={e => handleNestedContentChange(['links', index, 'label'], e.target.value)}
+                                              placeholder="Link label"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-sm font-medium">URL {index + 1}</label>
+                                            <Input
+                                              value={link.url}
+                                              onChange={e => handleNestedContentChange(['links', index, 'url'], e.target.value)}
+                                              placeholder="Link URL"
+                                            />
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => {
+                                              const newLinks = links.filter((_: any, i: number) => i !== index);
+                                              handleNestedContentChange(['links'], newLinks.length ? newLinks : [{ label: '', url: '' }]);
+                                            }}
+                                          >
+                                            <Trash className="h-4 w-4 mr-1" /> Remove
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        onClick={() => {
+                                          handleNestedContentChange(['links'], [...links, { label: '', url: '' }]);
+                                        }}
+                                      >
+                                        <PlusCircle className="h-4 w-4 mr-1" /> Add Link
+                                      </Button>
+                                    </div>
+                                  );
+                                  
+                                case 'dropdown':
+                                  const dropdownItems = editedBlockData.content?.items || [{ label: '', content: '' }];
+                                  
+                                  return (
+                                    <div className="space-y-4">
+                                      <div>
+                                        <label className="text-sm font-medium">Title</label>
+                                        <Input
+                                          value={editedBlockData.content?.title || ''}
+                                          onChange={e => handleFormChange('content.title', e.target.value)}
+                                          placeholder="Dropdown title"
+                                        />
+                                      </div>
+                                      {dropdownItems.map((item: any, index: number) => (
+                                        <div key={index} className="space-y-2 pb-4 border-b">
+                                          <div>
+                                            <label className="text-sm font-medium">Tab Label {index + 1}</label>
+                                            <Input
+                                              value={item.label}
+                                              onChange={e => handleNestedContentChange(['items', index, 'label'], e.target.value)}
+                                              placeholder="Tab label"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-sm font-medium">Tab Content {index + 1}</label>
+                                            <Textarea
+                                              value={item.content}
+                                              onChange={e => handleNestedContentChange(['items', index, 'content'], e.target.value)}
+                                              placeholder="Tab content"
+                                              rows={3}
+                                            />
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => {
+                                              const newItems = dropdownItems.filter((_: any, i: number) => i !== index);
+                                              handleNestedContentChange(['items'], newItems.length ? newItems : [{ label: '', content: '' }]);
+                                            }}
+                                          >
+                                            <Trash className="h-4 w-4 mr-1" /> Remove
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        onClick={() => {
+                                          handleNestedContentChange(['items'], [...dropdownItems, { label: '', content: '' }]);
+                                        }}
+                                      >
+                                        <PlusCircle className="h-4 w-4 mr-1" /> Add Tab Item
+                                      </Button>
+                                    </div>
+                                  );
+                                  
+                                default:
+                                  return <div>Select a block type</div>;
+                              }
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="preview">
+                      {renderBlockPreview(selectedBlock)}
+                    </TabsContent>
+                  </Tabs>
+                  
+                  <div className="flex justify-between">
+                    <Button variant="destructive" onClick={() => handleDeleteBlock(selectedBlock.id)}>
+                      <Trash className="h-4 w-4 mr-2" /> Delete Block
+                    </Button>
+                    <Button 
+                      onClick={saveCurrentBlock} 
+                      disabled={!hasUnsavedChanges || saving}
+                    >
+                      {saving ? (
+                        <>
+                          <Loader className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save Changes"
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <p className="text-muted-foreground">Select a block to edit, or add a new block.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Add/Edit Block Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedBlock ? 'Edit Block' : 'Add New Block'}</DialogTitle>
+            <DialogDescription>
+              Configure your news block. Different block types have different options.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium">Block Type</label>
+              <Select 
+                value={selectedBlockType}
+                onValueChange={(value) => {
+                  setSelectedBlockType(value as NewsBlockType);
+                  setFormData(getDefaultContent(value as NewsBlockType));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select block type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="heading">Heading</SelectItem>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="faq">FAQ</SelectItem>
+                  <SelectItem value="links">Links</SelectItem>
+                  <SelectItem value="dropdown">Dropdown</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {selectedBlockType && (
+              <div className="border rounded-md p-4 bg-muted/10">
+                {renderBlockForm()}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>

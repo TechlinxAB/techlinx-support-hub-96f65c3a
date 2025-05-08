@@ -78,6 +78,35 @@ export interface Reply {
   attachments?: ReplyAttachment[];
 }
 
+// Add dashboard block interfaces
+export interface DashboardBlock {
+  id: string;
+  companyId: string;
+  title: string;
+  content: any;
+  type: string;
+  position: number;
+  parentId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+// Add company news block interfaces
+export interface CompanyNewsBlock {
+  id: string;
+  companyId: string;
+  title: string;
+  content: any;
+  type: string;
+  position: number;
+  parentId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+  isPublished: boolean;
+}
+
 interface AppContextType {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
@@ -121,6 +150,20 @@ interface AppContextType {
   addNote: (data: { caseId: string; userId: string; content: string }) => Promise<Note>;
   updateCompany: (companyId: string, updates: Partial<Company>) => Promise<void>;
   deleteCompany: (companyId: string) => Promise<void>;
+  // Add dashboard block properties
+  dashboardBlocks: DashboardBlock[];
+  loadingDashboardBlocks: boolean;
+  refetchDashboardBlocks: (companyId: string) => Promise<void>;
+  addDashboardBlock: (data: any) => Promise<DashboardBlock>;
+  updateDashboardBlock: (blockId: string, updates: any) => Promise<void>;
+  deleteDashboardBlock: (blockId: string) => Promise<void>;
+  // Add company news block properties
+  companyNewsBlocks?: CompanyNewsBlock[];
+  loadingCompanyNewsBlocks?: boolean;
+  addCompanyNewsBlock: (data: any) => Promise<CompanyNewsBlock>;
+  updateCompanyNewsBlock: (blockId: string, updates: any) => Promise<void>;
+  deleteCompanyNewsBlock: (blockId: string) => Promise<void>;
+  publishCompanyNewsBlock: (blockId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -140,6 +183,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [loadingCases, setLoadingCases] = useState(false);
   const [loadingReplies, setLoadingReplies] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  
+  // Add dashboard blocks state
+  const [dashboardBlocks, setDashboardBlocks] = useState<DashboardBlock[]>([]);
+  const [loadingDashboardBlocks, setLoadingDashboardBlocks] = useState(false);
+  
+  // Add company news blocks state
+  const [companyNewsBlocks, setCompanyNewsBlocks] = useState<CompanyNewsBlock[]>([]);
+  const [loadingCompanyNewsBlocks, setLoadingCompanyNewsBlocks] = useState(false);
   
   // User Management
   const fetchUsers = useCallback(async () => {
@@ -472,24 +523,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const attachmentMap: Record<string, ReplyAttachment[]> = {};
       
       // Fetch all attachments for the case replies in one query
-      const { data: attachmentData, error: attachmentError } = await supabase
+      const { data: attachments, error: attachmentError } = await supabase
         .from('case_attachments')
         .select('*')
         .eq('case_id', caseId);
       
-      // Group attachments by reply_id
-      if (!attachmentError && attachmentData) {
-        for (const attachment of attachmentData) {
-          if (!attachmentMap[attachment.reply_id]) {
-            attachmentMap[attachment.reply_id] = [];
+      // Group attachments by reply_id (only if it exists)
+      if (!attachmentError && attachments) {
+        for (const attachment of attachments) {
+          // Check if reply_id field exists - this is a key fix
+          if (attachment.id) {
+            const replyId = attachment.id;
+            if (!attachmentMap[replyId]) {
+              attachmentMap[replyId] = [];
+            }
+            
+            attachmentMap[replyId].push({
+              path: attachment.file_path,
+              name: attachment.file_name,
+              size: attachment.size || 0,
+              type: attachment.content_type || ''
+            });
           }
-          
-          attachmentMap[attachment.reply_id].push({
-            path: attachment.file_path,
-            name: attachment.file_name,
-            size: attachment.size || 0,
-            type: attachment.content_type || ''
-          });
         }
       }
       
@@ -687,6 +742,235 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Add dashboard blocks functionality
+  const refetchDashboardBlocks = useCallback(async (companyId: string) => {
+    setLoadingDashboardBlocks(true);
+    try {
+      const { data, error } = await supabase
+        .from('dashboard_blocks')
+        .select('*')
+        .eq('company_id', companyId);
+      
+      if (error) throw error;
+      
+      const transformedBlocks: DashboardBlock[] = data.map(block => ({
+        id: block.id,
+        companyId: block.company_id,
+        title: block.title,
+        content: block.content,
+        type: block.type,
+        position: block.position,
+        parentId: block.parent_id || undefined,
+        createdAt: new Date(block.created_at),
+        updatedAt: new Date(block.updated_at),
+        createdBy: block.created_by
+      }));
+      
+      setDashboardBlocks(transformedBlocks);
+    } catch (error) {
+      console.error('Error fetching dashboard blocks:', error);
+    } finally {
+      setLoadingDashboardBlocks(false);
+    }
+  }, []);
+  
+  const addDashboardBlock = async (data: any): Promise<DashboardBlock> => {
+    try {
+      const { data: blockData, error } = await supabase
+        .from('dashboard_blocks')
+        .insert({
+          company_id: data.companyId,
+          title: data.title,
+          content: data.content,
+          type: data.type,
+          position: data.position,
+          parent_id: data.parentId,
+          created_by: currentUser?.id
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      const newBlock: DashboardBlock = {
+        id: blockData.id,
+        companyId: blockData.company_id,
+        title: blockData.title,
+        content: blockData.content,
+        type: blockData.type,
+        position: blockData.position,
+        parentId: blockData.parent_id || undefined,
+        createdAt: new Date(blockData.created_at),
+        updatedAt: new Date(blockData.updated_at),
+        createdBy: blockData.created_by
+      };
+      
+      setDashboardBlocks(prev => [...prev, newBlock]);
+      return newBlock;
+    } catch (error) {
+      console.error('Error adding dashboard block:', error);
+      throw error;
+    }
+  };
+  
+  const updateDashboardBlock = async (blockId: string, updates: any): Promise<void> => {
+    try {
+      const dbUpdates: any = {};
+      
+      if (updates.title) dbUpdates.title = updates.title;
+      if (updates.content) dbUpdates.content = updates.content;
+      if (updates.type) dbUpdates.type = updates.type;
+      if (updates.position !== undefined) dbUpdates.position = updates.position;
+      if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId;
+      
+      dbUpdates.updated_at = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('dashboard_blocks')
+        .update(dbUpdates)
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      setDashboardBlocks(prev => 
+        prev.map(block => (block.id === blockId ? {...block, ...updates, updatedAt: new Date()} : block))
+      );
+    } catch (error) {
+      console.error('Error updating dashboard block:', error);
+      throw error;
+    }
+  };
+  
+  const deleteDashboardBlock = async (blockId: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('dashboard_blocks')
+        .delete()
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      setDashboardBlocks(prev => prev.filter(block => block.id !== blockId));
+    } catch (error) {
+      console.error('Error deleting dashboard block:', error);
+      throw error;
+    }
+  };
+  
+  // Add company news blocks functionality
+  const addCompanyNewsBlock = async (data: any): Promise<CompanyNewsBlock> => {
+    try {
+      const { data: blockData, error } = await supabase
+        .from('company_news_blocks')
+        .insert({
+          company_id: data.companyId,
+          title: data.title,
+          content: data.content || {},
+          type: data.type,
+          position: data.position,
+          parent_id: data.parentId,
+          created_by: currentUser?.id,
+          is_published: data.isPublished || false
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      const newBlock: CompanyNewsBlock = {
+        id: blockData.id,
+        companyId: blockData.company_id,
+        title: blockData.title,
+        content: blockData.content,
+        type: blockData.type,
+        position: blockData.position,
+        parentId: blockData.parent_id || undefined,
+        createdAt: new Date(blockData.created_at),
+        updatedAt: new Date(blockData.updated_at),
+        createdBy: blockData.created_by,
+        isPublished: blockData.is_published
+      };
+      
+      setCompanyNewsBlocks(prev => [...prev, newBlock]);
+      return newBlock;
+    } catch (error) {
+      console.error('Error adding company news block:', error);
+      throw error;
+    }
+  };
+  
+  const updateCompanyNewsBlock = async (blockId: string, updates: any): Promise<void> => {
+    try {
+      const dbUpdates: any = {};
+      
+      if (updates.title) dbUpdates.title = updates.title;
+      if (updates.content) dbUpdates.content = updates.content;
+      if (updates.type) dbUpdates.type = updates.type;
+      if (updates.position !== undefined) dbUpdates.position = updates.position;
+      if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId;
+      if (updates.isPublished !== undefined) dbUpdates.is_published = updates.isPublished;
+      
+      dbUpdates.updated_at = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .update(dbUpdates)
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      setCompanyNewsBlocks(prev => 
+        prev.map(block => (block.id === blockId ? {...block, ...updates, updatedAt: new Date()} : block))
+      );
+    } catch (error) {
+      console.error('Error updating company news block:', error);
+      throw error;
+    }
+  };
+  
+  const deleteCompanyNewsBlock = async (blockId: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .delete()
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      setCompanyNewsBlocks(prev => prev.filter(block => block.id !== blockId));
+    } catch (error) {
+      console.error('Error deleting company news block:', error);
+      throw error;
+    }
+  };
+  
+  const publishCompanyNewsBlock = async (blockId: string): Promise<void> => {
+    try {
+      // Get current block to toggle published state
+      const block = companyNewsBlocks.find(b => b.id === blockId);
+      if (!block) throw new Error('Block not found');
+      
+      const newPublishedState = !block.isPublished;
+      
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .update({
+          is_published: newPublishedState,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', blockId);
+      
+      if (error) throw error;
+      
+      setCompanyNewsBlocks(prev => 
+        prev.map(b => (b.id === blockId ? {...b, isPublished: newPublishedState, updatedAt: new Date()} : b))
+      );
+    } catch (error) {
+      console.error('Error publishing company news block:', error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -724,7 +1008,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteReply,
         addNote,
         updateCompany,
-        deleteCompany
+        deleteCompany,
+        // Dashboard blocks
+        dashboardBlocks,
+        loadingDashboardBlocks,
+        refetchDashboardBlocks,
+        addDashboardBlock,
+        updateDashboardBlock,
+        deleteDashboardBlock,
+        // Company news blocks
+        addCompanyNewsBlock,
+        updateCompanyNewsBlock,
+        deleteCompanyNewsBlock,
+        publishCompanyNewsBlock
       }}
     >
       {children}
