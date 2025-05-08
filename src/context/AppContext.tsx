@@ -23,6 +23,7 @@ export interface Company {
   createdAt: string;
   name: string;
   description: string;
+  logo?: string; // Add logo property to match database schema
 }
 
 export interface Category {
@@ -97,11 +98,11 @@ interface AppContextType {
   fetchCategories: () => Promise<void>;
   fetchCases: () => Promise<void>;
   refetchCases: () => Promise<void>;
-  fetchReplies: (caseId: string) => Promise<void>;
+  fetchReplies: (caseId: string) => Promise<Reply[]>;
   refetchReplies: (caseId: string) => Promise<void>;
-  fetchNotes: (caseId: string) => Promise<void>;
+  fetchNotes: (caseId: string) => Promise<Note[]>;
   refetchNotes: (caseId: string) => Promise<void>;
-  addCompany: (data: { name: string; description: string }) => Promise<Company>;
+  addCompany: (data: { name: string; description: string; logo?: string }) => Promise<Company>;
   addCategory: (data: { name: string; description: string }) => Promise<Category>;
   addCase: (data: { 
     title: string; 
@@ -115,6 +116,20 @@ interface AppContextType {
   addReply: (data: { caseId: string; userId: string; content: string; isInternal: boolean; attachments?: File[] }) => Promise<Reply>;
   deleteReply: (replyId: string) => Promise<void>;
   addNote: (data: { caseId: string; userId: string; content: string }) => Promise<Note>;
+  updateCompany?: (companyId: string, updates: Partial<Company>) => Promise<void>;
+  deleteCompany?: (companyId: string) => Promise<void>;
+  // Dashboard blocks related properties
+  dashboardBlocks?: any[];
+  loadingDashboardBlocks?: boolean;
+  refetchDashboardBlocks?: (companyId: string) => Promise<void>;
+  addDashboardBlock?: (data: any) => Promise<any>;
+  updateDashboardBlock?: (blockId: string, updates: any) => Promise<void>;
+  deleteDashboardBlock?: (blockId: string) => Promise<void>;
+  // Company news blocks related properties
+  addCompanyNewsBlock?: (data: any) => Promise<any>;
+  updateCompanyNewsBlock?: (blockId: string, updates: any) => Promise<void>;
+  deleteCompanyNewsBlock?: (blockId: string) => Promise<void>;
+  publishCompanyNewsBlock?: (blockId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -140,7 +155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLoadingUsers(true);
     try {
       const { data, error } = await supabase
-        .from('profiles') // Change from "users" to "profiles"
+        .from('profiles') // Use 'profiles' table instead of 'users'
         .select('*');
       
       if (error) throw error;
@@ -182,7 +197,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: company.id,
         createdAt: company.created_at,
         name: company.name,
-        description: company.name // For backward compatibility, using name as description temporarily
+        description: company.name, // Using name as description temporarily
+        logo: company.logo // Include the logo
       }));
       
       setCompanies(transformedCompanies);
@@ -197,13 +213,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchCompanies();
   }, [fetchCompanies]);
   
-  const addCompany = async (data: { name: string; description: string }) => {
+  const addCompany = async (data: { name: string; description: string; logo?: string }) => {
     try {
       const { data: companyData, error } = await supabase
         .from('companies')
         .insert({
           name: data.name,
-          // Note: The description field isn't in the database schema, so we don't include it
+          logo: data.logo // Include logo field
         })
         .select()
         .single();
@@ -214,13 +230,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: companyData.id,
         createdAt: companyData.created_at,
         name: companyData.name,
-        description: data.description // Maintain application-side description
+        description: data.description, // Maintain application-side description
+        logo: companyData.logo
       };
       
       setCompanies(prev => [...prev, newCompany]);
       return newCompany;
     } catch (error) {
       console.error('Error adding company:', error);
+      throw error;
+    }
+  };
+
+  // Add updateCompany function
+  const updateCompany = async (companyId: string, updates: Partial<Company>) => {
+    try {
+      const dbUpdates: any = {};
+      if (updates.name) dbUpdates.name = updates.name;
+      if (updates.logo !== undefined) dbUpdates.logo = updates.logo;
+      
+      const { error } = await supabase
+        .from('companies')
+        .update(dbUpdates)
+        .eq('id', companyId);
+      
+      if (error) throw error;
+      
+      setCompanies(prev => 
+        prev.map(c => (c.id === companyId ? {...c, ...updates} : c))
+      );
+    } catch (error) {
+      console.error('Error updating company:', error);
+      throw error;
+    }
+  };
+
+  // Add deleteCompany function
+  const deleteCompany = async (companyId: string) => {
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', companyId);
+      
+      if (error) throw error;
+      
+      setCompanies(prev => prev.filter(c => c.id !== companyId));
+    } catch (error) {
+      console.error('Error deleting company:', error);
       throw error;
     }
   };
@@ -405,22 +462,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchReplies = useCallback(async (caseId: string) => {
     setLoadingReplies(true);
     try {
-      const { data, error } = await supabase
+      // First fetch the replies
+      const { data: replyData, error: replyError } = await supabase
         .from('replies')
-        .select('*, attachments(*)')
+        .select('*')
         .eq('case_id', caseId);
       
-      if (error) throw error;
+      if (replyError) throw replyError;
       
-      const formattedReplies = data.map(reply => ({
-        id: reply.id,
-        caseId: reply.case_id,
-        userId: reply.user_id,
-        content: reply.content,
-        isInternal: reply.is_internal,
-        createdAt: reply.created_at,
-        attachments: reply.attachments
-      }));
+      // Process each reply to get its attachments
+      const formattedReplies: Reply[] = await Promise.all(
+        replyData.map(async (reply) => {
+          // Fetch attachments for this reply
+          const { data: attachmentData, error: attachmentError } = await supabase
+            .from('case_attachments')
+            .select('*')
+            .eq('reply_id', reply.id);
+          
+          const attachments = attachmentError ? [] : attachmentData.map(attachment => ({
+            path: attachment.file_path,
+            name: attachment.file_name,
+            size: attachment.size,
+            type: attachment.content_type
+          }));
+          
+          return {
+            id: reply.id,
+            caseId: reply.case_id,
+            userId: reply.user_id,
+            content: reply.content,
+            isInternal: reply.is_internal,
+            createdAt: reply.created_at,
+            attachments: attachments
+          };
+        })
+      );
       
       setRepliesData(formattedReplies);
       return formattedReplies;
@@ -433,7 +509,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const refetchReplies = useCallback(async (caseId: string) => {
-    await fetchReplies(caseId);
+    const replies = await fetchReplies(caseId);
+    return;
   }, [fetchReplies]);
 
   // Add a reply with optional attachments
@@ -475,23 +552,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (attachmentData) {
               // Store attachment metadata
               const { data: attachmentRecord } = await supabase
-                .from('attachments')
+                .from('case_attachments')
                 .insert({
                   reply_id: newReply.id,
-                  name: attachmentData.name,
-                  path: attachmentData.path,
+                  case_id: data.caseId,
+                  file_name: attachmentData.name,
+                  file_path: attachmentData.path,
                   size: attachmentData.size,
-                  type: attachmentData.type
+                  content_type: attachmentData.type,
+                  created_by: data.userId
                 })
                 .select()
                 .single();
               
               if (attachmentRecord) {
                 attachments.push({
-                  path: attachmentRecord.path,
-                  name: attachmentRecord.name,
+                  path: attachmentRecord.file_path,
+                  name: attachmentRecord.file_name,
                   size: attachmentRecord.size,
-                  type: attachmentRecord.type
+                  type: attachmentRecord.content_type
                 });
               }
             }
@@ -518,6 +597,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteReply = async (replyId: string) => {
     try {
+      // Delete attachments first
+      await supabase
+        .from('case_attachments')
+        .delete()
+        .eq('reply_id', replyId);
+      
+      // Then delete the reply
       const { error } = await supabase
         .from('replies')
         .delete()
@@ -543,7 +629,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (error) throw error;
       
-      setNotesData(data);
+      // Transform notes data
+      const transformedNotes = data.map(note => ({
+        id: note.id,
+        caseId: note.case_id,
+        userId: note.user_id,
+        content: note.content,
+        createdAt: note.created_at
+      }));
+      
+      setNotesData(transformedNotes);
+      return transformedNotes;
     } catch (error) {
       console.error('Error fetching notes:', error);
       return [];
@@ -553,7 +649,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const refetchNotes = useCallback(async (caseId: string) => {
-    await fetchNotes(caseId);
+    const notes = await fetchNotes(caseId);
+    return;
   }, [fetchNotes]);
   
   const addNote = async (data: { caseId: string; userId: string; content: string }) => {
@@ -621,6 +718,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addReply,
         deleteReply,
         addNote,
+        updateCompany,
+        deleteCompany
       }}
     >
       {children}
