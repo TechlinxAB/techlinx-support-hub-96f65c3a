@@ -34,9 +34,10 @@ const ConsultantDashboard = () => {
   };
   
   // Calculate days since last update
-  const getDaysSinceUpdate = (updatedAt: Date) => {
+  const getDaysSinceUpdate = (updatedAt: string) => {
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - updatedAt.getTime());
+    const updateDate = new Date(updatedAt);
+    const diffTime = Math.abs(now.getTime() - updateDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
@@ -44,20 +45,20 @@ const ConsultantDashboard = () => {
   // Filter for New Cases (3 most recent with 'new' status)
   const newCases = cases
     .filter(c => c.status === 'new')
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 3);
   
   // Filter for Ongoing Cases (3 cases where last update wasn't by consultant)
   const ongoingCases = cases
     .filter(c => c.status === 'ongoing')
     // We'd need reply data to know who last updated, but for now we'll just use all ongoing cases
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 3);
   
   // Filter for Awaiting Confirmation Cases (3 most recent 'resolved' status)
   const awaitingConfirmationCases = cases
     .filter(c => c.status === 'resolved')
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 3);
   
   // Filter for Overdue Cases (over 30 days since last update, status is 'new' or 'ongoing')
@@ -67,7 +68,7 @@ const ConsultantDashboard = () => {
       getDaysSinceUpdate(c.updatedAt) > 30
     )
     .sort((a, b) => 
-      a.updatedAt.getTime() - b.updatedAt.getTime()
+      new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
     )
     .slice(0, 3);
   
@@ -75,10 +76,10 @@ const ConsultantDashboard = () => {
   // In a real implementation, we'd have a separate table for activities
   // For now, we'll simulate with recent cases as a placeholder
   const recentActivities = cases
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5)
     .map(c => ({
-      timestamp: c.createdAt,
+      timestamp: new Date(c.createdAt),
       description: `${getUserById(c.userId)} submitted: '${c.title}'`,
       caseId: c.id,
       companyId: c.companyId

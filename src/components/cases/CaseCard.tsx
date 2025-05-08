@@ -2,7 +2,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Case, CaseCategory, Company, User, useAppContext } from '@/context/AppContext';
+import { Case, Category, Company, User, useAppContext } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

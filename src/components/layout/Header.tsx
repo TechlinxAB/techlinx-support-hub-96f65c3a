@@ -19,7 +19,8 @@ interface HeaderProps {
 }
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
-  const { language, setLanguage } = useAppContext();
+  // We'll use a local language state since it seems the AppContext doesn't actually have this
+  const [language, setLanguage] = useState('en');
   const { signOut, user, profile } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   

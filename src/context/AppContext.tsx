@@ -1,3 +1,4 @@
+
 import React, { 
   createContext, 
   useState, 
@@ -6,6 +7,7 @@ import React, {
   useCallback 
 } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadAttachment } from '@/utils/supabaseStorage';
 
 export interface User {
   id: string;
@@ -13,6 +15,7 @@ export interface User {
   name: string;
   email: string;
   role: 'user' | 'consultant';
+  companyId?: string; // Add companyId to User interface
 }
 
 export interface Company {
@@ -29,17 +32,22 @@ export interface Category {
   description: string;
 }
 
+// Define case status and priority types explicitly
+export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
+export type CasePriority = 'low' | 'medium' | 'high';
+
 export interface Case {
   id: string;
   createdAt: string;
   updatedAt: string;
   title: string;
   description: string;
-  status: 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
-  priority: 'low' | 'medium' | 'high';
+  status: CaseStatus;
+  priority: CasePriority;
   companyId: string;
   userId: string;
   categoryId: string;
+  assignedToId?: string; // Add optional assignedToId
 }
 
 export interface Note {
@@ -76,6 +84,8 @@ interface AppContextType {
   cases: Case[];
   replies: Reply[];
   notes: Note[];
+  language?: string; // Add language
+  setLanguage?: (lang: string) => void; // Add setLanguage
   loadingUsers: boolean;
   loadingCompanies: boolean;
   loadingCategories: boolean;
@@ -117,6 +127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cases, setCases] = useState<Case[]>([]);
   const [replies, setRepliesData] = useState<Reply[]>([]);
   const [notes, setNotesData] = useState<Note[]>([]);
+  const [language, setLanguage] = useState<string>('en'); // Add language state
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -129,12 +140,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLoadingUsers(true);
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('profiles') // Change from "users" to "profiles"
         .select('*');
       
       if (error) throw error;
       
-      setUsers(data);
+      // Transform profile data to User interface
+      const transformedUsers = data.map(profile => ({
+        id: profile.id,
+        createdAt: profile.created_at,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        companyId: profile.company_id
+      }));
+      
+      setUsers(transformedUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -156,7 +177,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (error) throw error;
       
-      setCompanies(data);
+      // Transform company data to Company interface
+      const transformedCompanies = data.map(company => ({
+        id: company.id,
+        createdAt: company.created_at,
+        name: company.name,
+        description: company.name // For backward compatibility, using name as description temporarily
+      }));
+      
+      setCompanies(transformedCompanies);
     } catch (error) {
       console.error('Error fetching companies:', error);
     } finally {
@@ -172,7 +201,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: companyData, error } = await supabase
         .from('companies')
-        .insert(data)
+        .insert({
+          name: data.name,
+          // Note: The description field isn't in the database schema, so we don't include it
+        })
         .select()
         .single();
       
@@ -182,7 +214,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: companyData.id,
         createdAt: companyData.created_at,
         name: companyData.name,
-        description: companyData.description
+        description: data.description // Maintain application-side description
       };
       
       setCompanies(prev => [...prev, newCompany]);
@@ -203,7 +235,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (error) throw error;
       
-      setCategories(data);
+      // Transform category data to Category interface
+      const transformedCategories = data.map(category => ({
+        id: category.id,
+        createdAt: category.created_at,
+        name: category.name,
+        description: category.name // For backward compatibility, using name as description temporarily
+      }));
+      
+      setCategories(transformedCategories);
     } catch (error) {
       console.error('Error fetching categories:', error);
     } finally {
@@ -219,7 +259,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: categoryData, error } = await supabase
         .from('categories')
-        .insert(data)
+        .insert({
+          name: data.name,
+          // Note: The description field isn't in the database schema, so we don't include it
+        })
         .select()
         .single();
       
@@ -229,7 +272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: categoryData.id,
         createdAt: categoryData.created_at,
         name: categoryData.name,
-        description: categoryData.description
+        description: data.description // Maintain application-side description
       };
       
       setCategories(prev => [...prev, newCategory]);
@@ -250,7 +293,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (error) throw error;
       
-      setCases(data);
+      // Transform cases data to Case interface
+      const transformedCases = data.map(caseItem => ({
+        id: caseItem.id,
+        createdAt: caseItem.created_at,
+        updatedAt: caseItem.updated_at,
+        title: caseItem.title,
+        description: caseItem.description,
+        status: caseItem.status,
+        priority: caseItem.priority,
+        companyId: caseItem.company_id,
+        userId: caseItem.user_id,
+        categoryId: caseItem.category_id,
+        assignedToId: caseItem.assigned_to_id
+      }));
+      
+      setCases(transformedCases);
     } catch (error) {
       console.error('Error fetching cases:', error);
     } finally {
@@ -277,7 +335,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: caseData, error } = await supabase
         .from('cases')
-        .insert(data)
+        .insert({
+          title: data.title,
+          description: data.description,
+          status: data.status as CaseStatus,
+          priority: data.priority as CasePriority,
+          company_id: data.companyId,
+          category_id: data.categoryId,
+          user_id: currentUser?.id
+        })
         .select()
         .single();
       
@@ -293,7 +359,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         priority: caseData.priority,
         companyId: caseData.company_id,
         userId: caseData.user_id,
-        categoryId: caseData.category_id
+        categoryId: caseData.category_id,
+        assignedToId: caseData.assigned_to_id
       };
       
       setCases(prev => [...prev, newCase]);
@@ -306,9 +373,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const updateCase = async (caseId: string, updates: Partial<Case>) => {
     try {
+      // Transform frontend Case interface to database schema
+      const dbUpdates: any = {};
+      
+      if (updates.title) dbUpdates.title = updates.title;
+      if (updates.description) dbUpdates.description = updates.description;
+      if (updates.status) dbUpdates.status = updates.status;
+      if (updates.priority) dbUpdates.priority = updates.priority;
+      if (updates.companyId) dbUpdates.company_id = updates.companyId;
+      if (updates.userId) dbUpdates.user_id = updates.userId;
+      if (updates.categoryId) dbUpdates.category_id = updates.categoryId;
+      if (updates.assignedToId) dbUpdates.assigned_to_id = updates.assignedToId;
+      
       const { error } = await supabase
         .from('cases')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', caseId);
       
       if (error) throw error;
@@ -390,32 +469,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         for (const file of data.attachments) {
           try {
-            // Upload the file
-            const { data: uploadData } = await supabase
-              .storage
-              .from('case-attachments')
-              .upload(`${data.caseId}/${newReply.id}/${file.name}`, file);
+            // Use the uploadAttachment utility
+            const attachmentData = await uploadAttachment(file, data.caseId, newReply.id);
             
-            if (uploadData) {
+            if (attachmentData) {
               // Store attachment metadata
-              const { data: attachmentData } = await supabase
+              const { data: attachmentRecord } = await supabase
                 .from('attachments')
                 .insert({
                   reply_id: newReply.id,
-                  name: file.name,
-                  path: uploadData.path,
-                  size: file.size,
-                  type: file.type
+                  name: attachmentData.name,
+                  path: attachmentData.path,
+                  size: attachmentData.size,
+                  type: attachmentData.type
                 })
                 .select()
                 .single();
               
-              if (attachmentData) {
+              if (attachmentRecord) {
                 attachments.push({
-                  path: attachmentData.path,
-                  name: attachmentData.name,
-                  size: attachmentData.size,
-                  type: attachmentData.type
+                  path: attachmentRecord.path,
+                  name: attachmentRecord.name,
+                  size: attachmentRecord.size,
+                  type: attachmentRecord.type
                 });
               }
             }
@@ -484,7 +560,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: noteData, error } = await supabase
         .from('notes')
-        .insert(data)
+        .insert({
+          case_id: data.caseId,
+          user_id: data.userId,
+          content: data.content
+        })
         .select()
         .single();
       
@@ -517,6 +597,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cases,
         replies,
         notes,
+        language,
+        setLanguage,
         loadingUsers,
         loadingCompanies,
         loadingCategories,

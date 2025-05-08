@@ -22,12 +22,12 @@ const UserDashboard = () => {
       id: c.id,
       title: c.title,
       status: c.status,
-      updatedAt: c.updatedAt.toISOString() // Convert Date to string
+      updatedAt: c.updatedAt // Already a string in our updated model
     }));
   
   // Fetch company settings and announcements
-  const { settings, loading: settingsLoading } = useDashboardSettings(currentUser?.companyId);
-  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(currentUser?.companyId);
+  const { settings, loading: settingsLoading } = useDashboardSettings(currentUser?.companyId || '');
+  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(currentUser?.companyId || '');
   
   const loading = settingsLoading || announcementsLoading;
   
