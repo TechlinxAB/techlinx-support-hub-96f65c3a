@@ -17,13 +17,8 @@ export function Toaster() {
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
           borderRadius: '6px',
           padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          justifyContent: 'flex-start',
           minHeight: 'auto',
-          width: '100%',
-          position: 'relative'
+          width: '100%'
         },
         duration: 3000,
         className: "custom-toast"
