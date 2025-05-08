@@ -32,20 +32,13 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     // Add to active toasts
     activeToasts.add(key);
     
-    // Set timeout to remove from active toasts after duration
+    // Create toast with className for custom styling
     const toastId = sonnerToast(messageOrObject, {
       description: props?.description,
-      duration: props?.duration,
+      duration: props?.duration || 3000,
       id: props?.id,
-      className: props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white", // Ensure white background
-      style: {
-        background: '#FFFFFF', // Solid white background
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
-        border: '1px solid var(--border)',
-        position: 'relative', // Positioning context
-        paddingRight: '36px' // Space for close button
-      }
+      className: `custom-toast ${props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
+               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`
     });
     
     // Remove from active toasts when dismissed or duration ends
@@ -69,20 +62,13 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
   // Add to active toasts
   activeToasts.add(key);
   
-  // Create the toast
+  // Create toast with className for custom styling
   const toastId = sonnerToast(title || "", {
     description,
-    duration,
+    duration: duration || 3000,
     id,
-    className: variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-             variant === "success" ? "bg-green-500 text-white" : "bg-white", // Ensure white background
-    style: {
-      background: '#FFFFFF', // Solid white background
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
-      border: '1px solid var(--border)',
-      position: 'relative', // Positioning context
-      paddingRight: '36px' // Space for close button
-    }
+    className: `custom-toast ${variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
+             variant === "success" ? "bg-green-500 text-white" : "bg-white"}`
   });
   
   // Remove from active toasts when dismissed or duration ends
@@ -106,16 +92,10 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
   // Add to active toasts
   activeToasts.add(key);
   
-  // Create the loading toast
+  // Create the loading toast with className for custom styling
   const toastId = sonnerToast.loading(message, {
     ...options,
-    style: {
-      background: '#FFFFFF', // Solid white background
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
-      border: '1px solid var(--border)',
-      position: 'relative', // Positioning context
-      paddingRight: '36px' // Space for close button
-    }
+    className: "custom-toast"
   });
   
   // Set timeout to remove from active toasts after duration or default 30 seconds for loading
