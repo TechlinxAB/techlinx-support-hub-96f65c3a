@@ -42,7 +42,12 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
       duration: props?.duration,
       id: props?.id,
       className: props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-               props?.variant === "success" ? "bg-green-500 text-white" : undefined
+               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white", // Ensure white background
+      style: {
+        background: '#FFFFFF', // Solid white background
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
+        border: '1px solid var(--border)'
+      }
     });
   }
   
@@ -69,7 +74,12 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     duration,
     id,
     className: variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-             variant === "success" ? "bg-green-500 text-white" : undefined
+             variant === "success" ? "bg-green-500 text-white" : "bg-white", // Ensure white background
+    style: {
+      background: '#FFFFFF', // Solid white background
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
+      border: '1px solid var(--border)'
+    }
   });
 }
 
@@ -91,7 +101,14 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
     activeToasts.delete(key);
   }, options?.duration || 30000);
   
-  return sonnerToast.loading(message, options);
+  return sonnerToast.loading(message, {
+    ...options,
+    style: {
+      background: '#FFFFFF', // Solid white background
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
+      border: '1px solid var(--border)'
+    }
+  });
 };
 
 export const useToast = () => {

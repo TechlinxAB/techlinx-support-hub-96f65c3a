@@ -44,7 +44,7 @@
 
 /* Fix for select content transparency */
 .select-content {
-  background-color: white;
+  background-color: white !important;
 }
 
 /* Fix for any dropdowns */
@@ -54,10 +54,22 @@
   background-color: white !important;
 }
 
+/* Toast styling fix */
+[data-sonner-toast] {
+  background-color: white !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid var(--border) !important;
+}
+
 /* Dark mode fixes */
 .dark [role=menu],
 .dark [role=listbox],
 .dark .dropdown-content,
 .dark .select-content {
   background-color: hsl(224 71% 4%) !important;
+}
+
+.dark [data-sonner-toast] {
+  background-color: hsl(224 71% 4%) !important;
+  border-color: hsl(216 34% 17%) !important;
 }
