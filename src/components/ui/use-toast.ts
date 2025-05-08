@@ -32,15 +32,13 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     // Add to active toasts
     activeToasts.add(key);
     
-    // Create toast with className for custom styling
+    // Create toast
     const toastId = sonnerToast(messageOrObject, {
       description: props?.description,
       duration: props?.duration || 3000,
       id: props?.id,
       className: `custom-toast toast-wrapper ${props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
-      // Customize the toast to work with our styling
-      unstyled: true
+               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`
     });
     
     // Remove from active toasts when dismissed or duration ends
@@ -64,15 +62,13 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
   // Add to active toasts
   activeToasts.add(key);
   
-  // Create toast with className for custom styling
+  // Create toast
   const toastId = sonnerToast(title || "", {
     description,
     duration: duration || 3000,
     id,
     className: `custom-toast toast-wrapper ${variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-             variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
-    // Customize the toast to work with our styling
-    unstyled: true
+             variant === "success" ? "bg-green-500 text-white" : "bg-white"}`
   });
   
   // Remove from active toasts when dismissed or duration ends
@@ -96,11 +92,10 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
   // Add to active toasts
   activeToasts.add(key);
   
-  // Create the loading toast with className for custom styling
+  // Create the loading toast
   const toastId = sonnerToast.loading(message, {
     ...options,
-    className: "custom-toast toast-wrapper",
-    unstyled: true
+    className: "custom-toast toast-wrapper"
   });
   
   // Set timeout to remove from active toasts after duration or default 30 seconds for loading
