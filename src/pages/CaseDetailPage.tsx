@@ -51,15 +51,13 @@ const CaseDetailPage = () => {
     description: '',
     status: '',
     priority: '',
-    categoryId: '',
-    assignedToId: ''
+    categoryId: ''
   });
   
   // Find the current case
   const currentCase = cases.find(c => c.id === id);
   const company = currentCase ? companies.find(c => c.id === currentCase.companyId) : null;
   const user = currentCase ? users.find(u => u.id === currentCase.userId) : null;
-  const assignedTo = currentCase?.assignedToId ? users.find(u => u.id === currentCase.assignedToId) : null;
   const category = currentCase ? categories.find(c => c.id === currentCase.categoryId) : null;
   
   const isConsultant = currentUser?.role === 'consultant';
@@ -73,8 +71,7 @@ const CaseDetailPage = () => {
         description: currentCase.description,
         status: currentCase.status,
         priority: currentCase.priority,
-        categoryId: currentCase.categoryId,
-        assignedToId: currentCase.assignedToId || 'unassigned' // Change empty string to 'unassigned'
+        categoryId: currentCase.categoryId
       });
     }
   }, [currentCase]);
@@ -118,9 +115,7 @@ const CaseDetailPage = () => {
         description: editFormData.description,
         status: editFormData.status as any,
         priority: editFormData.priority as any, 
-        categoryId: editFormData.categoryId,
-        // Handle the 'unassigned' value by converting it back to undefined
-        assignedToId: editFormData.assignedToId === 'unassigned' ? undefined : editFormData.assignedToId
+        categoryId: editFormData.categoryId
       });
       
       setIsEditDialogOpen(false);
@@ -202,13 +197,6 @@ const CaseDetailPage = () => {
                   <div className="mb-2">
                     <span className="font-medium">Company: </span>
                     <span>{company.name}</span>
-                  </div>
-                )}
-                
-                {assignedTo && (
-                  <div className="mb-2">
-                    <span className="font-medium">Assigned to: </span>
-                    <span>{assignedTo.name}</span>
                   </div>
                 )}
                 
@@ -361,29 +349,6 @@ const CaseDetailPage = () => {
                                     {category.name}
                                   </SelectItem>
                                 ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="assignedTo">Assigned To</Label>
-                            <Select 
-                              value={editFormData.assignedToId}
-                              onValueChange={(value) => setEditFormData({...editFormData, assignedToId: value})}
-                            >
-                              <SelectTrigger id="assignedTo">
-                                <SelectValue placeholder="Select Consultant" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unassigned">Unassigned</SelectItem>
-                                {users
-                                  .filter(u => u.role === 'consultant')
-                                  .map(user => (
-                                    <SelectItem key={user.id} value={user.id}>
-                                      {user.name}
-                                    </SelectItem>
-                                  ))
-                                }
                               </SelectContent>
                             </Select>
                           </div>
