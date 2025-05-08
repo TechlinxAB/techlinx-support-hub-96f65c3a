@@ -1016,7 +1016,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await supabase.from('replies').delete().match({ id: replyId });
       
       // Update the local state
-      setReplies(prev => prev.filter(reply => reply.id !== replyId));
+      setRepliesData(prev => prev.filter(reply => reply.id !== replyId));
     } catch (error) {
       console.error('Error deleting reply:', error);
       throw error;
