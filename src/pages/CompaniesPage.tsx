@@ -13,6 +13,7 @@ import {
   Trash2,
   Settings,
   Edit,
+  Eye,
   Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -217,20 +218,21 @@ const CompaniesPage = () => {
                     </div>
                   </div>
                   
-                  {/* First row of full-width buttons */}
-                  <div className="grid grid-cols-1 gap-2">
+                  {/* Main buttons row - Documentation, Dashboard, Cases */}
+                  <div className="grid grid-cols-3 gap-2">
                     <Button 
                       variant="outline" 
-                      className="flex gap-2 items-center justify-center w-full"
+                      className="flex gap-1 items-center justify-center h-11"
                       onClick={() => navigate(`/companies/${company.id}`)}
                     >
                       <FileText className="h-4 w-4" />
-                      Documentation
+                      <span className="hidden sm:inline">Documentation</span>
+                      <span className="sm:hidden">Docs</span>
                     </Button>
                     
                     <Button 
                       variant="outline" 
-                      className="flex gap-2 items-center justify-center w-full"
+                      className="flex gap-1 items-center justify-center h-11"
                       onClick={() => navigate(`/company-dashboard-builder/${company.id}`)}
                     >
                       <LayoutDashboard className="h-4 w-4" />
@@ -239,7 +241,7 @@ const CompaniesPage = () => {
                     
                     <Button 
                       variant="outline" 
-                      className="flex gap-2 items-center justify-center w-full"
+                      className="flex gap-1 items-center justify-center h-11"
                       onClick={() => {
                         navigate('/cases');
                         // Here we would implement filtering by company
@@ -251,11 +253,11 @@ const CompaniesPage = () => {
                   </div>
 
                   {/* News buttons row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {currentUser?.role === 'consultant' && (
                       <Button 
                         variant="outline" 
-                        className="flex gap-2 items-center justify-center w-full"
+                        className="flex gap-1 items-center justify-center h-11"
                         onClick={() => navigate(`/company-news-builder/${company.id}`)}
                       >
                         <Edit className="h-4 w-4" />
@@ -264,10 +266,10 @@ const CompaniesPage = () => {
                     )}
                     <Button 
                       variant="outline" 
-                      className={`flex gap-2 items-center justify-center w-full ${currentUser?.role !== 'consultant' ? 'sm:col-span-2' : ''}`}
+                      className={`flex gap-1 items-center justify-center h-11 ${currentUser?.role !== 'consultant' ? 'col-span-2' : ''}`}
                       onClick={() => navigate(`/company-news/${company.id}`)}
                     >
-                      <MessageCircle className="h-4 w-4" />
+                      <Eye className="h-4 w-4" />
                       View News
                     </Button>
                   </div>
