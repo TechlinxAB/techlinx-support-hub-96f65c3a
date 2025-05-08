@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -72,6 +71,7 @@ const CompaniesPage = () => {
     try {
       await addCompany({
         name: companyName,
+        description: companyName, // Using name as description for now
         logo: companyLogo || undefined
       });
       

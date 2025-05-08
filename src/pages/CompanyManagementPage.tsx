@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { 
@@ -111,6 +110,7 @@ const CompanyManagementPage = () => {
       if (dialogMode === 'create') {
         await addCompany({
           name,
+          description: name, // Using name as description
           logo: logo || undefined
         });
       } else if (dialogMode === 'edit' && selectedCompany) {

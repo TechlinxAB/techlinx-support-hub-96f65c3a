@@ -9,13 +9,20 @@ import React, {
 import { supabase } from '@/integrations/supabase/client';
 import { uploadAttachment } from '@/utils/supabaseStorage';
 
+export type UserRole = 'user' | 'consultant';
+export type Language = 'en' | 'sv';
+export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
+export type CasePriority = 'low' | 'medium' | 'high';
+
 export interface User {
   id: string;
   createdAt: string;
   name: string;
   email: string;
-  role: 'user' | 'consultant';
-  companyId?: string; // Add companyId to User interface
+  role: UserRole;
+  companyId?: string;
+  phone?: string;
+  preferredLanguage?: Language;
 }
 
 export interface Company {
@@ -23,7 +30,7 @@ export interface Company {
   createdAt: string;
   name: string;
   description: string;
-  logo?: string; // Add logo property to match database schema
+  logo?: string;
 }
 
 export interface Category {
@@ -32,10 +39,6 @@ export interface Category {
   name: string;
   description: string;
 }
-
-// Define case status and priority types explicitly
-export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
-export type CasePriority = 'low' | 'medium' | 'high';
 
 export interface Case {
   id: string;
@@ -48,7 +51,7 @@ export interface Case {
   companyId: string;
   userId: string;
   categoryId: string;
-  assignedToId?: string; // Add optional assignedToId
+  assignedToId?: string;
 }
 
 export interface Note {
@@ -85,8 +88,8 @@ interface AppContextType {
   cases: Case[];
   replies: Reply[];
   notes: Note[];
-  language?: string; // Add language
-  setLanguage?: (lang: string) => void; // Add setLanguage
+  language?: string;
+  setLanguage?: (lang: string) => void;
   loadingUsers: boolean;
   loadingCompanies: boolean;
   loadingCategories: boolean;
@@ -94,6 +97,7 @@ interface AppContextType {
   loadingReplies: boolean;
   loadingNotes: boolean;
   fetchUsers: () => Promise<void>;
+  refetchUsers: () => Promise<void>;
   fetchCompanies: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchCases: () => Promise<void>;
@@ -116,16 +120,14 @@ interface AppContextType {
   addReply: (data: { caseId: string; userId: string; content: string; isInternal: boolean; attachments?: File[] }) => Promise<Reply>;
   deleteReply: (replyId: string) => Promise<void>;
   addNote: (data: { caseId: string; userId: string; content: string }) => Promise<Note>;
-  updateCompany?: (companyId: string, updates: Partial<Company>) => Promise<void>;
-  deleteCompany?: (companyId: string) => Promise<void>;
-  // Dashboard blocks related properties
+  updateCompany: (companyId: string, updates: Partial<Company>) => Promise<void>;
+  deleteCompany: (companyId: string) => Promise<void>;
   dashboardBlocks?: any[];
   loadingDashboardBlocks?: boolean;
   refetchDashboardBlocks?: (companyId: string) => Promise<void>;
   addDashboardBlock?: (data: any) => Promise<any>;
   updateDashboardBlock?: (blockId: string, updates: any) => Promise<void>;
   deleteDashboardBlock?: (blockId: string) => Promise<void>;
-  // Company news blocks related properties
   addCompanyNewsBlock?: (data: any) => Promise<any>;
   updateCompanyNewsBlock?: (blockId: string, updates: any) => Promise<void>;
   deleteCompanyNewsBlock?: (blockId: string) => Promise<void>;
@@ -142,7 +144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cases, setCases] = useState<Case[]>([]);
   const [replies, setRepliesData] = useState<Reply[]>([]);
   const [notes, setNotesData] = useState<Note[]>([]);
-  const [language, setLanguage] = useState<string>('en'); // Add language state
+  const [language, setLanguage] = useState<string>('en');
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -155,19 +157,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLoadingUsers(true);
     try {
       const { data, error } = await supabase
-        .from('profiles') // Use 'profiles' table instead of 'users'
+        .from('profiles')
         .select('*');
       
       if (error) throw error;
       
       // Transform profile data to User interface
-      const transformedUsers = data.map(profile => ({
+      const transformedUsers: User[] = data.map(profile => ({
         id: profile.id,
         createdAt: profile.created_at,
         name: profile.name,
         email: profile.email,
         role: profile.role,
-        companyId: profile.company_id
+        companyId: profile.company_id,
+        phone: profile.phone,
+        preferredLanguage: profile.preferred_language
       }));
       
       setUsers(transformedUsers);
@@ -177,6 +181,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLoadingUsers(false);
     }
   }, []);
+  
+  // Function to refetch users
+  const refetchUsers = useCallback(async () => {
+    await fetchUsers();
+  }, [fetchUsers]);
   
   useEffect(() => {
     fetchUsers();
@@ -193,12 +202,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       // Transform company data to Company interface
-      const transformedCompanies = data.map(company => ({
+      const transformedCompanies: Company[] = data.map(company => ({
         id: company.id,
         createdAt: company.created_at,
         name: company.name,
         description: company.name, // Using name as description temporarily
-        logo: company.logo // Include the logo
+        logo: company.logo
       }));
       
       setCompanies(transformedCompanies);
@@ -219,7 +228,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .from('companies')
         .insert({
           name: data.name,
-          logo: data.logo // Include logo field
+          logo: data.logo
         })
         .select()
         .single();
@@ -230,7 +239,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: companyData.id,
         createdAt: companyData.created_at,
         name: companyData.name,
-        description: data.description, // Maintain application-side description
+        description: data.description,
         logo: companyData.logo
       };
       
@@ -293,7 +302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       // Transform category data to Category interface
-      const transformedCategories = data.map(category => ({
+      const transformedCategories: Category[] = data.map(category => ({
         id: category.id,
         createdAt: category.created_at,
         name: category.name,
@@ -351,7 +360,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       // Transform cases data to Case interface
-      const transformedCases = data.map(caseItem => ({
+      const transformedCases: Case[] = data.map(caseItem => ({
         id: caseItem.id,
         createdAt: caseItem.created_at,
         updatedAt: caseItem.updated_at,
@@ -509,8 +518,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const refetchReplies = useCallback(async (caseId: string) => {
-    const replies = await fetchReplies(caseId);
-    return;
+    await fetchReplies(caseId);
   }, [fetchReplies]);
 
   // Add a reply with optional attachments
@@ -630,7 +638,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       // Transform notes data
-      const transformedNotes = data.map(note => ({
+      const transformedNotes: Note[] = data.map(note => ({
         id: note.id,
         caseId: note.case_id,
         userId: note.user_id,
@@ -649,8 +657,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const refetchNotes = useCallback(async (caseId: string) => {
-    const notes = await fetchNotes(caseId);
-    return;
+    await fetchNotes(caseId);
   }, [fetchNotes]);
   
   const addNote = async (data: { caseId: string; userId: string; content: string }) => {
@@ -703,6 +710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadingReplies,
         loadingNotes,
         fetchUsers,
+        refetchUsers,
         fetchCompanies,
         fetchCategories,
         fetchCases,

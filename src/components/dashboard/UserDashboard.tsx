@@ -22,7 +22,7 @@ const UserDashboard = () => {
       id: c.id,
       title: c.title,
       status: c.status,
-      updatedAt: c.updatedAt // Already a string in our updated model
+      updatedAt: c.updatedAt
     }));
   
   // Fetch company settings and announcements

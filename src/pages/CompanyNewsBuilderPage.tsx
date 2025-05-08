@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -292,6 +291,23 @@ const CompanyNewsBuilderPage = () => {
       refetchCompanyNewsBlocks(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNewsBlockAction = async (blockId: string, actionType: string) => {
+    try {
+      if (actionType === 'publish') {
+        await publishCompanyNewsBlock!(blockId);
+        toast({
+          title: "Published",
+          description: "News block published successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Error during action:', error);
+      toast.error("Failed to perform action", {
+        description: error.message || "Please try again"
+      });
     }
   };
 

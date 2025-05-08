@@ -1,163 +1,132 @@
-
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import { ArrowLeft, Send, Save } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 
 const NewCasePage = () => {
+  const { addCase, currentUser, companies, categories } = useAppContext();
   const navigate = useNavigate();
-  const { 
-    addCase, 
-    categories, 
-    users, 
-    companies, 
-    currentUser 
-  } = useAppContext();
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [status, setStatus] = useState('new');
   const [priority, setPriority] = useState('medium');
-  const [userId, setUserId] = useState(currentUser?.id || '');
-  const [companyId, setCompanyId] = useState(currentUser?.companyId || '');
-  const [language, setLanguage] = useState('en');
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [companyId, setCompanyId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [loading, setLoading] = useState(false);
   
-  const handleSubmit = (e: React.FormEvent, isDraft: boolean = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title || !description || !categoryId || !priority || !userId || !companyId) {
+    if (!currentUser) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a case",
+        variant: "destructive",
+      });
       return;
     }
     
-    addCase({
-      title,
-      description,
-      status: isDraft ? 'draft' : 'new',
-      priority: priority as any,
-      userId,
-      companyId,
-      categoryId,
-    });
+    setLoading(true);
     
-    navigate('/cases');
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(e.target.files);
+    try {
+      const newCase = await addCase({
+        title,
+        description,
+        status,
+        priority,
+        companyId: companyId || currentUser.companyId || '',
+        categoryId
+      });
+      
+      toast({
+        title: "Success",
+        description: "Case created successfully",
+      });
+      
+      navigate(`/cases/${newCase.id}`);
+    } catch (error) {
+      console.error('Error creating case:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create case",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
   
-  const isConsultant = currentUser?.role === 'consultant';
-  
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/cases')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Cases
-        </Button>
-      </div>
-      
-      <Card>
-        <form onSubmit={(e) => handleSubmit(e, false)}>
-          <CardHeader>
-            <h1 className="text-xl font-bold">Create New Case</h1>
-          </CardHeader>
-          
-          <CardContent className="space-y-4">
-            {isConsultant && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">User</label>
-                  <Select 
-                    value={userId} 
-                    onValueChange={setUserId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select User" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Company</label>
-                  <Select 
-                    value={companyId} 
-                    onValueChange={setCompanyId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Company" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {companies.map(company => (
-                        <SelectItem key={company.id} value={company.id}>
-                          {company.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input 
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder="Brief summary of the issue"
-                required
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="container mx-auto py-8">
+      <Card className="w-full max-w-3xl mx-auto">
+        <CardHeader>
+          <CardTitle>Create New Case</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Title */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
-                <Select 
-                  value={categoryId} 
-                  onValueChange={setCategoryId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Category" />
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  placeholder="Enter case title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                />
+              </div>
+              
+              {/* Company */}
+              <div className="space-y-2">
+                <Label htmlFor="company">Company</Label>
+                <Select value={companyId} onValueChange={setCompanyId}>
+                  <SelectTrigger id="company">
+                    <SelectValue placeholder="Select a company" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
+                    {companies.map((company) => (
+                      <SelectItem key={company.id} value={company.id}>
+                        {company.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Status */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <Select 
-                  value={priority} 
-                  onValueChange={setPriority}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Priority" />
+                <Label htmlFor="status">Status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="ongoing">Ongoing</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Priority */}
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Select value={priority} onValueChange={setPriority}>
+                  <SelectTrigger id="priority">
+                    <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="low">Low</SelectItem>
@@ -166,74 +135,45 @@ const NewCasePage = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Language</label>
-                <Select 
-                  value={language} 
-                  onValueChange={setLanguage}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Language" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="sv">Swedish</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             
+            {/* Category */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Textarea 
+              <Label htmlFor="category">Category</Label>
+              <Select value={categoryId} onValueChange={setCategoryId}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Enter case description"
                 value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Detailed description of the issue..."
-                rows={8}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
                 required
               />
             </div>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Attachments</label>
-              <Input 
-                type="file" 
-                onChange={handleFileChange}
-                multiple
-              />
-              <p className="text-xs text-muted-foreground">
-                You can upload multiple files (max 5MB each)
-              </p>
-            </div>
-          </CardContent>
-          
-          <CardFooter className="flex justify-end gap-2">
-            <Button 
-              type="button" 
-              variant="outline"
-              onClick={() => navigate('/cases')}
-            >
-              Cancel
+            {/* Submit Button */}
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Case
             </Button>
-            <Button 
-              type="button" 
-              variant="outline"
-              onClick={(e) => handleSubmit(e, true)}
-              disabled={!title || !categoryId || !priority}
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Save Draft
-            </Button>
-            <Button 
-              type="submit"
-              disabled={!title || !description || !categoryId || !priority}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Submit Case
-            </Button>
-          </CardFooter>
-        </form>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );
