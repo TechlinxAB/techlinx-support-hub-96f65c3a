@@ -273,17 +273,16 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       const uploadId = `${file.name}-${Date.now()}`;
       setUploadProgress(prev => ({ ...prev, [uploadId]: 0 }));
       
-      // Upload the file to Supabase Storage
+      // Upload the file to Supabase Storage with progress tracking
       const { data, error } = await supabase.storage
         .from('case-attachments')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const percent = Math.round((progress.loaded / progress.total) * 100);
-            setUploadProgress(prev => ({ ...prev, [uploadId]: percent }));
-          }
+          upsert: false
         });
+      
+      // After upload completes, set progress to 100%
+      setUploadProgress(prev => ({ ...prev, [uploadId]: 100 }));
       
       if (error) {
         console.error('Error uploading file:', error);
@@ -313,24 +312,30 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     
     try {
       // First, add the reply to get a reply ID
-      const reply = await addReply({
+      const newReply = await addReply({
         caseId,
         userId: currentUser!.id,
         content: replyContent || "(No message)", // Use placeholder if only attachments
         isInternal: isInternalReply
       });
       
+      if (!newReply || !newReply.id) {
+        throw new Error("Failed to create reply");
+      }
+      
+      const replyId = newReply.id;
+      
       // If there are attachments, upload them
-      if (attachments.length > 0 && reply?.id) {
+      if (attachments.length > 0) {
         for (const file of attachments) {
           // Upload the file
-          const filePath = await uploadFile(file, reply.id);
+          const filePath = await uploadFile(file, replyId);
           
           if (filePath) {
             // Save attachment metadata in the database
             await uploadAttachment({
               caseId,
-              replyId: reply.id,
+              replyId: replyId,
               fileName: file.name,
               filePath,
               contentType: file.type,

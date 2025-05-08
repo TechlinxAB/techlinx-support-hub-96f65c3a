@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -68,7 +68,7 @@ export interface Note {
 export type CaseAttachment = {
   id: string;
   caseId: string;
-  replyId?: string;  // Add this field to link to replies
+  replyId?: string;
   fileName: string;
   filePath: string;
   contentType: string;
@@ -1201,7 +1201,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       
       // Update state
-      setReplies(prev => prev.filter(r => r.id !== replyId));
+      setRepliesData(prev => prev.filter(r => r.id !== replyId));
       setCaseAttachments(prev => prev.filter(a => a.replyId !== replyId));
     } catch (err) {
       console.error('Exception deleting reply:', err);
