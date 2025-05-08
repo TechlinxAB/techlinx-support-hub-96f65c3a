@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -12,65 +11,54 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 interface CaseDiscussionProps {
   caseId: string;
 }
 
-// Cache helper for discussions
-const discussionCache = {
-  get: (caseId: string) => {
-    try {
-      const cached = localStorage.getItem(`discussion-cache-${caseId}`);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        
-        // Cache expires after 5 minutes
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          return data;
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Cache retrieval error:', error);
-      return null;
-    }
-  },
-  
-  set: (caseId: string, replies: any[], notes: any[]) => {
-    try {
-      localStorage.setItem(`discussion-cache-${caseId}`, JSON.stringify({
-        data: { replies, notes },
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.error('Cache storage error:', error);
-    }
-  }
-};
-
 // Utility function for exponential backoff retry
-const retryOperation = async (operation: () => Promise<any>, maxRetries = 3, initialDelay = 300) => {
+const retryFetch = async (fn: () => Promise<any>, maxRetries = 5, initialDelay = 300) => {
   let retries = 0;
   
   while (retries < maxRetries) {
     try {
-      return await operation();
+      return await fn();
     } catch (error) {
       retries++;
       
-      if (retries >= maxRetries) {
+      if (retries === maxRetries) {
         throw error;
       }
       
-      // Exponential backoff with jitter
+      // Calculate delay with exponential backoff (300ms, 600ms, 1200ms, etc.)
       const delay = initialDelay * Math.pow(2, retries - 1);
-      const jitter = Math.random() * 200;
+      
+      // Add some randomness to prevent synchronized retries
+      const jitter = Math.random() * 300;
       
       console.log(`Retry ${retries}/${maxRetries} after ${delay + jitter}ms`);
       await new Promise(resolve => setTimeout(resolve, delay + jitter));
+    }
+  }
+};
+
+// Helper to interact with local storage
+const localStorageCache = {
+  getItem: (key: string) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      console.log('Unable to cache in localStorage');
     }
   }
 };
@@ -91,120 +79,116 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   
   const [replyContent, setReplyContent] = useState('');
   const [isInternalReply, setIsInternalReply] = useState(false);
+  const [noteContent, setNoteContent] = useState('');
   const [attachments, setAttachments] = useState<FileList | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isRefetching, setIsRefetching] = useState(false);
   const [localReplies, setLocalReplies] = useState<any[]>([]);
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [offlineMode, setOfflineMode] = useState(false);
-  const [dataFetched, setDataFetched] = useState(false); // Add this to track if initial data fetch is done
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
-  const lastFetchTimeRef = useRef<number>(0);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Initialize with cached data if available
+  // Cache the case discussion data
   useEffect(() => {
-    const cached = discussionCache.get(caseId);
-    if (cached) {
-      setLocalReplies(cached.replies || []);
-      setLocalNotes(cached.notes || []);
-      
-      // Still fetch fresh data, but we have something to show immediately
-      console.log('Using cached discussion data while fetching fresh data');
+    const cachedDiscussion = localStorageCache.getItem(`case-discussion-${caseId}`);
+    
+    if (cachedDiscussion) {
+      if (cachedDiscussion.replies) setLocalReplies(cachedDiscussion.replies);
+      if (cachedDiscussion.notes) setLocalNotes(cachedDiscussion.notes);
     }
   }, [caseId]);
-
-  // Debounced fetch function to prevent excessive requests
-  const debouncedFetch = useCallback((caseId: string) => {
-    // Don't fetch too frequently (at least 2 seconds between requests)
-    const now = Date.now();
-    if (now - lastFetchTimeRef.current < 2000) {
-      // Clear existing timeout if it exists
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
+  
+  // Update cache when data changes
+  useEffect(() => {
+    if (replies.length > 0 || notes.length > 0) {
+      const caseReplies = replies.filter(r => r.caseId === caseId);
+      const caseNotes = notes.filter(n => n.caseId === caseId);
       
-      // Set a new timeout
-      fetchTimeoutRef.current = setTimeout(() => {
-        debouncedFetch(caseId);
-      }, 2000);
+      localStorageCache.setItem(`case-discussion-${caseId}`, {
+        replies: caseReplies,
+        notes: caseNotes,
+        timestamp: new Date().toISOString()
+      });
       
-      return;
+      setLocalReplies(caseReplies);
+      setLocalNotes(caseNotes);
+    }
+  }, [replies, notes, caseId]);
+  
+  // Function to handle manual refetching with error handling and retry
+  const handleRefetch = useCallback(async () => {
+    // Clear previous timer if it exists
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
     
-    lastFetchTimeRef.current = now;
-    
-    setIsRefetching(true);
-    setFetchError(null);
-    
-    Promise.all([
-      retryOperation(() => refetchReplies(caseId)),
-      retryOperation(() => refetchNotes(caseId))
-    ])
-      .then(() => {
-        setOfflineMode(false);
-        // Update the cache with fresh data
-        const caseReplies = replies.filter(r => r.caseId === caseId);
-        const caseNotes = notes.filter(n => n.caseId === caseId);
-        discussionCache.set(caseId, caseReplies, caseNotes);
-        setDataFetched(true); // Mark data as fetched
-      })
-      .catch(error => {
-        console.error('Error fetching discussion data:', error);
-        setFetchError('Failed to load discussion data. Using cached data if available.');
+    // Debounce the refetch
+    debounceTimerRef.current = setTimeout(async () => {
+      setIsRefetching(true);
+      setFetchError(null);
+      setOfflineMode(false);
+      
+      try {
+        await Promise.all([
+          retryFetch(() => refetchReplies(caseId)),
+          retryFetch(() => refetchNotes(caseId))
+        ]);
+        
+        toast({
+          title: "Refreshed",
+          description: "Discussion data has been refreshed",
+        });
+      } catch (error) {
+        console.error('Error refetching data:', error);
+        setFetchError('Failed to load discussion data. You can view cached data or try again later.');
         setOfflineMode(true);
-        setDataFetched(true); // Mark data as fetched even if it failed
         
         toast({
           title: "Connection issue",
-          description: "Displaying cached data. Click refresh to try again.",
+          description: "Using cached data where available. Retry when connection improves.",
           variant: "destructive"
         });
-      })
-      .finally(() => {
+      } finally {
         setIsRefetching(false);
-      });
-  }, [caseId, refetchReplies, refetchNotes, replies, notes, toast]);
-  
-  // Initial data fetch with limited frequency, but only ONCE
-  useEffect(() => {
-    if (caseId && !dataFetched) {
-      debouncedFetch(caseId);
-    }
+      }
+    }, 300); // 300ms debounce
     
+    // Cleanup function
     return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
-  }, [caseId, debouncedFetch, dataFetched]); // Add dataFetched to dependencies
+  }, [caseId, refetchReplies, refetchNotes, toast]);
   
-  // Store pending submissions
-  const storePendingSubmission = useCallback((type: 'reply' | 'note', data: any) => {
-    try {
-      const storageKey = type === 'reply' ? 'pendingReplies' : 'pendingNotes';
-      const pending = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      pending.push({ ...data, timestamp: Date.now() });
-      localStorage.setItem(storageKey, JSON.stringify(pending));
-    } catch (error) {
-      console.error(`Error storing pending ${type}:`, error);
+  // Initial data fetch - only run once when component mounts or caseId changes
+  useEffect(() => {
+    if (caseId) {
+      handleRefetch();
     }
-  }, []);
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [caseId, handleRefetch]); // Only depend on caseId and handleRefetch to prevent refetch loops
   
-  // Merge replies and notes from context and local state (for optimistic updates)
-  const mergedReplies = [...(offlineMode ? localReplies : replies.filter(r => r.caseId === caseId))];
-  const mergedNotes = [...(offlineMode ? localNotes : notes.filter(n => n.caseId === caseId))];
-  
-  // Combine all items for display, sorted by date
+  // Merge replies and notes, sort by date (prioritize local state if in offline mode)
   const allItems = [
-    ...mergedReplies.map(r => ({
+    ...(offlineMode ? localReplies : replies.filter(r => r.caseId === caseId)).map(r => ({
       ...r,
       type: 'reply',
       createdAt: new Date(r.createdAt)
     })),
-    ...mergedNotes.map(n => ({
+    ...(offlineMode ? localNotes : notes.filter(n => n.caseId === caseId)).map(n => ({
       ...n,
       type: 'note',
       createdAt: new Date(n.createdAt)
@@ -223,149 +207,182 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     if (!replyContent.trim()) return;
     
     try {
-      // Create optimistic update
+      // Optimistic update for UI responsiveness
       const tempId = `temp-${Date.now()}`;
       const optimisticReply = {
         id: tempId,
         caseId,
         userId: currentUser!.id,
         content: replyContent,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(),
         isInternal: isInternalReply,
         isOptimistic: true
       };
       
-      // Add to local state for immediate feedback
       setLocalReplies(prev => [...prev, optimisticReply]);
       
-      // Attempt to save to server
-      await addReply({
+      // Save to the server with retry
+      await retryFetch(() => addReply({
         caseId,
         userId: currentUser!.id,
         content: replyContent,
         isInternal: isInternalReply
-      });
-      
-      toast("Reply sent", {
-        description: "Your reply has been added successfully."
-      });
+      }));
       
       setReplyContent('');
       setIsInternalReply(false);
       setAttachments(null);
       
-      // Refresh data after successful submission, but with a small delay
-      setTimeout(() => debouncedFetch(caseId), 300);
+      toast({
+        title: "Reply sent",
+        description: "Your reply has been added to the discussion.",
+      });
+      
+      // Refresh the data after a successful submission
+      handleRefetch();
     } catch (error) {
       console.error('Error adding reply:', error);
       
-      // Store for later submission
-      storePendingSubmission('reply', {
-        caseId,
-        userId: currentUser!.id,
-        content: replyContent,
-        isInternal: isInternalReply
+      toast({
+        title: "Failed to send reply",
+        description: "Your reply is saved locally and will be sent when connection is restored.",
+        variant: "destructive",
       });
       
-      toast("Network issue", {
-        description: "Your reply is saved and will be sent when connection improves.",
-        variant: "destructive"
+      // Store unsent messages for later sync
+      const pendingMessages = JSON.parse(localStorage.getItem('pendingMessages') || '[]');
+      pendingMessages.push({
+        type: 'reply',
+        caseId,
+        userId: currentUser!.id, 
+        content: replyContent,
+        isInternal: isInternalReply,
+        timestamp: new Date().toISOString()
       });
+      localStorage.setItem('pendingMessages', JSON.stringify(pendingMessages));
     }
   };
   
-  // Function to retry sending pending submissions
-  const retryPendingSubmissions = useCallback(async () => {
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!noteContent.trim()) return;
+    
     try {
-      // Check for pending replies
-      const pendingReplies = JSON.parse(localStorage.getItem('pendingReplies') || '[]');
-      const thisItemReplies = pendingReplies.filter((item: any) => item.caseId === caseId);
+      // Optimistic update
+      const tempId = `temp-${Date.now()}`;
+      const optimisticNote = {
+        id: tempId,
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+        createdAt: new Date(),
+        isOptimistic: true
+      };
       
-      if (thisItemReplies.length > 0) {
-        for (const item of thisItemReplies) {
-          try {
-            await addReply({
-              caseId: item.caseId,
-              userId: item.userId,
-              content: item.content,
-              isInternal: item.isInternal
-            });
-          } catch (error) {
-            console.error('Failed to submit pending reply:', error);
-            // Will keep in localStorage for next attempt
-            continue;
-          }
-        }
-        
-        // Remove successfully processed items
-        const remainingReplies = pendingReplies.filter((item: any) => item.caseId !== caseId);
-        localStorage.setItem('pendingReplies', JSON.stringify(remainingReplies));
-      }
+      setLocalNotes(prev => [...prev, optimisticNote]);
       
-      // Check for pending notes
-      const pendingNotes = JSON.parse(localStorage.getItem('pendingNotes') || '[]');
-      const thisItemNotes = pendingNotes.filter((item: any) => item.caseId === caseId);
+      // Save to server with retry
+      await retryFetch(() => addNote({
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+      }));
       
-      if (thisItemNotes.length > 0) {
-        for (const item of thisItemNotes) {
-          try {
-            await addNote({
-              caseId: item.caseId,
-              userId: item.userId,
-              content: item.content
-            });
-          } catch (error) {
-            console.error('Failed to submit pending note:', error);
-            // Will keep in localStorage for next attempt
-            continue;
-          }
-        }
-        
-        // Remove successfully processed items
-        const remainingNotes = pendingNotes.filter((item: any) => item.caseId !== caseId);
-        localStorage.setItem('pendingNotes', JSON.stringify(remainingNotes));
-      }
+      setNoteContent('');
       
-      if (thisItemReplies.length > 0 || thisItemNotes.length > 0) {
-        toast({
-          title: "Sync completed",
-          description: "Your pending messages have been sent.",
-        });
-        
-        // Refresh discussions
-        debouncedFetch(caseId);
-      }
+      toast({
+        title: "Note added",
+        description: "Your internal note has been added.",
+      });
+      
+      // Refresh data after successful submission
+      handleRefetch();
     } catch (error) {
-      console.error('Error syncing pending submissions:', error);
+      console.error('Error adding note:', error);
+      
+      toast({
+        title: "Failed to add note",
+        description: "Your note is saved locally and will be added when connection is restored.",
+        variant: "destructive",
+      });
+      
+      // Store unsent notes for later sync
+      const pendingNotes = JSON.parse(localStorage.getItem('pendingNotes') || '[]');
+      pendingNotes.push({
+        type: 'note',
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem('pendingNotes', JSON.stringify(pendingNotes));
+    }
+  };
+  
+  const retryPendingMessages = async () => {
+    // Try to send any pending messages
+    const pendingMessages = JSON.parse(localStorage.getItem('pendingMessages') || '[]');
+    const pendingNotes = JSON.parse(localStorage.getItem('pendingNotes') || '[]');
+    
+    if (pendingMessages.length === 0 && pendingNotes.length === 0) return;
+    
+    try {
+      // Process replies
+      for (const message of pendingMessages) {
+        if (message.caseId === caseId) {
+          await addReply({
+            caseId: message.caseId,
+            userId: message.userId,
+            content: message.content,
+            isInternal: message.isInternal
+          });
+        }
+      }
+      
+      // Process notes
+      for (const note of pendingNotes) {
+        if (note.caseId === caseId) {
+          await addNote({
+            caseId: note.caseId,
+            userId: note.userId,
+            content: note.content
+          });
+        }
+      }
+      
+      // Clear pending items
+      localStorage.setItem('pendingMessages', JSON.stringify(
+        pendingMessages.filter((m: any) => m.caseId !== caseId)
+      ));
+      
+      localStorage.setItem('pendingNotes', JSON.stringify(
+        pendingNotes.filter((n: any) => n.caseId !== caseId)
+      ));
+      
+      toast({
+        title: "Sync completed",
+        description: "Your pending messages have been sent.",
+      });
+      
+      handleRefetch();
+    } catch (error) {
       toast({
         title: "Sync failed",
         description: "Unable to sync your pending messages. Will retry later.",
         variant: "destructive",
       });
     }
-  }, [caseId, addReply, addNote, debouncedFetch, toast]);
-  
-  // Try to submit pending items when connection is restored
-  useEffect(() => {
-    if (!offlineMode) {
-      const hasPendingItems = 
-        (localStorage.getItem('pendingReplies') && localStorage.getItem('pendingReplies') !== '[]') || 
-        (localStorage.getItem('pendingNotes') && localStorage.getItem('pendingNotes') !== '[]');
-      
-      if (hasPendingItems) {
-        retryPendingSubmissions();
-      }
-    }
-  }, [offlineMode, retryPendingSubmissions]);
-  
-  const handleRefresh = () => {
-    setIsRefetching(true);
-    setOfflineMode(false);
-    debouncedFetch(caseId);
   };
   
-  // If there's an error and no cached data
-  if (fetchError && !offlineMode && localReplies.length === 0 && localNotes.length === 0) {
+  useEffect(() => {
+    // Attempt to send pending messages when component loads
+    if (!offlineMode && (localStorage.getItem('pendingMessages') || localStorage.getItem('pendingNotes'))) {
+      retryPendingMessages();
+    }
+  }, [offlineMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  if (fetchError && !offlineMode) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
@@ -373,15 +390,24 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           <Alert className="mb-4" variant="destructive">
             <AlertDescription>{fetchError}</AlertDescription>
           </Alert>
-          <div className="flex justify-center">
-            <Button 
-              onClick={handleRefresh} 
-              variant="outline"
-              disabled={isRefetching}
-              className="gap-2"
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-center">
+              <Button 
+                onClick={handleRefetch} 
+                variant="outline"
+                disabled={isRefetching}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+                {isRefetching ? 'Retrying...' : 'Retry'}
+              </Button>
+            </div>
+            
+            <Button
+              onClick={() => setOfflineMode(true)}
+              variant="secondary"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-              {isRefetching ? 'Retrying...' : 'Retry'}
+              View Cached Discussions
             </Button>
           </div>
         </CardContent>
@@ -389,7 +415,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     );
   }
   
-  // Show loading state only when we have no data at all
   if ((loadingReplies || loadingNotes || isRefetching) && allItems.length === 0) {
     return (
       <Card>
@@ -423,7 +448,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">
@@ -437,7 +462,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={handleRefresh}
+                onClick={handleRefetch}
                 disabled={isRefetching}
                 className="h-8 gap-1"
               >
@@ -446,16 +471,21 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               </Button>
             </div>
           </div>
+          {offlineMode && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Showing cached discussions. Some messages may be pending upload.
+            </p>
+          )}
         </CardHeader>
         
-        <CardContent>
+        <CardContent className="space-y-4">
           {allItems.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {allItems.map((item, index) => {
+            <div className="space-y-4">
+              {allItems.map((item) => {
                 const author = users.find(u => u.id === item.userId);
                 
                 if (item.type === 'note' && !isConsultant) {
@@ -463,6 +493,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                   return null;
                 }
                 
+                const isUserMessage = item.userId === currentUser?.id;
                 const isOptimistic = (item as any).isOptimistic;
                 // Use the author's name if found, or "Unknown User" as a fallback
                 const authorName = getAuthorDisplayName(item.userId);
@@ -471,50 +502,52 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 return (
                   <div 
                     key={`${item.type}-${item.id}`}
-                    className="flex gap-4"
+                    className={`flex ${isUserMessage ? 'justify-end' : 'justify-start'}`}
                   >
-                    <Avatar className="h-10 w-10 flex-shrink-0">
-                      <AvatarFallback>{initials}</AvatarFallback>
-                    </Avatar>
-                    
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          {authorName}
-                        </span>
-                        
+                    <div 
+                      className={`max-w-[80%] ${
+                        item.type === 'note' 
+                          ? 'bg-orange-50 border-orange-200' 
+                          : (item as any).isInternal 
+                            ? 'bg-gray-50 border-gray-200'
+                            : isUserMessage
+                              ? 'bg-primary-foreground border-primary/20'
+                              : 'bg-muted border-muted-foreground/20'
+                      } border rounded-lg p-3 ${isOptimistic ? 'opacity-70' : ''}`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            {author?.avatar ? (
+                              <AvatarImage src={author.avatar} alt={authorName} />
+                            ) : (
+                              <AvatarFallback>{initials}</AvatarFallback>
+                            )}
+                          </Avatar>
+                          <span className="font-medium text-sm">
+                            {authorName}
+                          </span>
+                          {item.type === 'note' && (
+                            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
+                              Internal Note
+                            </Badge>
+                          )}
+                          {item.type === 'reply' && (item as any).isInternal && (
+                            <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
+                              <Lock className="h-3 w-3" /> Internal
+                            </Badge>
+                          )}
+                          {isOptimistic && (
+                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+                              Sending...
+                            </Badge>
+                          )}
+                        </div>
                         <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(item.createdAt, { addSuffix: true })}
                         </span>
-                        
-                        {item.type === 'note' && (
-                          <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
-                            Internal Note
-                          </Badge>
-                        )}
-                        
-                        {item.type === 'reply' && (item as any).isInternal && (
-                          <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
-                            <Lock className="h-3 w-3" /> Internal
-                          </Badge>
-                        )}
-                        
-                        {isOptimistic && (
-                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
-                            Sending...
-                          </Badge>
-                        )}
                       </div>
-                      
-                      <div className={`p-3 rounded-md ${
-                        item.type === 'note' 
-                          ? 'bg-orange-50 border border-orange-200' 
-                          : (item as any).isInternal 
-                            ? 'bg-gray-50 border border-gray-200'
-                            : 'bg-white border border-gray-200'
-                      } ${isOptimistic ? 'opacity-70' : ''}`}>
-                        <p className="whitespace-pre-wrap">{item.content}</p>
-                      </div>
+                      <p className="whitespace-pre-wrap text-sm">{item.content}</p>
                     </div>
                   </div>
                 );
@@ -522,49 +555,71 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
             </div>
           )}
           
-          <div className="mt-8 pt-4 border-t border-gray-200">
-            <form onSubmit={handleAddReply} className="space-y-4">
-              <Textarea 
-                placeholder="Type your reply..." 
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                rows={4}
-                className="w-full"
-              />
-              
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center">
-                  <Input 
-                    type="file" 
-                    multiple 
-                    onChange={handleAttachmentChange}
-                    id="file-upload"
-                    className="max-w-xs"
-                  />
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  {isConsultant && (
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        id="internal" 
-                        checked={isInternalReply}
-                        onCheckedChange={setIsInternalReply}
-                      />
-                      <Label htmlFor="internal" className="text-sm">Internal reply</Label>
-                    </div>
-                  )}
-                  
-                  <Button type="submit" className="gap-2">
-                    <SendHorizontal className="h-4 w-4" />
-                    Send Reply
-                  </Button>
-                </div>
+          <form onSubmit={handleAddReply} className="pt-4">
+            <Textarea 
+              placeholder="Type your reply..." 
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              rows={4}
+              className="mb-3"
+            />
+            
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+              <div className="flex items-center gap-3">
+                <Input 
+                  type="file" 
+                  multiple 
+                  onChange={handleAttachmentChange}
+                  className="max-w-xs"
+                />
               </div>
-            </form>
-          </div>
+              
+              <div className="flex flex-wrap items-center gap-4">
+                {isConsultant && (
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="internal" 
+                      checked={isInternalReply}
+                      onCheckedChange={setIsInternalReply}
+                    />
+                    <Label htmlFor="internal" className="text-sm">Internal reply</Label>
+                  </div>
+                )}
+                
+                <Button type="submit" className="gap-2">
+                  <SendHorizontal className="h-4 w-4" />
+                  Send Reply
+                </Button>
+              </div>
+            </div>
+          </form>
         </CardContent>
       </Card>
+      
+      {isConsultant && (
+        <Card>
+          <CardHeader className="pb-3">
+            <h3 className="text-lg font-semibold">Internal Notes</h3>
+            <p className="text-sm text-muted-foreground">
+              Notes are only visible to consultants
+            </p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddNote} className="space-y-3">
+              <Textarea 
+                placeholder="Add internal note..." 
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                rows={4}
+              />
+              
+              <div className="flex justify-end">
+                <Button type="submit">Add Note</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
