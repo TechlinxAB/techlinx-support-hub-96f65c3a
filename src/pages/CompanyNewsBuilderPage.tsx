@@ -78,7 +78,7 @@ const CompanyNewsBuilderPage = () => {
 
   const handleAddBlock = async () => {
     if (!companyId || !newBlockType || !newBlockTitle.trim()) {
-      toast("Error", {
+      toast.error("Error", {
         description: "Company ID, block type and title are required"
       });
       return;
@@ -102,7 +102,7 @@ const CompanyNewsBuilderPage = () => {
 
       if (newBlockId) {
         // Add block to local state optimistically
-        const newBlock: CompanyNewsBlock = {
+        const newBlock = {
           id: newBlockId,
           companyId,
           title: newBlockTitle,
@@ -126,9 +126,7 @@ const CompanyNewsBuilderPage = () => {
       }
     } catch (error) {
       console.error('Error adding block:', error);
-      toast.error("Failed to add block", {
-        description: error.message || "Please try again"
-      });
+      toast.error("Failed to add block");
     } finally {
       setLoading(false);
     }
@@ -275,8 +273,8 @@ const CompanyNewsBuilderPage = () => {
         isPublished
       });
       
-      // Database update
-      await publishCompanyNewsBlock(blockId, isPublished);
+      // Database update - passing only the blockId here, not the second argument
+      await publishCompanyNewsBlock(blockId);
       
       toast.success(isPublished ? "Published" : "Unpublished", {
         description: `Block ${isPublished ? 'published' : 'unpublished'} successfully`

@@ -1,4 +1,3 @@
-
 import React, { 
   createContext, 
   useState, 
@@ -122,16 +121,6 @@ interface AppContextType {
   addNote: (data: { caseId: string; userId: string; content: string }) => Promise<Note>;
   updateCompany: (companyId: string, updates: Partial<Company>) => Promise<void>;
   deleteCompany: (companyId: string) => Promise<void>;
-  dashboardBlocks?: any[];
-  loadingDashboardBlocks?: boolean;
-  refetchDashboardBlocks?: (companyId: string) => Promise<void>;
-  addDashboardBlock?: (data: any) => Promise<any>;
-  updateDashboardBlock?: (blockId: string, updates: any) => Promise<void>;
-  deleteDashboardBlock?: (blockId: string) => Promise<void>;
-  addCompanyNewsBlock?: (data: any) => Promise<any>;
-  updateCompanyNewsBlock?: (blockId: string, updates: any) => Promise<void>;
-  deleteCompanyNewsBlock?: (blockId: string) => Promise<void>;
-  publishCompanyNewsBlock?: (blockId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -479,33 +468,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (replyError) throw replyError;
       
-      // Process each reply to get its attachments
-      const formattedReplies: Reply[] = await Promise.all(
-        replyData.map(async (reply) => {
-          // Fetch attachments for this reply
-          const { data: attachmentData, error: attachmentError } = await supabase
-            .from('case_attachments')
-            .select('*')
-            .eq('reply_id', reply.id);
+      // Create a map to store attachments for each reply
+      const attachmentMap: Record<string, ReplyAttachment[]> = {};
+      
+      // Fetch all attachments for the case replies in one query
+      const { data: attachmentData, error: attachmentError } = await supabase
+        .from('case_attachments')
+        .select('*')
+        .eq('case_id', caseId);
+      
+      // Group attachments by reply_id
+      if (!attachmentError && attachmentData) {
+        for (const attachment of attachmentData) {
+          if (!attachmentMap[attachment.reply_id]) {
+            attachmentMap[attachment.reply_id] = [];
+          }
           
-          const attachments = attachmentError ? [] : attachmentData.map(attachment => ({
+          attachmentMap[attachment.reply_id].push({
             path: attachment.file_path,
             name: attachment.file_name,
-            size: attachment.size,
-            type: attachment.content_type
-          }));
-          
-          return {
-            id: reply.id,
-            caseId: reply.case_id,
-            userId: reply.user_id,
-            content: reply.content,
-            isInternal: reply.is_internal,
-            createdAt: reply.created_at,
-            attachments: attachments
-          };
-        })
-      );
+            size: attachment.size || 0,
+            type: attachment.content_type || ''
+          });
+        }
+      }
+      
+      // Map the replies with their attachments
+      const formattedReplies: Reply[] = replyData.map((reply) => ({
+        id: reply.id,
+        caseId: reply.case_id,
+        userId: reply.user_id,
+        content: reply.content,
+        isInternal: reply.is_internal,
+        createdAt: reply.created_at,
+        attachments: attachmentMap[reply.id] || []
+      }));
       
       setRepliesData(formattedReplies);
       return formattedReplies;
