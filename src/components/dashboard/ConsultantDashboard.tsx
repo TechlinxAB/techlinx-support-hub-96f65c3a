@@ -1,155 +1,423 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import CaseList from '@/components/cases/CaseList';
-import { ChartContainer } from '@/components/ui/chart';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { 
+  Star, 
+  StarOff,
+  Clock, 
+  AlertTriangle, 
+  CheckCircle2, 
+  FilePlus, 
+  Users,
+  ArrowRight,
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 const ConsultantDashboard = () => {
-  const { cases, companies } = useAppContext();
+  const navigate = useNavigate();
+  const { cases, currentUser, users, companies } = useAppContext();
+  const [starredCases, setStarredCases] = useState<string[]>([]);
   
-  // Calculate counts
-  const newCases = cases.filter(c => c.status === 'new').length;
-  const ongoingCases = cases.filter(c => c.status === 'ongoing').length;
-  const resolvedCases = cases.filter(c => c.status === 'resolved').length;
-  const completedCases = cases.filter(c => c.status === 'completed').length;
-
-  // Prepare data for charts
-  const priorityData = [
-    { name: 'Low', value: cases.filter(c => c.priority === 'low').length, color: '#10B981' },
-    { name: 'Medium', value: cases.filter(c => c.priority === 'medium').length, color: '#F59E0B' },
-    { name: 'High', value: cases.filter(c => c.priority === 'high').length, color: '#EF4444' },
-  ];
-
-  // Companies with most cases
-  const companyCaseCounts = companies.map(company => {
-    const count = cases.filter(c => c.companyId === company.id).length;
-    return {
-      name: company.name,
-      cases: count
-    };
-  }).sort((a, b) => b.cases - a.cases).slice(0, 5);
+  // Get user details by ID
+  const getUserById = (id: string) => {
+    return users.find(user => user.id === id)?.name || 'Unknown User';
+  };
+  
+  // Get company name by ID
+  const getCompanyById = (id: string) => {
+    return companies.find(company => company.id === id)?.name || 'Unknown Company';
+  };
+  
+  // Calculate days since last update
+  const getDaysSinceUpdate = (updatedAt: string) => {
+    const lastUpdate = new Date(updatedAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - lastUpdate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+  
+  // Filter for New Cases (3 most recent with 'new' status)
+  const newCases = cases
+    .filter(c => c.status === 'new')
+    .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
+    .slice(0, 3);
+  
+  // Filter for Ongoing Cases (3 cases where last update wasn't by consultant)
+  const ongoingCases = cases
+    .filter(c => c.status === 'ongoing')
+    // We'd need reply data to know who last updated, but for now we'll just use all ongoing cases
+    .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
+    .slice(0, 3);
+  
+  // Filter for Awaiting Confirmation Cases (3 most recent 'resolved' status)
+  const awaitingConfirmationCases = cases
+    .filter(c => c.status === 'resolved')
+    .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
+    .slice(0, 3);
+  
+  // Filter for Overdue Cases (over 30 days since last update, status is 'new' or 'ongoing')
+  const overdueCases = cases
+    .filter(c => 
+      (c.status === 'new' || c.status === 'ongoing') && 
+      c.updated_at && 
+      getDaysSinceUpdate(c.updated_at) > 30
+    )
+    .sort((a, b) => 
+      new Date(a.updated_at || '').getTime() - new Date(b.updated_at || '').getTime()
+    )
+    .slice(0, 3);
+  
+  // Recent Activity Feed (user actions only)
+  // In a real implementation, we'd have a separate table for activities
+  // For now, we'll simulate with recent cases as a placeholder
+  const recentActivities = cases
+    .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
+    .slice(0, 5)
+    .map(c => ({
+      timestamp: c.created_at,
+      description: `${getUserById(c.user_id)} submitted: '${c.title}'`,
+      caseId: c.id,
+      companyId: c.company_id
+    }));
+  
+  // Toggle star on a case
+  const toggleStar = (caseId: string) => {
+    if (starredCases.includes(caseId)) {
+      setStarredCases(starredCases.filter(id => id !== caseId));
+    } else {
+      setStarredCases([...starredCases, caseId]);
+    }
+  };
+  
+  // Load starred cases from localStorage on component mount
+  useEffect(() => {
+    const savedStarredCases = localStorage.getItem('starredCases');
+    if (savedStarredCases) {
+      setStarredCases(JSON.parse(savedStarredCases));
+    }
+  }, []);
+  
+  // Save starred cases to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem('starredCases', JSON.stringify(starredCases));
+  }, [starredCases]);
+  
+  // Filter cases that are starred
+  const watchlistCases = cases.filter(c => starredCases.includes(c.id)).slice(0, 3);
+  
+  // Navigate to case detail
+  const viewCase = (caseId: string) => {
+    navigate(`/cases/${caseId}`);
+  };
   
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Consultant Dashboard</h1>
       
-      {/* Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Case Overview Panels - Top Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* New Cases Panel */}
         <Card>
-          <CardHeader className="pb-2">
-            <h3 className="text-sm font-medium text-muted-foreground">New Cases</h3>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <Badge variant="default" className="bg-green-500">New</Badge>
+              New Cases
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{newCases}</p>
+          <CardContent className="pb-3">
+            {newCases.length > 0 ? (
+              <div className="space-y-3">
+                {newCases.map(caseItem => (
+                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
+                    <div className="space-y-1">
+                      <p className="font-medium">{caseItem.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => toggleStar(caseItem.id)}
+                      >
+                        {starredCases.includes(caseItem.id) ? 
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                          <Star className="h-4 w-4" />}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => viewCase(caseItem.id)}
+                      >
+                        View Case
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-6">No new cases</p>
+            )}
           </CardContent>
         </Card>
         
+        {/* Ongoing Cases Panel */}
         <Card>
-          <CardHeader className="pb-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Ongoing</h3>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <Badge variant="default" className="bg-blue-500">Active</Badge>
+              Ongoing Cases
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{ongoingCases}</p>
+          <CardContent className="pb-3">
+            {ongoingCases.length > 0 ? (
+              <div className="space-y-3">
+                {ongoingCases.map(caseItem => (
+                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
+                    <div className="space-y-1">
+                      <p className="font-medium">{caseItem.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => toggleStar(caseItem.id)}
+                      >
+                        {starredCases.includes(caseItem.id) ? 
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                          <Star className="h-4 w-4" />}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => viewCase(caseItem.id)}
+                      >
+                        View Case
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-6">No ongoing cases</p>
+            )}
           </CardContent>
         </Card>
         
+        {/* Awaiting Confirmation Panel */}
         <Card>
-          <CardHeader className="pb-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Awaiting Confirmation</h3>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <Badge variant="default" className="bg-yellow-500">Pending</Badge>
+              Awaiting Confirmation
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{resolvedCases}</p>
+          <CardContent className="pb-3">
+            {awaitingConfirmationCases.length > 0 ? (
+              <div className="space-y-3">
+                {awaitingConfirmationCases.map(caseItem => (
+                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
+                    <div className="space-y-1">
+                      <p className="font-medium">{caseItem.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => toggleStar(caseItem.id)}
+                      >
+                        {starredCases.includes(caseItem.id) ? 
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                          <Star className="h-4 w-4" />}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => viewCase(caseItem.id)}
+                      >
+                        View Case
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-6">No cases awaiting confirmation</p>
+            )}
           </CardContent>
         </Card>
         
+        {/* Overdue Cases Panel */}
         <Card>
-          <CardHeader className="pb-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Completed</h3>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <Badge variant="destructive">Overdue</Badge>
+              Overdue Cases
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{completedCases}</p>
+          <CardContent className="pb-3">
+            {overdueCases.length > 0 ? (
+              <div className="space-y-3">
+                {overdueCases.map(caseItem => (
+                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
+                    <div className="space-y-1">
+                      <p className="font-medium">{caseItem.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                      </p>
+                      <p className="text-xs text-red-500">
+                        {caseItem.updated_at && `${getDaysSinceUpdate(caseItem.updated_at)} days since last update`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => toggleStar(caseItem.id)}
+                      >
+                        {starredCases.includes(caseItem.id) ? 
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                          <Star className="h-4 w-4" />}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => viewCase(caseItem.id)}
+                      >
+                        View Case
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-6">No overdue cases</p>
+            )}
           </CardContent>
         </Card>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Priority Chart */}
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Activity Feed */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <h3 className="text-lg font-medium">Priority Breakdown</h3>
+            <CardTitle className="text-xl font-medium">Recent Activity</CardTitle>
           </CardHeader>
-          <CardContent className="flex justify-center">
-            <div className="w-full h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={priorityData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {priorityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Activity</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentActivities.map((activity, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-medium">
+                      {activity.timestamp ? formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true }) : 'Recently'}
+                    </TableCell>
+                    <TableCell>{activity.description}</TableCell>
+                    <TableCell>{getCompanyById(activity.companyId)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => viewCase(activity.caseId)}
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {recentActivities.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6">No recent activity</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
         
-        {/* Top Companies */}
-        <Card>
-          <CardHeader>
-            <h3 className="text-lg font-medium">Top Companies by Cases</h3>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <div className="w-full h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={companyCaseCounts}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  {/* Explicitly providing all props instead of relying on defaultProps */}
-                  <XAxis 
-                    dataKey="name" 
-                    scale="band"
-                    padding={{ left: 10, right: 10 }}
-                    tick={{ fontSize: 12 }}
-                    height={60}
-                    tickLine={true}
-                    axisLine={true}
-                    interval={0}
-                    tickMargin={5}
-                    minTickGap={0}
-                    allowDecimals={false}
-                  />
-                  <YAxis
-                    width={40}
-                    tickLine={true}
-                    axisLine={true}
-                    tick={{ fontSize: 12 }}
-                    allowDecimals={false}
-                    minTickGap={5}
-                  />
-                  <Tooltip cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }} />
-                  <Bar dataKey="cases" fill="#387A3D" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="space-y-6">
-        <CaseList title="Recent Cases" showFilters={false} limit={5} />
+        {/* Right Column: Watchlist and Quick Actions */}
+        <div className="space-y-6">
+          {/* Case Watchlist */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-medium">Watchlist</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {watchlistCases.length > 0 ? (
+                <div className="space-y-4">
+                  {watchlistCases.map(caseItem => (
+                    <div key={caseItem.id} className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="font-medium">{caseItem.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => toggleStar(caseItem.id)}
+                        >
+                          <StarOff className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => viewCase(caseItem.id)}
+                        >
+                          View
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 space-y-2">
+                  <p className="text-muted-foreground">No cases in your watchlist</p>
+                  <p className="text-sm text-muted-foreground">Star cases to add them here</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          
+          {/* Quick Actions Panel */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-medium">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button className="w-full justify-start" onClick={() => navigate('/cases/new')}>
+                <FilePlus className="mr-2 h-4 w-4" />
+                Create New Case
+              </Button>
+              <Button className="w-full justify-start" onClick={() => navigate('/users')}>
+                <Users className="mr-2 h-4 w-4" />
+                Manage Users
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
