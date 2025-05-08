@@ -59,6 +59,7 @@ export type Database = {
           file_name: string
           file_path: string
           id: string
+          reply_id: string | null
           size: number | null
         }
         Insert: {
@@ -69,6 +70,7 @@ export type Database = {
           file_name: string
           file_path: string
           id?: string
+          reply_id?: string | null
           size?: number | null
         }
         Update: {
@@ -79,6 +81,7 @@ export type Database = {
           file_name?: string
           file_path?: string
           id?: string
+          reply_id?: string | null
           size?: number | null
         }
         Relationships: [
@@ -94,6 +97,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_attachments_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "replies"
             referencedColumns: ["id"]
           },
         ]
