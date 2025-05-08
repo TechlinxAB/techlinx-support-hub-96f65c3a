@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -404,12 +405,21 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   
   // Calculate initials for avatar
   const getInitials = (name: string) => {
+    if (!name || typeof name !== 'string') return "??";
+    
     return name
       .split(' ')
       .map(part => part[0])
       .join('')
       .toUpperCase()
       .substring(0, 2);
+  };
+
+  // Get display name for a user
+  const getAuthorDisplayName = (userId: string) => {
+    const author = users.find(u => u.id === userId);
+    // Always show the name of the user, regardless of the current user's role
+    return author?.name || "Unknown User";
   };
 
   return (
@@ -454,7 +464,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 }
                 
                 const isOptimistic = (item as any).isOptimistic;
-                const initials = author?.name ? getInitials(author.name) : "??";
+                // Use the author's name if found, or "Unknown User" as a fallback
+                const authorName = getAuthorDisplayName(item.userId);
+                const initials = getInitials(authorName);
                 
                 return (
                   <div 
@@ -468,7 +480,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">
-                          {author?.name || 'Unknown'}
+                          {authorName}
                         </span>
                         
                         <span className="text-xs text-muted-foreground">
