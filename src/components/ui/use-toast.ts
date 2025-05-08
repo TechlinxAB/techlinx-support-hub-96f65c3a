@@ -33,11 +33,7 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     activeToasts.add(key);
     
     // Set timeout to remove from active toasts after duration
-    setTimeout(() => {
-      activeToasts.delete(key);
-    }, props?.duration || 3000);
-    
-    return sonnerToast(messageOrObject, {
+    const toastId = sonnerToast(messageOrObject, {
       description: props?.description,
       duration: props?.duration,
       id: props?.id,
@@ -46,9 +42,18 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
       style: {
         background: '#FFFFFF', // Solid white background
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
-        border: '1px solid var(--border)'
+        border: '1px solid var(--border)',
+        position: 'relative', // Positioning context
+        paddingRight: '36px' // Space for close button
       }
     });
+    
+    // Remove from active toasts when dismissed or duration ends
+    setTimeout(() => {
+      activeToasts.delete(key);
+    }, props?.duration || 3000);
+    
+    return toastId;
   }
   
   // If the first argument is an object, use the new API style
@@ -64,12 +69,8 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
   // Add to active toasts
   activeToasts.add(key);
   
-  // Set timeout to remove from active toasts after duration
-  setTimeout(() => {
-    activeToasts.delete(key);
-  }, duration || 3000);
-  
-  return sonnerToast(title || "", {
+  // Create the toast
+  const toastId = sonnerToast(title || "", {
     description,
     duration,
     id,
@@ -78,9 +79,18 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     style: {
       background: '#FFFFFF', // Solid white background
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
-      border: '1px solid var(--border)'
+      border: '1px solid var(--border)',
+      position: 'relative', // Positioning context
+      paddingRight: '36px' // Space for close button
     }
   });
+  
+  // Remove from active toasts when dismissed or duration ends
+  setTimeout(() => {
+    activeToasts.delete(key);
+  }, duration || 3000);
+  
+  return toastId;
 }
 
 // Add loading method to the toast function
@@ -96,19 +106,24 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
   // Add to active toasts
   activeToasts.add(key);
   
+  // Create the loading toast
+  const toastId = sonnerToast.loading(message, {
+    ...options,
+    style: {
+      background: '#FFFFFF', // Solid white background
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
+      border: '1px solid var(--border)',
+      position: 'relative', // Positioning context
+      paddingRight: '36px' // Space for close button
+    }
+  });
+  
   // Set timeout to remove from active toasts after duration or default 30 seconds for loading
   setTimeout(() => {
     activeToasts.delete(key);
   }, options?.duration || 30000);
   
-  return sonnerToast.loading(message, {
-    ...options,
-    style: {
-      background: '#FFFFFF', // Solid white background
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Consistent shadow
-      border: '1px solid var(--border)'
-    }
-  });
+  return toastId;
 };
 
 export const useToast = () => {
