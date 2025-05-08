@@ -82,12 +82,12 @@
   text-align: left;
 }
 
-/* Toast close button styling - positioned correctly at bottom right */
+/* Toast close button styling - positioned way down and way right */
 [data-sonner-toast] [data-close-button] {
   position: absolute !important;
   top: auto !important;
-  bottom: 12px !important;
-  right: 12px !important;
+  bottom: 8px !important; /* Position very close to the bottom */
+  right: 8px !important; /* Position very close to the right edge */
   margin: 0 !important;
   background-color: transparent !important;
   opacity: 0.7 !important;
