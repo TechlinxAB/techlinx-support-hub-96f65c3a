@@ -64,11 +64,11 @@ export interface Note {
   createdAt: Date;
 }
 
-// CaseAttachment type
+// CaseAttachment type - updated to include replyId property
 export type CaseAttachment = {
   id: string;
   caseId: string;
-  replyId?: string;
+  replyId?: string; // Add this property
   fileName: string;
   filePath: string;
   contentType: string;
@@ -1101,7 +1101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const formattedAttachments: CaseAttachment[] = data.map(a => ({
         id: a.id,
         caseId: a.case_id,
-        replyId: a.reply_id,
+        replyId: a.reply_id || undefined,
         fileName: a.file_name,
         filePath: a.file_path,
         contentType: a.content_type || '',
@@ -1145,7 +1145,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newAttachment: CaseAttachment = {
         id: data.id,
         caseId: data.case_id,
-        replyId: data.reply_id,
+        replyId: data.reply_id || undefined,
         fileName: data.file_name,
         filePath: data.file_path,
         contentType: data.content_type || '',
