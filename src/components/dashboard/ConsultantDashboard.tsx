@@ -34,10 +34,9 @@ const ConsultantDashboard = () => {
   };
   
   // Calculate days since last update
-  const getDaysSinceUpdate = (updatedAt: string) => {
-    const lastUpdate = new Date(updatedAt);
+  const getDaysSinceUpdate = (updatedAt: Date) => {
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - lastUpdate.getTime());
+    const diffTime = Math.abs(now.getTime() - updatedAt.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
@@ -45,31 +44,30 @@ const ConsultantDashboard = () => {
   // Filter for New Cases (3 most recent with 'new' status)
   const newCases = cases
     .filter(c => c.status === 'new')
-    .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 3);
   
   // Filter for Ongoing Cases (3 cases where last update wasn't by consultant)
   const ongoingCases = cases
     .filter(c => c.status === 'ongoing')
     // We'd need reply data to know who last updated, but for now we'll just use all ongoing cases
-    .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 3);
   
   // Filter for Awaiting Confirmation Cases (3 most recent 'resolved' status)
   const awaitingConfirmationCases = cases
     .filter(c => c.status === 'resolved')
-    .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 3);
   
   // Filter for Overdue Cases (over 30 days since last update, status is 'new' or 'ongoing')
   const overdueCases = cases
     .filter(c => 
       (c.status === 'new' || c.status === 'ongoing') && 
-      c.updated_at && 
-      getDaysSinceUpdate(c.updated_at) > 30
+      getDaysSinceUpdate(c.updatedAt) > 30
     )
     .sort((a, b) => 
-      new Date(a.updated_at || '').getTime() - new Date(b.updated_at || '').getTime()
+      a.updatedAt.getTime() - b.updatedAt.getTime()
     )
     .slice(0, 3);
   
@@ -77,13 +75,13 @@ const ConsultantDashboard = () => {
   // In a real implementation, we'd have a separate table for activities
   // For now, we'll simulate with recent cases as a placeholder
   const recentActivities = cases
-    .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 5)
     .map(c => ({
-      timestamp: c.created_at,
-      description: `${getUserById(c.user_id)} submitted: '${c.title}'`,
+      timestamp: c.createdAt,
+      description: `${getUserById(c.userId)} submitted: '${c.title}'`,
       caseId: c.id,
-      companyId: c.company_id
+      companyId: c.companyId
     }));
   
   // Toggle star on a case
@@ -138,7 +136,7 @@ const ConsultantDashboard = () => {
                     <div className="space-y-1">
                       <p className="font-medium">{caseItem.title}</p>
                       <p className="text-sm text-muted-foreground">
-                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                        {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -184,7 +182,7 @@ const ConsultantDashboard = () => {
                     <div className="space-y-1">
                       <p className="font-medium">{caseItem.title}</p>
                       <p className="text-sm text-muted-foreground">
-                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                        {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -230,7 +228,7 @@ const ConsultantDashboard = () => {
                     <div className="space-y-1">
                       <p className="font-medium">{caseItem.title}</p>
                       <p className="text-sm text-muted-foreground">
-                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                        {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -276,10 +274,10 @@ const ConsultantDashboard = () => {
                     <div className="space-y-1">
                       <p className="font-medium">{caseItem.title}</p>
                       <p className="text-sm text-muted-foreground">
-                        {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                        {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
                       </p>
                       <p className="text-xs text-red-500">
-                        {caseItem.updated_at && `${getDaysSinceUpdate(caseItem.updated_at)} days since last update`}
+                        {`${getDaysSinceUpdate(caseItem.updatedAt)} days since last update`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -330,7 +328,7 @@ const ConsultantDashboard = () => {
                 {recentActivities.map((activity, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">
-                      {activity.timestamp ? formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true }) : 'Recently'}
+                      {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
                     </TableCell>
                     <TableCell>{activity.description}</TableCell>
                     <TableCell>{getCompanyById(activity.companyId)}</TableCell>
@@ -370,7 +368,7 @@ const ConsultantDashboard = () => {
                       <div className="space-y-1">
                         <p className="font-medium">{caseItem.title}</p>
                         <p className="text-sm text-muted-foreground">
-                          {getUserById(caseItem.user_id)} • {getCompanyById(caseItem.company_id)}
+                          {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
