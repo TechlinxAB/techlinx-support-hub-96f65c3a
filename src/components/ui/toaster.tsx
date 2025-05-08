@@ -17,12 +17,12 @@ export function Toaster() {
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // Add shadow for better visibility
           position: 'relative', // Ensure proper positioning context
           borderRadius: '6px', // Slightly rounded corners for better aesthetics
-          padding: '12px 16px', // Add padding but less at top to accommodate close button
+          padding: '16px 16px 40px 16px', // Extra padding at bottom to accommodate the close button
           display: 'flex',
           flexDirection: 'row', // Change to row to put content and close button side by side
           alignItems: 'flex-start', // Align items at the top
           justifyContent: 'space-between', // Space between content and close button
-          minHeight: '80px', // Ensure minimum height for consistent appearance
+          minHeight: '100px', // Ensure minimum height for consistent appearance
           width: '100%'
         },
         duration: 3000,
