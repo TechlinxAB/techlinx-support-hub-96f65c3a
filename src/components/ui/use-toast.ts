@@ -39,8 +39,23 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
       id: props?.id,
       className: `custom-toast ${props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
                props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
-      // Custom render function to put close button inside
-      unstyled: true
+      // Customize the toast to work with our styling
+      unstyled: true,
+      // Use render function to wrap title and description in a content div
+      render: (component) => {
+        if (!component || typeof component !== 'object') return component;
+        
+        // Create a wrapper for the component to style it
+        const updatedComponent = {
+          ...component,
+          props: {
+            ...component.props,
+            className: `toast-content ${component.props?.className || ''}`
+          }
+        };
+        
+        return updatedComponent;
+      }
     });
     
     // Remove from active toasts when dismissed or duration ends
@@ -71,8 +86,23 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     id,
     className: `custom-toast ${variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
              variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
-    // Custom render function to put close button inside
-    unstyled: true
+    // Customize the toast to work with our styling
+    unstyled: true,
+    // Use render function to wrap title and description in a content div
+    render: (component) => {
+      if (!component || typeof component !== 'object') return component;
+      
+      // Create a wrapper for the component to style it
+      const updatedComponent = {
+        ...component,
+        props: {
+          ...component.props,
+          className: `toast-content ${component.props?.className || ''}`
+        }
+      };
+      
+      return updatedComponent;
+    }
   });
   
   // Remove from active toasts when dismissed or duration ends
@@ -100,7 +130,22 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
   const toastId = sonnerToast.loading(message, {
     ...options,
     className: "custom-toast",
-    unstyled: true
+    unstyled: true,
+    // Use render function to wrap content in a div
+    render: (component) => {
+      if (!component || typeof component !== 'object') return component;
+      
+      // Create a wrapper for the component to style it
+      const updatedComponent = {
+        ...component,
+        props: {
+          ...component.props,
+          className: `toast-content ${component.props?.className || ''}`
+        }
+      };
+      
+      return updatedComponent;
+    }
   });
   
   // Set timeout to remove from active toasts after duration or default 30 seconds for loading

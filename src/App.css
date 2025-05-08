@@ -60,17 +60,22 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
   border: 1px solid var(--border) !important;
   display: flex !important;
-  flex-direction: column !important;
+  flex-direction: row !important; /* Use row direction for side-by-side layout */
+  justify-content: space-between !important; /* Put space between content and close button */
+  align-items: flex-start !important; /* Align items at the top */
   position: relative !important;
 }
 
-/* Toast close button styling - positioned inside the toast using relative positioning */
+/* Toast content container to keep title and description together */
+.toast-content {
+  flex: 1;
+  padding-right: 12px;
+}
+
+/* Toast close button styling - positioned correctly at top right */
 [data-sonner-toast] [data-close-button] {
-  position: relative !important;
-  align-self: flex-end !important;
-  margin-bottom: -24px !important;
-  margin-top: 4px !important;
-  margin-right: 4px !important;
+  position: static !important; /* Use static positioning within the flexbox */
+  margin: 0 !important; /* Remove all margins */
   background-color: transparent !important;
   opacity: 0.7 !important;
   padding: 4px !important;
