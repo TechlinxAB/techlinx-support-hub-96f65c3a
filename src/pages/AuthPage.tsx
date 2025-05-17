@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -13,32 +13,24 @@ const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const mountedRef = useRef(true);
   
-  // Check if user is already logged in
+  // Simple redirect if user is already authenticated
   useEffect(() => {
-    setCheckingAuth(true);
-    
-    // If authenticated, redirect to home
     if (user) {
+      console.log("User already authenticated, redirecting to home");
       navigate('/', { replace: true });
     }
-    
-    setCheckingAuth(false);
-    
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [navigate, user]);
+  }, [user, navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
+      setErrorMessage("Please fill in all fields");
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -48,8 +40,10 @@ const AuthPage = () => {
     }
     
     setLoading(true);
+    setErrorMessage('');
     
     try {
+      console.log(`Attempting to sign in with email: ${email}`);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -57,16 +51,18 @@ const AuthPage = () => {
       
       if (error) throw error;
       
+      console.log("Sign in successful, data:", data);
+      
       toast({
         title: "Success!",
         description: "You have been logged in",
       });
       
-      // Navigate to home
-      navigate('/', { replace: true });
+      // Navigation will happen automatically via useEffect in AuthContext
       
     } catch (error: any) {
-      if (!mountedRef.current) return;
+      console.error("Sign in error:", error);
+      setErrorMessage(error.message || "Invalid email or password");
       
       toast({
         title: "Error",
@@ -74,20 +70,9 @@ const AuthPage = () => {
         variant: "destructive"
       });
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
-  
-  // Show loading while checking auth status
-  if (checkingAuth) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
@@ -99,6 +84,12 @@ const AuthPage = () => {
         
         <form onSubmit={handleSignIn}>
           <CardContent className="space-y-4">
+            {errorMessage && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                {errorMessage}
+              </div>
+            )}
+            
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email</label>
               <Input

@@ -14,14 +14,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Debounce function to prevent multiple calls
-function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): (...args: Parameters<T>) => void {
-  let timeoutId: ReturnType<typeof setTimeout>;
-  return function(this: any, ...args: Parameters<T>) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn.apply(this, args), ms);
-  };
-}
+// Simple state management to prevent auth loops
+const AUTH_STATE = {
+  INITIALIZED: false,
+  LAST_USER_ID: null as string | null,
+  REDIRECTING: false,
+  REDIRECT_TIMESTAMP: 0,
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -29,12 +28,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const authStateChangeCount = useRef(0);
   const mountedRef = useRef(true);
+  const authSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const profileFetchAttempts = useRef<{[key: string]: number}>({});
   
-  // Debounced profile fetching to prevent multiple calls
+  // Debounced profile fetching with retry limits
   const fetchUserProfile = async (userId: string) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) return null;
+    
+    // Track fetch attempts to prevent infinite loops
+    if (!profileFetchAttempts.current[userId]) {
+      profileFetchAttempts.current[userId] = 0;
+    }
+    
+    // Limit fetch attempts per user
+    if (profileFetchAttempts.current[userId] >= 3) {
+      console.error(`Too many profile fetch attempts for user: ${userId}`);
+      return null;
+    }
+    
+    profileFetchAttempts.current[userId]++;
     
     try {
       console.log("Fetching profile for user:", userId);
@@ -46,80 +59,109 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error("Error fetching user profile:", error.message);
-        return;
+        return null;
       }
 
       if (data && mountedRef.current) {
         console.log("Profile data retrieved:", data);
         setProfile(data);
+        return data;
       }
+      return null;
     } catch (error: any) {
       console.error('Error fetching user profile:', error.message);
+      return null;
     }
   };
-  
-  // Debounce auth state changes to avoid multiple rapid updates
-  const handleAuthChange = debounce((currentSession: Session | null) => {
-    if (!mountedRef.current) return;
-    
-    setSession(currentSession);
-    setUser(currentSession?.user ?? null);
-    
-    // For profile fetching, use setTimeout to prevent deadlocks
-    if (currentSession?.user) {
-      setTimeout(() => {
-        if (mountedRef.current) {
-          fetchUserProfile(currentSession.user.id);
-        }
-      }, 0);
-    } else {
-      // Clear the profile when no user
-      setProfile(null);
-    }
-  }, 300);
 
+  // Clear auth state on unmount to prevent memory leaks
   useEffect(() => {
-    mountedRef.current = true;
-    let authSubscription: { unsubscribe: () => void } | undefined;
-    
+    return () => {
+      mountedRef.current = false;
+      
+      // Cleanup subscription if it exists
+      if (authSubscriptionRef.current) {
+        console.log("Cleaning up auth subscription");
+        authSubscriptionRef.current.unsubscribe();
+        authSubscriptionRef.current = null;
+      }
+    };
+  }, []);
+
+  // Main auth effect - separated from profile fetching for better stability
+  useEffect(() => {
     const initAuth = async () => {
       try {
-        // 1. Set up the auth state listener first
-        authSubscription = supabase.auth.onAuthStateChange((event, currentSession) => {
-          authStateChangeCount.current += 1;
-          console.log(`Auth state change #${authStateChangeCount.current}:`, event, currentSession?.user?.id);
-          
-          if (event === 'SIGNED_OUT') {
-            // Clear state immediately for sign out
-            if (mountedRef.current) {
+        console.log("Initializing auth state");
+        
+        // Get existing session first - this is synchronous from local storage
+        const { data: sessionData } = await supabase.auth.getSession();
+        const initialSession = sessionData?.session;
+        
+        // Update state with existing session if any
+        if (initialSession?.user) {
+          if (mountedRef.current) {
+            console.log("Found existing session for user:", initialSession.user.id);
+            setSession(initialSession);
+            setUser(initialSession.user);
+            
+            // Mark our global state as initialized with this user
+            AUTH_STATE.INITIALIZED = true;
+            AUTH_STATE.LAST_USER_ID = initialSession.user.id;
+            
+            // Fetch profile separate from auth state changes
+            fetchUserProfile(initialSession.user.id);
+          }
+        } else {
+          if (mountedRef.current) {
+            console.log("No existing session found");
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+          }
+        }
+        
+        // Then set up the subscription for future changes
+        if (!authSubscriptionRef.current && mountedRef.current) {
+          const { data } = supabase.auth.onAuthStateChange((event, currentSession) => {
+            if (!mountedRef.current) return;
+            
+            console.log(`Auth state changed: ${event} ${currentSession?.user?.id}`);
+            
+            // Handle sign out event immediately
+            if (event === 'SIGNED_OUT') {
+              console.log("User signed out, clearing state");
               setSession(null);
               setUser(null);
               setProfile(null);
+              AUTH_STATE.LAST_USER_ID = null;
+              return;
             }
-          } else {
-            // Debounce other auth state changes
-            handleAuthChange(currentSession);
-          }
-        }).data.subscription;
-
-        // 2. Then check for existing session
-        const { data } = await supabase.auth.getSession();
-        console.log("Got existing session:", data.session?.user?.id);
-        
-        if (!mountedRef.current) return;
-
-        // Don't use debounce for initial session setup
-        if (data.session) {
-          setSession(data.session);
-          setUser(data.session.user);
-          await fetchUserProfile(data.session.user.id);
-        } else {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
+            
+            // For sign in, update state and fetch profile
+            if (currentSession?.user) {
+              // Only update if the user ID has changed to prevent loops
+              if (AUTH_STATE.LAST_USER_ID !== currentSession.user.id) {
+                console.log(`Setting new user: ${currentSession.user.id}`);
+                setSession(currentSession);
+                setUser(currentSession.user);
+                AUTH_STATE.LAST_USER_ID = currentSession.user.id;
+                
+                // Use setTimeout to break potential deadlocks
+                setTimeout(() => {
+                  if (mountedRef.current) {
+                    fetchUserProfile(currentSession.user!.id);
+                  }
+                }, 50);
+              }
+            }
+          });
+          
+          authSubscriptionRef.current = data.subscription;
         }
-      } catch (error) {
-        console.error("Error initializing auth:", error);
+        
+      } catch (error: any) {
+        console.error("Error initializing auth:", error.message);
       } finally {
         if (mountedRef.current) {
           setLoading(false);
@@ -128,35 +170,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     initAuth();
-
-    return () => {
-      mountedRef.current = false;
-      if (authSubscription) {
-        console.log("Cleaning up auth subscription");
-        authSubscription.unsubscribe();
-      }
-      clearTimeout(handleAuthChange as unknown as number);
-    };
   }, []);
 
   const signOut = async () => {
     try {
-      // 1. Clear local state first to prevent race conditions
-      setProfile(null);
-      setUser(null);
-      setSession(null);
+      console.log("Signing out user");
       
-      // 2. Then perform the signout operation
+      // Clear local state first for immediate UI update
+      setProfile(null);
+      
+      // Add forced removal of localStorage supabase items to ensure clean state
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('supabase.auth.refreshToken');
+      }
+      
+      // Then call Supabase signOut
       const { error } = await supabase.auth.signOut();
       
       if (error) throw error;
       
+      // Final clear of state - belt and suspenders
+      setUser(null);
+      setSession(null);
+      AUTH_STATE.LAST_USER_ID = null;
+      
       toast({
         title: "Signed out successfully",
       });
-
-      // Force clear local storage session data as a backup
-      localStorage.removeItem('supabase.auth.token');
       
     } catch (error: any) {
       console.error('Error signing out:', error.message);

@@ -16,6 +16,7 @@ export const supabase = createClient<Database>(
   {
     auth: {
       persistSession: true,
+      // Use localstorage directly rather than relying on SSR detection which can cause issues
       storage: typeof window !== 'undefined' ? localStorage : undefined,
       autoRefreshToken: true,
       detectSessionInUrl: false,
