@@ -61,6 +61,12 @@ export interface ImageBlockContent {
   url: string;
   alt: string;
   caption?: string;
+  width?: string;
+  objectFit?: 'cover' | 'contain' | 'fill' | 'none';
+  objectPosition?: string;
+  aspectRatio?: string;
+  customAspectRatioWidth?: string;
+  customAspectRatioHeight?: string;
 }
 
 export interface NoticeBlockContent {

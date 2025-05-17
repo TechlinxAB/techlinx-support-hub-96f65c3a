@@ -444,6 +444,49 @@ const CompanyNewsBuilderPage = () => {
               </div>
             </div>
 
+            {/* Aspect Ratio Control for Widescreen Effect */}
+            <div className="space-y-2">
+              <Label htmlFor="image-aspect-ratio">Aspect Ratio</Label>
+              <Select 
+                value={content.aspectRatio || "16/9"} 
+                onValueChange={(value) => handleFormChange('content.aspectRatio', value)}
+              >
+                <SelectTrigger id="image-aspect-ratio">
+                  <SelectValue placeholder="Select aspect ratio" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16/9">16:9 (Widescreen)</SelectItem>
+                  <SelectItem value="21/9">21:9 (Ultra Widescreen)</SelectItem>
+                  <SelectItem value="4/3">4:3 (Standard)</SelectItem>
+                  <SelectItem value="1/1">1:1 (Square)</SelectItem>
+                  <SelectItem value="9/16">9:16 (Portrait)</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Custom Aspect Ratio (only shown when "custom" is selected) */}
+            {content.aspectRatio === 'custom' && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-aspect-ratio">Custom Aspect Ratio (width/height)</Label>
+                <div className="flex items-center space-x-2">
+                  <Input 
+                    id="custom-aspect-ratio-width" 
+                    value={content.customAspectRatioWidth || '16'} 
+                    onChange={(e) => handleFormChange('content.customAspectRatioWidth', e.target.value)}
+                    className="w-20"
+                  />
+                  <span>/</span>
+                  <Input 
+                    id="custom-aspect-ratio-height" 
+                    value={content.customAspectRatioHeight || '9'} 
+                    onChange={(e) => handleFormChange('content.customAspectRatioHeight', e.target.value)}
+                    className="w-20"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Object Fit Control */}
             <div className="space-y-2">
               <Label htmlFor="image-object-fit">Object Fit</Label>
@@ -491,7 +534,24 @@ const CompanyNewsBuilderPage = () => {
               <div className="mt-4 border rounded-md p-4">
                 <p className="text-sm text-muted-foreground mb-2">Preview:</p>
                 <div style={{ width: content.width || '100%' }}>
-                  <AspectRatio ratio={16 / 9} className="bg-muted">
+                  <AspectRatio 
+                    ratio={
+                      content.aspectRatio === 'custom'
+                        ? parseInt(content.customAspectRatioWidth || '16') / parseInt(content.customAspectRatioHeight || '9')
+                        : content.aspectRatio === '21/9' 
+                          ? 21/9 
+                          : content.aspectRatio === '16/9' 
+                            ? 16/9 
+                            : content.aspectRatio === '4/3' 
+                              ? 4/3 
+                              : content.aspectRatio === '1/1' 
+                                ? 1 
+                                : content.aspectRatio === '9/16'
+                                  ? 9/16
+                                  : 16/9
+                    } 
+                    className="bg-muted"
+                  >
                     <img 
                       src={content.url} 
                       alt={content.alt} 
@@ -511,7 +571,7 @@ const CompanyNewsBuilderPage = () => {
           </div>
         );
       
-      case 'notice': {
+      case 'notice': 
         const noticeType = content.type || 'info';  // Fixed: changed displayContent to content
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
@@ -541,9 +601,8 @@ const CompanyNewsBuilderPage = () => {
             <p className={`mt-2 ${textColor}`}>{content.message || 'Notice message'}</p>
           </div>
         );
-      }
       
-      case 'faq': {
+      case 'faq': 
         const items = content.items || []; // Fixed: changed displayContent to content
         return (
           <div className="mt-4 space-y-6">
@@ -603,9 +662,8 @@ const CompanyNewsBuilderPage = () => {
             </Button>
           </div>
         );
-      }
       
-      case 'links': {
+      case 'links': 
         const links = content.links || []; // Fixed: changed displayContent to content
         return (
           <div className="mt-4 space-y-6">
@@ -675,9 +733,8 @@ const CompanyNewsBuilderPage = () => {
             </Button>
           </div>
         );
-      }
       
-      case 'dropdown': {
+      case 'dropdown': 
         const title = content.title || 'Dropdown Title'; // Fixed: changed displayContent to content
         const items = content.items || []; // Fixed: changed displayContent to content
         
@@ -699,7 +756,6 @@ const CompanyNewsBuilderPage = () => {
             </div>
           </div>
         );
-      }
       
       default:
         return <div>Select a block type</div>;
@@ -718,12 +774,11 @@ const CompanyNewsBuilderPage = () => {
     const displayContent = { ...defaultContent, ...content };
     
     switch (block.type) {
-      case 'heading': {
+      case 'heading': 
         // Safely handle the heading level with a default
         const level = displayContent.level || 2; // Default to h2 if level is undefined
         const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
         return <HeadingTag className={`mt-${level} font-bold`}>{displayContent.text || 'Heading Text'}</HeadingTag>;
-      }
       
       case 'text':
         return (
@@ -756,7 +811,24 @@ const CompanyNewsBuilderPage = () => {
           <div className="mt-4" style={{ width: displayContent.width || '100%' }}>
             {displayContent.url ? (
               <>
-                <AspectRatio ratio={16 / 9} className="bg-muted">
+                <AspectRatio 
+                  ratio={
+                    displayContent.aspectRatio === 'custom'
+                      ? parseInt(displayContent.customAspectRatioWidth || '16') / parseInt(displayContent.customAspectRatioHeight || '9')
+                      : displayContent.aspectRatio === '21/9' 
+                        ? 21/9 
+                        : displayContent.aspectRatio === '16/9' 
+                          ? 16/9 
+                          : displayContent.aspectRatio === '4/3' 
+                            ? 4/3 
+                            : displayContent.aspectRatio === '1/1' 
+                              ? 1 
+                              : displayContent.aspectRatio === '9/16'
+                                ? 9/16
+                                : 16/9
+                  } 
+                  className="bg-muted"
+                >
                   <img 
                     src={displayContent.url} 
                     alt={displayContent.alt || 'Image'} 
@@ -779,7 +851,7 @@ const CompanyNewsBuilderPage = () => {
           </div>
         );
       
-      case 'notice': {
+      case 'notice': 
         const noticeType = displayContent.type || 'info';
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
@@ -809,9 +881,8 @@ const CompanyNewsBuilderPage = () => {
             <p className={`mt-2 ${textColor}`}>{displayContent.message || 'Notice message'}</p>
           </div>
         );
-      }
       
-      case 'faq': {
+      case 'faq': 
         const items = displayContent.items || [];
         return (
           <div className="mt-4 space-y-4">
@@ -828,9 +899,8 @@ const CompanyNewsBuilderPage = () => {
             )}
           </div>
         );
-      }
       
-      case 'links': {
+      case 'links': 
         const links = displayContent.links || [];
         return (
           <div className="mt-4 space-y-2">
@@ -847,9 +917,8 @@ const CompanyNewsBuilderPage = () => {
             )}
           </div>
         );
-      }
       
-      case 'dropdown': {
+      case 'dropdown': 
         const title = displayContent.title || 'Dropdown Title';
         const items = displayContent.items || [];
         
@@ -871,7 +940,6 @@ const CompanyNewsBuilderPage = () => {
             </div>
           </div>
         );
-      }
       
       default:
         return null;

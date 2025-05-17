@@ -21,7 +21,7 @@ export const useOptimizedNewsBlockSave = () => {
   const pendingSaves = useRef(new Map<string, NodeJS.Timeout>());
   
   // Throttle settings
-  const MIN_SAVE_INTERVAL = 1000; // Minimum time between save operations
+  const MIN_SAVE_INTERVAL = 1500; // Minimum time between save operations
   const lastSaveTimestamp = useRef<number>(0);
   
   // Track active toast IDs to prevent duplicates
@@ -31,12 +31,24 @@ export const useOptimizedNewsBlockSave = () => {
     if (pendingSaves.current.has(blockId)) {
       clearTimeout(pendingSaves.current.get(blockId));
       pendingSaves.current.delete(blockId);
+      console.log(`Cancelled pending save for block ${blockId}`);
     }
     
     // Also cancel any in-flight requests for this block
     if (abortControllers.current.has(blockId)) {
-      abortControllers.current.get(blockId)?.abort();
-      abortControllers.current.delete(blockId);
+      try {
+        abortControllers.current.get(blockId)?.abort();
+        abortControllers.current.delete(blockId);
+        console.log(`Aborted in-flight save for block ${blockId}`);
+      } catch (error) {
+        console.error("Error aborting save:", error);
+      }
+    }
+    
+    // Remove from queue if present
+    if (saveQueue.current.has(blockId)) {
+      saveQueue.current.delete(blockId);
+      console.log(`Removed block ${blockId} from save queue`);
     }
   };
 
@@ -51,7 +63,7 @@ export const useOptimizedNewsBlockSave = () => {
       // Schedule next attempt after the throttle period
       setTimeout(() => {
         processQueue();
-      }, MIN_SAVE_INTERVAL - timeSinceLastSave);
+      }, MIN_SAVE_INTERVAL - timeSinceLastSave + 100); // Add small buffer
       return;
     }
     
@@ -77,6 +89,7 @@ export const useOptimizedNewsBlockSave = () => {
         // If we already have a toast for this block, use that ID
         if (activeToastIds.current.has(blockId)) {
           toastId = activeToastIds.current.get(blockId);
+          console.log(`Prevented duplicate loading toast: Saving changes...-${toastId}`);
         } else {
           // Using toast.loading which returns string or number
           toastId = toast.loading("Saving changes...");
@@ -89,26 +102,20 @@ export const useOptimizedNewsBlockSave = () => {
       // Log save operation details for debugging
       console.log(`Starting save for block ${blockId} at ${new Date().toISOString()}`);
       
-      // Perform the update with timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Save operation timed out after 15 seconds')), 15000);
-      });
+      const timestamp = new Date().toISOString();
+
+      // Add a delay to ensure UI updates show the loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Send the actual request with the abort signal
-      const updatePromise = supabase
+      // Send the actual request with the abort signal and proper error handling
+      const { error } = await supabase
         .from('company_news_blocks')
         .update({
           ...data,
-          updated_at: new Date().toISOString() // Force server to use new timestamp
+          updated_at: timestamp // Force server to use new timestamp
         })
         .eq('id', blockId)
         .abortSignal(abortController.signal);
-      
-      // Race between the timeout and the update
-      const { error } = await Promise.race([
-        updatePromise,
-        timeoutPromise
-      ]) as any;
       
       if (error) throw error;
       
@@ -132,10 +139,12 @@ export const useOptimizedNewsBlockSave = () => {
         }, 2000);
       }
       
-      options?.onSuccess?.();
-    } catch (error: any) { // Properly typed error parameter
+      if (options?.onSuccess) {
+        options.onSuccess();
+      }
+    } catch (error: any) {
       // Check if this was an abort error, which we can ignore
-      if (error.name === 'AbortError') {
+      if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
         console.log('Save operation was cancelled');
         if (options?.showToast !== false) {
           toast("Save cancelled");
@@ -147,8 +156,10 @@ export const useOptimizedNewsBlockSave = () => {
       console.error('Error saving news block:', error);
       
       if (options?.showToast !== false) {
-        toast("Failed to save changes", {
-          description: error.message || "Please try again"
+        toast({
+          title: "Failed to save changes",
+          description: error.message || "Please try again",
+          variant: "destructive"
         });
       }
       
@@ -170,7 +181,7 @@ export const useOptimizedNewsBlockSave = () => {
       // Small delay before processing next item to prevent overwhelming the browser
       setTimeout(() => {
         processQueue();
-      }, 300);
+      }, 500);
     }
   }, []);
 
@@ -197,7 +208,7 @@ export const useOptimizedNewsBlockSave = () => {
   const debouncedSave = useCallback((
     blockId: string, 
     data: Partial<any>, 
-    delay: number = 1500, // Increased default debounce time
+    delay: number = 2500, // Reasonable default debounce time
     options?: SaveOptions
   ) => {
     // Cancel any pending saves for this block
