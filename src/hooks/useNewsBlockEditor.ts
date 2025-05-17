@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
@@ -232,7 +233,7 @@ export const useNewsBlockEditor = (
     }
     
     try {
-      // Save without relying on the toastIdRef
+      // Save without showing toast from saveNewsBlock (we'll handle it here)
       await saveNewsBlock(
         selectedBlockId, 
         {
@@ -240,18 +241,49 @@ export const useNewsBlockEditor = (
           content: editedBlockData.content
         }, 
         {
-          showToast: true, // Let the save function handle toast management
+          showToast: false, // We'll handle toasts here for better control
           onStart: () => {
             setLocalSaving(true);
             console.log("Save operation started");
+            
+            // Show a single toast for the save operation
+            if (toastIdRef.current) {
+              toast.dismiss(toastIdRef.current);
+            }
+            
+            toastIdRef.current = toast({
+              title: "Saving changes...",
+              variant: "default"
+            });
           },
           onSuccess: () => {
             setHasUnsavedChanges(false);
+            
+            // Update toast to success
+            if (toastIdRef.current) {
+              toast.dismiss(toastIdRef.current);
+              toastIdRef.current = toast({
+                title: "Changes saved",
+                variant: "success"
+              });
+            }
+            
             options?.onSaveSuccess?.();
             console.log("Save operation completed successfully");
           },
           onError: (error) => {
             console.error("Save operation failed:", error);
+            
+            // Show error toast
+            if (toastIdRef.current) {
+              toast.dismiss(toastIdRef.current);
+              toastIdRef.current = toast({
+                title: "Could not save changes", 
+                description: "Please try again",
+                variant: "destructive"
+              });
+            }
+            
             options?.onSaveError?.(error);
           }
         }
@@ -261,11 +293,16 @@ export const useNewsBlockEditor = (
       
       // Only show the error toast if we haven't shown one already
       if (!errorToastShown.current) {
-        toast({
+        if (toastIdRef.current) {
+          toast.dismiss(toastIdRef.current);
+        }
+        
+        toastIdRef.current = toast({
           title: "Could not save changes", 
           description: "Please try again",
           variant: "destructive"
         });
+        
         errorToastShown.current = true;
       }
       
@@ -278,7 +315,7 @@ export const useNewsBlockEditor = (
 
   // Auto-save when changes are made with improved throttling and optimistic updates
   useEffect(() => {
-    if (selectedBlockId && hasUnsavedChanges) {
+    if (selectedBlockId && hasUnsavedChanges && !manualSaveInProgress.current) {
       // Throttle auto-save attempts much more aggressively
       const now = Date.now();
       if (now - lastAutoSaveAttempt.current < AUTO_SAVE_THROTTLE) {

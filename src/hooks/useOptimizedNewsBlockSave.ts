@@ -80,7 +80,7 @@ export const useOptimizedNewsBlockSave = () => {
     const [blockId, { data, options }] = Array.from(saveQueue.current.entries())[0];
     saveQueue.current.delete(blockId);
     
-    // Create abort controller for this request
+    // Create abort controller for this request but don't use it to cancel automatically
     const abortController = new AbortController();
     abortControllers.current.set(blockId, abortController);
     
@@ -117,18 +117,18 @@ export const useOptimizedNewsBlockSave = () => {
       
       const timestamp = new Date().toISOString();
 
-      // Add a small delay to ensure UI updates show the loading state
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Add a smaller delay to ensure UI updates show the loading state
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Send the actual request with the abort signal and proper error handling
+      // Send the actual request with proper error handling
+      // Do NOT pass the abort signal to prevent automatic cancellation
       const { error } = await supabase
         .from('company_news_blocks')
         .update({
           ...data,
           updated_at: timestamp // Force server to use new timestamp
         })
-        .eq('id', blockId)
-        .abortSignal(abortController.signal);
+        .eq('id', blockId);
       
       if (error) throw error;
       
