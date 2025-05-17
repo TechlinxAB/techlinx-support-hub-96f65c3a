@@ -12,6 +12,7 @@ export interface DashboardBlock {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  showTitle?: boolean; // Add this property to control title visibility
 }
 
 export interface HeadingBlockContent {

@@ -13,6 +13,7 @@ import { Loader, PlusCircle, Trash, MoveUp, MoveDown, Edit, Eye, EyeOff } from '
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -118,7 +119,8 @@ const CompanyDashboardBuilderPage = () => {
       setSelectedBlockType(block.type);
       setFormData({
         ...block.content,
-        blockTitle: block.title // Store the current block title
+        blockTitle: block.title, // Store the current block title
+        showTitle: block.showTitle !== false // Default to true if not explicitly set to false
       });
       setDialogOpen(true);
     }, 50);
@@ -159,15 +161,19 @@ const CompanyDashboardBuilderPage = () => {
       
       // Extract the block title from formData
       const blockTitle = formData.blockTitle || `New ${selectedBlockType}`;
-      // Remove blockTitle from the content data
-      const { blockTitle: _, ...contentData } = formData;
+      // Extract showTitle option
+      const showTitle = formData.showTitle !== false; // Default to true if not explicitly set to false
+      
+      // Remove blockTitle and showTitle from the content data
+      const { blockTitle: _, showTitle: __, ...contentData } = formData;
       
       if (editingBlock) {
         // Update existing block
         await updateDashboardBlock(editingBlock.id, {
           title: blockTitle,
           content: contentData,
-          type: selectedBlockType
+          type: selectedBlockType,
+          showTitle: showTitle
         });
       } else {
         // Create new block
@@ -181,7 +187,8 @@ const CompanyDashboardBuilderPage = () => {
           title: blockTitle,
           content: contentData,
           type: selectedBlockType,
-          position: maxPosition
+          position: maxPosition,
+          showTitle: showTitle
         });
       }
       
@@ -196,16 +203,28 @@ const CompanyDashboardBuilderPage = () => {
   };
   
   const renderBlockForm = () => {
-    // Common title field to be shown for all block types
+    // Common title field and visibility toggle to be shown for all block types
     const commonTitleField = (
-      <div className="mb-4">
-        <label className="text-sm font-medium">Block Title/Name</label>
-        <Input 
-          value={editingBlock?.title || formData.blockTitle || ''}
-          onChange={e => setFormData({ ...formData, blockTitle: e.target.value })}
-          placeholder="Enter block title"
-          className="mt-1"
-        />
+      <div className="mb-4 space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Block Title/Name</label>
+          <Input 
+            value={formData.blockTitle || ''}
+            onChange={e => setFormData({ ...formData, blockTitle: e.target.value })}
+            placeholder="Enter block title"
+          />
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="show-title"
+            checked={formData.showTitle !== false} // Default to true if not explicitly false
+            onCheckedChange={checked => setFormData({ ...formData, showTitle: checked })}
+          />
+          <label htmlFor="show-title" className="text-sm font-medium">
+            Show title on dashboard
+          </label>
+        </div>
       </div>
     );
     
@@ -538,7 +557,9 @@ const CompanyDashboardBuilderPage = () => {
                 {block.type}
               </div>
             )}
-            <CardTitle className="text-lg">{block.title}</CardTitle>
+            {(block.showTitle !== false) && (
+              <CardTitle className="text-lg">{block.title}</CardTitle>
+            )}
           </div>
           
           {!isPreview && (
@@ -581,7 +602,9 @@ const CompanyDashboardBuilderPage = () => {
                 <Card key={childBlock.id} className="mb-2">
                   <CardHeader className="py-2 px-3">
                     <div className="flex justify-between items-center">
-                      <div className="text-sm">{childBlock.title} ({childBlock.type})</div>
+                      <div className="text-sm">
+                        {childBlock.showTitle !== false ? childBlock.title : ''} ({childBlock.type})
+                      </div>
                       {!isPreview && (
                         <div className="flex">
                           <Button variant="ghost" size="sm" onClick={() => handleEditBlock(childBlock)}>
