@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -38,6 +38,7 @@ const CompanyDashboardBuilderPage = () => {
   const [formData, setFormData] = useState<any>({});
   const [isPreview, setIsPreview] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchTriggered, setFetchTriggered] = useState(false); // Add flag to track if fetch has been triggered
   
   // Find the company
   const company = companies.find(c => c.id === companyId);
@@ -63,13 +64,16 @@ const CompanyDashboardBuilderPage = () => {
     checkAccess();
   }, [profile, navigate, companyId]);
   
+  // Fix infinite reloading by using a flag to ensure we only fetch once
   useEffect(() => {
-    if (companyId && !isLoading) {
+    if (companyId && !isLoading && !fetchTriggered) {
       console.log("Fetching dashboard blocks for company:", companyId);
       refetchDashboardBlocks(companyId);
+      setFetchTriggered(true); // Set flag to prevent continuous fetching
     }
-  }, [companyId, refetchDashboardBlocks, isLoading]);
+  }, [companyId, refetchDashboardBlocks, isLoading, fetchTriggered]);
   
+  // Update the sorted blocks when dashboard blocks change
   useEffect(() => {
     // Sort blocks by position and filter to only include top-level blocks (no parentId)
     if (dashboardBlocks.length > 0 && companyId) {
@@ -87,6 +91,14 @@ const CompanyDashboardBuilderPage = () => {
       .filter(block => block.parentId === parentId)
       .sort((a, b) => a.position - b.position);
   };
+  
+  // Create a memoized function to handle manual refetching
+  const handleManualRefetch = useCallback(() => {
+    if (companyId) {
+      refetchDashboardBlocks(companyId);
+      toast.success("Dashboard data refreshed");
+    }
+  }, [companyId, refetchDashboardBlocks]);
   
   const handleAddBlock = () => {
     setEditingBlock(null);
@@ -534,6 +546,14 @@ const CompanyDashboardBuilderPage = () => {
         </div>
         
         <div className="flex space-x-2">
+          <Button 
+            variant="outline"
+            onClick={handleManualRefetch}
+            className="flex items-center gap-1"
+          >
+            <Loader className="h-4 w-4 mr-1" />
+            Refresh
+          </Button>
           <Button 
             variant={isPreview ? "outline" : "default"}
             className="flex items-center gap-1"
