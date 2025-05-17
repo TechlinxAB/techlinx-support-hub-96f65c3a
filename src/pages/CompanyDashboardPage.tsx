@@ -41,9 +41,6 @@ const CompanyDashboardPage = () => {
   
   // Render a specific block type
   const renderBlock = (block: DashboardBlock) => {
-    // Only render the title if showTitle is not explicitly false
-    const shouldShowTitle = block.showTitle !== false;
-    
     switch (block.type) {
       case 'heading':
         const level = block.content.level || 1;
@@ -74,7 +71,7 @@ const CompanyDashboardPage = () => {
       case 'text':
         return (
           <div className="prose max-w-none mb-4">
-            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            {block.showTitle !== false && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
             <p>{block.content.text}</p>
           </div>
         );
@@ -83,7 +80,7 @@ const CompanyDashboardPage = () => {
         return (
           <Card className="mb-4">
             <CardContent className="p-6">
-              {shouldShowTitle && <h3 className="text-lg font-semibold mb-2">{block.title}</h3>}
+              {block.showTitle !== false && <h3 className="text-lg font-semibold mb-2">{block.title}</h3>}
               <h3 className="text-lg font-semibold mb-2">{block.content.title}</h3>
               <p className="text-muted-foreground">{block.content.content}</p>
               {block.content.action && (
@@ -102,7 +99,7 @@ const CompanyDashboardPage = () => {
       case 'faq':
         return (
           <>
-            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            {block.showTitle !== false && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
             <Accordion type="single" collapsible className="mb-6">
               {block.content.items?.map((faq: any, index: number) => (
                 <AccordionItem value={`item-${index}`} key={index}>
@@ -121,7 +118,7 @@ const CompanyDashboardPage = () => {
       case 'links':
         return (
           <>
-            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            {block.showTitle !== false && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
             <div className="flex flex-wrap gap-3 mb-6">
               {block.content.links?.map((link: any, index: number) => (
                 <Button 
@@ -139,7 +136,7 @@ const CompanyDashboardPage = () => {
       case 'dropdown':
         return (
           <>
-            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            {block.showTitle !== false && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
             <Tabs defaultValue="item-0" className="mb-6">
               <TabsList className="mb-2">
                 {block.content.items?.map((item: any, index: number) => (
@@ -160,7 +157,7 @@ const CompanyDashboardPage = () => {
       case 'image':
         return (
           <div className="mb-4">
-            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            {block.showTitle !== false && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
             <img 
               src={block.content.url} 
               alt={block.content.alt || block.title} 

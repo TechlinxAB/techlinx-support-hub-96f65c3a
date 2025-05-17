@@ -164,6 +164,8 @@ const CompanyDashboardBuilderPage = () => {
       // Extract showTitle option
       const showTitle = formData.showTitle !== false; // Default to true if not explicitly set to false
       
+      console.log('Saving block with showTitle:', showTitle, 'and formData:', formData);
+      
       // Remove blockTitle and showTitle from the content data
       const { blockTitle: _, showTitle: __, ...contentData } = formData;
       
@@ -175,6 +177,8 @@ const CompanyDashboardBuilderPage = () => {
           type: selectedBlockType,
           showTitle: showTitle
         });
+        
+        console.log('Updated block with showTitle:', showTitle);
       } else {
         // Create new block
         // Get max position for new block
@@ -190,6 +194,8 @@ const CompanyDashboardBuilderPage = () => {
           position: maxPosition,
           showTitle: showTitle
         });
+        
+        console.log('Created new block with showTitle:', showTitle);
       }
       
       toast.success("Block saved successfully", { id: toastId });
