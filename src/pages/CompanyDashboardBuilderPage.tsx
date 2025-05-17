@@ -111,7 +111,10 @@ const CompanyDashboardBuilderPage = () => {
   const handleEditBlock = (block: DashboardBlock) => {
     setEditingBlock(block);
     setSelectedBlockType(block.type);
-    setFormData(block.content);
+    setFormData({
+      ...block.content,
+      blockTitle: block.title // Store the current block title
+    });
     setDialogOpen(true);
   };
   
@@ -148,11 +151,16 @@ const CompanyDashboardBuilderPage = () => {
     try {
       const toastId = toast.loading("Saving dashboard block...");
       
+      // Extract the block title from formData
+      const blockTitle = formData.blockTitle || `New ${selectedBlockType}`;
+      // Remove blockTitle from the content data
+      const { blockTitle: _, ...contentData } = formData;
+      
       if (editingBlock) {
         // Update existing block
         await updateDashboardBlock(editingBlock.id, {
-          title: formData.title || editingBlock.title,
-          content: formData,
+          title: blockTitle,
+          content: contentData,
           type: selectedBlockType
         });
       } else {
@@ -164,8 +172,8 @@ const CompanyDashboardBuilderPage = () => {
         
         await addDashboardBlock({
           companyId: companyId!,
-          title: formData.title || `New ${selectedBlockType}`,
-          content: formData,
+          title: blockTitle,
+          content: contentData,
           type: selectedBlockType,
           position: maxPosition
         });
@@ -182,10 +190,24 @@ const CompanyDashboardBuilderPage = () => {
   };
   
   const renderBlockForm = () => {
+    // Common title field to be shown for all block types
+    const commonTitleField = (
+      <div className="mb-4">
+        <label className="text-sm font-medium">Block Title/Name</label>
+        <Input 
+          value={editingBlock?.title || formData.blockTitle || ''}
+          onChange={e => setFormData({ ...formData, blockTitle: e.target.value })}
+          placeholder="Enter block title"
+          className="mt-1"
+        />
+      </div>
+    );
+    
     switch (selectedBlockType) {
       case 'heading':
         return (
           <div className="space-y-4">
+            {commonTitleField}
             <div>
               <label className="text-sm font-medium">Text</label>
               <Input 
@@ -216,6 +238,7 @@ const CompanyDashboardBuilderPage = () => {
       case 'text':
         return (
           <div className="space-y-4">
+            {commonTitleField}
             <div>
               <label className="text-sm font-medium">Text</label>
               <Textarea 
@@ -231,6 +254,7 @@ const CompanyDashboardBuilderPage = () => {
       case 'card':
         return (
           <div className="space-y-4">
+            {commonTitleField}
             <div>
               <label className="text-sm font-medium">Title</label>
               <Input 
@@ -273,6 +297,7 @@ const CompanyDashboardBuilderPage = () => {
       case 'image':
         return (
           <div className="space-y-4">
+            {commonTitleField}
             <div>
               <label className="text-sm font-medium">Image URL</label>
               <Input 
@@ -318,6 +343,7 @@ const CompanyDashboardBuilderPage = () => {
         
         return (
           <div className="space-y-4">
+            {commonTitleField}
             {items.map((item: any, index: number) => (
               <div key={index} className="space-y-2 pb-4 border-b">
                 <div>
@@ -374,6 +400,7 @@ const CompanyDashboardBuilderPage = () => {
         
         return (
           <div className="space-y-4">
+            {commonTitleField}
             {links.map((link: any, index: number) => (
               <div key={index} className="space-y-2 pb-4 border-b">
                 <div>
@@ -429,6 +456,7 @@ const CompanyDashboardBuilderPage = () => {
         
         return (
           <div className="space-y-4">
+            {commonTitleField}
             <div>
               <label className="text-sm font-medium">Title</label>
               <Input 
