@@ -1,8 +1,8 @@
 
 import React, { createContext, useState, useEffect, useContext, ReactNode, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { supabase, hasValidSession } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   session: Session | null;
@@ -18,8 +18,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_STATE = {
   INITIALIZED: false,
   LAST_USER_ID: null as string | null,
-  REDIRECTING: false,
-  REDIRECT_TIMESTAMP: 0,
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -27,27 +25,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  
+  // Refs to manage subscriptions and prevent memory leaks
   const mountedRef = useRef(true);
   const authSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const profileFetchTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
   const profileFetchAttempts = useRef<{[key: string]: number}>({});
   
-  // Debounced profile fetching with retry limits
+  // Fetch profile function with retry limits and debouncing
   const fetchUserProfile = async (userId: string) => {
     if (!mountedRef.current) return null;
     
     // Track fetch attempts to prevent infinite loops
-    if (!profileFetchAttempts.current[userId]) {
-      profileFetchAttempts.current[userId] = 0;
-    }
+    profileFetchAttempts.current[userId] = (profileFetchAttempts.current[userId] || 0) + 1;
     
-    // Limit fetch attempts per user
-    if (profileFetchAttempts.current[userId] >= 3) {
-      console.error(`Too many profile fetch attempts for user: ${userId}`);
+    // Limit fetch attempts per user to 3
+    if (profileFetchAttempts.current[userId] > 3) {
+      console.warn(`Too many profile fetch attempts for user: ${userId}`);
       return null;
     }
-    
-    profileFetchAttempts.current[userId]++;
     
     try {
       console.log("Fetching profile for user:", userId);
@@ -55,7 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching user profile:", error.message);
@@ -63,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data && mountedRef.current) {
-        console.log("Profile data retrieved:", data);
+        console.log("Profile data retrieved successfully");
         setProfile(data);
         return data;
       }
@@ -74,61 +70,81 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Clear auth state on unmount to prevent memory leaks
+  // Clean up function to prevent memory leaks and remove active timeouts
+  const cleanupResources = () => {
+    // Clear all profile fetch timeouts
+    profileFetchTimeoutsRef.current.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    profileFetchTimeoutsRef.current = [];
+    
+    // Unsubscribe from auth changes
+    if (authSubscriptionRef.current) {
+      console.log("Cleaning up auth subscription");
+      authSubscriptionRef.current.unsubscribe();
+      authSubscriptionRef.current = null;
+    }
+  };
+
+  // Effect for cleanup on unmount
   useEffect(() => {
     return () => {
       mountedRef.current = false;
-      
-      // Cleanup subscription if it exists
-      if (authSubscriptionRef.current) {
-        console.log("Cleaning up auth subscription");
-        authSubscriptionRef.current.unsubscribe();
-        authSubscriptionRef.current = null;
-      }
+      cleanupResources();
     };
   }, []);
 
-  // Main auth effect - separated from profile fetching for better stability
+  // Main auth initialization effect
   useEffect(() => {
     const initAuth = async () => {
       try {
         console.log("Initializing auth state");
+        setLoading(true);
         
-        // Get existing session first - this is synchronous from local storage
-        const { data: sessionData } = await supabase.auth.getSession();
-        const initialSession = sessionData?.session;
+        // First check for existing session synchronously
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         
-        // Update state with existing session if any
-        if (initialSession?.user) {
-          if (mountedRef.current) {
-            console.log("Found existing session for user:", initialSession.user.id);
-            setSession(initialSession);
-            setUser(initialSession.user);
-            
-            // Mark our global state as initialized with this user
-            AUTH_STATE.INITIALIZED = true;
-            AUTH_STATE.LAST_USER_ID = initialSession.user.id;
-            
-            // Fetch profile separate from auth state changes
-            fetchUserProfile(initialSession.user.id);
-          }
-        } else {
-          if (mountedRef.current) {
-            console.log("No existing session found");
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-          }
+        if (sessionError) {
+          console.error("Error getting session:", sessionError.message);
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
         }
         
-        // Then set up the subscription for future changes
+        const initialSession = sessionData?.session;
+        
+        if (initialSession?.user) {
+          console.log("Found existing session for user:", initialSession.user.id);
+          setSession(initialSession);
+          setUser(initialSession.user);
+          
+          // Mark global state as initialized
+          AUTH_STATE.INITIALIZED = true;
+          AUTH_STATE.LAST_USER_ID = initialSession.user.id;
+          
+          // Fetch profile with a small delay to avoid potential deadlocks
+          const timeoutId = setTimeout(() => {
+            if (mountedRef.current) {
+              fetchUserProfile(initialSession.user.id);
+            }
+          }, 50);
+          profileFetchTimeoutsRef.current.push(timeoutId);
+        } else {
+          console.log("No existing session found");
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        }
+        
+        // Set up the subscription for future auth changes
         if (!authSubscriptionRef.current && mountedRef.current) {
           const { data } = supabase.auth.onAuthStateChange((event, currentSession) => {
             if (!mountedRef.current) return;
             
-            console.log(`Auth state changed: ${event} ${currentSession?.user?.id}`);
+            console.log(`Auth state changed: ${event} for user ${currentSession?.user?.id || 'null'}`);
             
-            // Handle sign out event immediately
+            // Handle sign out event
             if (event === 'SIGNED_OUT') {
               console.log("User signed out, clearing state");
               setSession(null);
@@ -138,28 +154,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
             
-            // For sign in, update state and fetch profile
+            // For sign in and token refresh, update state
             if (currentSession?.user) {
-              // Only update if the user ID has changed to prevent loops
-              if (AUTH_STATE.LAST_USER_ID !== currentSession.user.id) {
-                console.log(`Setting new user: ${currentSession.user.id}`);
+              // Only update if user ID has changed to prevent loops
+              const newUserId = currentSession.user.id;
+              if (AUTH_STATE.LAST_USER_ID !== newUserId) {
+                console.log(`Setting new user: ${newUserId}`);
                 setSession(currentSession);
                 setUser(currentSession.user);
-                AUTH_STATE.LAST_USER_ID = currentSession.user.id;
+                AUTH_STATE.LAST_USER_ID = newUserId;
                 
-                // Use setTimeout to break potential deadlocks
-                setTimeout(() => {
+                // Use setTimeout to avoid potential auth deadlocks
+                const timeoutId = setTimeout(() => {
                   if (mountedRef.current) {
-                    fetchUserProfile(currentSession.user!.id);
+                    fetchUserProfile(newUserId);
                   }
                 }, 50);
+                profileFetchTimeoutsRef.current.push(timeoutId);
               }
             }
           });
           
           authSubscriptionRef.current = data.subscription;
         }
-        
       } catch (error: any) {
         console.error("Error initializing auth:", error.message);
       } finally {
@@ -172,45 +189,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
   }, []);
 
+  // Improved signOut function that properly handles the auth flow
   const signOut = async () => {
     try {
-      console.log("Signing out user");
+      console.log("Attempting to sign out user");
       
-      // Clear local state first for immediate UI update
-      setProfile(null);
-      
-      // Add forced removal of localStorage supabase items to ensure clean state
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('supabase.auth.token');
-        localStorage.removeItem('supabase.auth.refreshToken');
-      }
-      
-      // Then call Supabase signOut
+      // Call Supabase signOut FIRST before clearing local state
       const { error } = await supabase.auth.signOut();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase signOut error:", error.message);
+        toast({
+          title: "Error signing out",
+          description: error.message,
+        });
+        return;
+      }
       
-      // Final clear of state - belt and suspenders
-      setUser(null);
+      // Clear local state after successful Supabase signOut
       setSession(null);
+      setUser(null);
+      setProfile(null);
       AUTH_STATE.LAST_USER_ID = null;
+      
+      // Clear localStorage items for a clean slate
+      if (typeof window !== 'undefined') {
+        // Clear any custom auth items if needed, but let Supabase handle its own items
+        // localStorage.removeItem('custom-auth-item');
+      }
       
       toast({
         title: "Signed out successfully",
       });
       
     } catch (error: any) {
-      console.error('Error signing out:', error.message);
+      console.error('Error in signOut function:', error.message);
       toast({
         title: "Error signing out",
-        description: error.message,
-        variant: "destructive",
+        description: error.message || "An unknown error occurred",
       });
     }
   };
 
+  const value = {
+    session,
+    user,
+    profile,
+    loading,
+    signOut
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

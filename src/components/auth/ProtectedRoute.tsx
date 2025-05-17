@@ -1,9 +1,10 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
 import { toast } from 'sonner';
+import { hasValidSession } from '@/integrations/supabase/client';
 
 // Global redirect state to prevent loops
 const REDIRECT_STATE = {
@@ -16,6 +17,8 @@ const ProtectedRoute = () => {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isCheckingSession, setIsCheckingSession] = useState(false);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
   const toastShownRef = useRef(false);
   const redirectTimeoutRef = useRef<number | null>(null);
 
@@ -29,10 +32,43 @@ const ProtectedRoute = () => {
     };
   }, []);
   
-  // Handle auth redirection with anti-loop protection
+  // Initial session validation
   useEffect(() => {
-    // Don't do anything while still loading
-    if (loading) {
+    const validateSession = async () => {
+      // Skip if we're already at auth page
+      if (location.pathname === '/auth') {
+        setInitialCheckDone(true);
+        return;
+      }
+
+      setIsCheckingSession(true);
+      try {
+        const isValid = await hasValidSession();
+        if (!isValid && !loading) {
+          console.log("No valid session found during initial check");
+          if (!toastShownRef.current) {
+            toast.error("Please sign in to continue");
+            toastShownRef.current = true;
+          }
+          navigate('/auth', { replace: true });
+        }
+      } catch (error) {
+        console.error("Error validating session:", error);
+      } finally {
+        setIsCheckingSession(false);
+        setInitialCheckDone(true);
+      }
+    };
+
+    if (!initialCheckDone && !loading) {
+      validateSession();
+    }
+  }, [loading, navigate, location.pathname, initialCheckDone]);
+
+  // Main auth redirection logic - only runs after initial check is done
+  useEffect(() => {
+    // Skip if still loading or initial check isn't done
+    if (loading || !initialCheckDone) {
       return;
     }
     
@@ -43,9 +79,9 @@ const ProtectedRoute = () => {
     
     const now = Date.now();
     
-    // Check if we should redirect to auth
+    // Check if we need to redirect to auth
     if (!user) {
-      // Don't redirect if we've redirected recently
+      // Don't redirect if we've redirected recently (anti-loop)
       if (now - REDIRECT_STATE.LAST_AUTH_REDIRECT < REDIRECT_STATE.REDIRECT_COOLDOWN_MS) {
         return;
       }
@@ -68,12 +104,12 @@ const ProtectedRoute = () => {
       // Reset toast flag when user is authenticated
       toastShownRef.current = false;
     }
-  }, [user, loading, navigate, location.pathname]);
+  }, [user, loading, navigate, location.pathname, initialCheckDone]);
   
   // Role-based access protection
   useEffect(() => {
     // Skip if still loading or no user/profile
-    if (loading || !user || !profile) {
+    if (loading || !user || !profile || !initialCheckDone) {
       return;
     }
     
@@ -89,9 +125,9 @@ const ProtectedRoute = () => {
         redirectTimeoutRef.current = null;
       }, 100);
     }
-  }, [user, profile, loading, location.pathname, navigate]);
+  }, [user, profile, loading, location.pathname, navigate, initialCheckDone]);
   
-  if (loading) {
+  if (loading || isCheckingSession) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary" />

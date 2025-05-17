@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
@@ -10,16 +10,18 @@ import { useAuth } from '@/context/AuthContext';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
   const [navigationAttempted, setNavigationAttempted] = useState(false);
-  const redirectTimeoutRef = React.useRef<number | null>(null);
+  const redirectTimeoutRef = useRef<number | null>(null);
   
   // Load starred cases on component mount
   useEffect(() => {
-    loadStarredCases();
+    if (user) {
+      loadStarredCases();
+    }
     
     // Clean up any pending navigations on unmount
     return () => {
@@ -28,12 +30,12 @@ const Dashboard = () => {
         redirectTimeoutRef.current = null;
       }
     };
-  }, [loadStarredCases]);
+  }, [loadStarredCases, user]);
   
   // Enhanced navigation handling with improved direct access for dashboard builder
   useEffect(() => {
-    // Skip if we've already attempted navigation
-    if (navigationAttempted || !profile) {
+    // Skip if we've already attempted navigation or no user/profile
+    if (navigationAttempted || !profile || !user) {
       return;
     }
     
@@ -66,11 +68,23 @@ const Dashboard = () => {
       redirectTimeoutRef.current = null;
     }, 300);
     
-  }, [location, navigate, navigationAttempted, profile]);
+  }, [location, navigate, navigationAttempted, profile, user]);
+  
+  // Show a loading state if no profile is available yet
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+  
+  // Use profile role as a fallback if currentUser is not available
+  const role = currentUser?.role || profile?.role;
   
   return (
     <>
-      {currentUser?.role === 'consultant' ? (
+      {role === 'consultant' ? (
         <ConsultantDashboard />
       ) : (
         <UserDashboard />

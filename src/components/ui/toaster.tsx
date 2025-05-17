@@ -18,11 +18,14 @@ export function Toaster() {
           borderRadius: '6px',
           padding: '16px',
           minHeight: 'auto',
-          width: '100%'
+          width: '100%',
+          zIndex: 9999,
         },
-        duration: 3000,
+        duration: 4000,
         className: "custom-toast"
       }}
+      richColors
+      expand={false}
     />
   );
 }

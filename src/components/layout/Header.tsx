@@ -13,6 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -22,6 +24,8 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const { language, setLanguage } = useAppContext();
   const { signOut, user, profile } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const navigate = useNavigate();
   
   // Update time every minute
   useEffect(() => {
@@ -31,6 +35,25 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     
     return () => clearInterval(timer);
   }, []);
+  
+  // Handle sign out with proper feedback and redirection
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut();
+      toast.success("Signed out successfully");
+      
+      // Redirect to home/auth page after successful logout
+      setTimeout(() => {
+        navigate('/auth', { replace: true });
+      }, 500);
+    } catch (error) {
+      console.error("Error during sign out:", error);
+      toast.error("Error signing out. Please try again.");
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
   
   return (
     <header className="bg-white dark:bg-card border-b border-border h-16 px-4 flex items-center justify-between shadow-sm">
@@ -79,18 +102,31 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
               <div className="text-xs text-muted-foreground">{profile?.email || user?.email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut()}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
+            <DropdownMenuItem 
+              onClick={handleSignOut} 
+              disabled={isSigningOut}
+              className={isSigningOut ? 'opacity-50 cursor-not-allowed' : ''}
+            >
+              {isSigningOut ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                  Signing out...
+                </>
+              ) : (
+                <>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </>
+              )}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

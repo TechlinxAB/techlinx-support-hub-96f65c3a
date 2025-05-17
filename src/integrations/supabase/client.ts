@@ -16,14 +16,30 @@ export const supabase = createClient<Database>(
   {
     auth: {
       persistSession: true,
-      // Use localstorage directly rather than relying on SSR detection which can cause issues
-      storage: typeof window !== 'undefined' ? localStorage : undefined,
+      // Always use localStorage for session persistence for consistency
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       autoRefreshToken: true,
-      detectSessionInUrl: false,
-      flowType: 'implicit'
-    },
-    db: {
-      schema: 'public'
+      detectSessionInUrl: true
     }
   }
 );
+
+// Helper to check if we have a valid session
+export const hasValidSession = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error("Error checking session:", error.message);
+      return false;
+    }
+    return !!data?.session;
+  } catch (err) {
+    console.error("Failed to check session:", err);
+    return false;
+  }
+};
+
+// Helper to check if auth is ready
+export const isAuthReady = () => {
+  return typeof window !== 'undefined' && window.localStorage;
+};

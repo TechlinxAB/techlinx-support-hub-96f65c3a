@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -14,28 +14,33 @@ const AuthPage = () => {
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const location = useLocation();
+  const redirectedFromRef = useRef<boolean>(false);
   
-  // Simple redirect if user is already authenticated
+  // Get return URL from query params if available
+  const getReturnUrl = () => {
+    const params = new URLSearchParams(location.search);
+    return params.get('returnUrl') || '/';
+  };
+  
+  // Check if user is already logged in
   useEffect(() => {
-    if (user) {
+    if (user && !loading && !redirectedFromRef.current) {
       console.log("User already authenticated, redirecting to home");
-      navigate('/', { replace: true });
+      redirectedFromRef.current = true;
+      const returnUrl = getReturnUrl();
+      navigate(returnUrl, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, loading, location]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
       setErrorMessage("Please fill in all fields");
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
+      toast.error("Please fill in all fields");
       return;
     }
     
@@ -51,24 +56,21 @@ const AuthPage = () => {
       
       if (error) throw error;
       
-      console.log("Sign in successful, data:", data);
+      console.log("Sign in successful");
       
-      toast({
-        title: "Success!",
-        description: "You have been logged in",
-      });
+      toast.success("You have been logged in");
       
-      // Navigation will happen automatically via useEffect in AuthContext
+      // Give a small delay before redirecting to allow auth state to update
+      setTimeout(() => {
+        const returnUrl = getReturnUrl();
+        navigate(returnUrl, { replace: true });
+      }, 500);
       
     } catch (error: any) {
       console.error("Sign in error:", error);
       setErrorMessage(error.message || "Invalid email or password");
       
-      toast({
-        title: "Error",
-        description: error.message || "Invalid email or password",
-        variant: "destructive"
-      });
+      toast.error(error.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
