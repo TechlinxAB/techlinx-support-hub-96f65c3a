@@ -92,8 +92,11 @@ export const useOptimizedNewsBlockSave = () => {
           console.log(`Prevented duplicate loading toast: Saving changes...-${toastId}`);
         } else {
           // Using toast.loading which returns string or number
-          toastId = toast.loading("Saving changes...");
-          if (toastId !== -1) {
+          toastId = toast({
+            title: "Saving changes...",
+            variant: "default"
+          });
+          if (toastId) {
             activeToastIds.current.set(blockId, toastId);
           }
         }
@@ -125,11 +128,10 @@ export const useOptimizedNewsBlockSave = () => {
       setLastSaveTime(saveTime);
       
       // Update toast status if it was shown
-      if (toastId && toastId !== -1 && options?.showToast !== false) {
+      if (toastId && options?.showToast !== false) {
         toast({
           title: "News Block Updated",
           description: "The news block has been successfully updated",
-          id: toastId,
           variant: "success"
         });
         
@@ -147,7 +149,10 @@ export const useOptimizedNewsBlockSave = () => {
       if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
         console.log('Save operation was cancelled');
         if (options?.showToast !== false) {
-          toast("Save cancelled");
+          toast({
+            title: "Save cancelled",
+            variant: "default"
+          });
         }
         return;
       }

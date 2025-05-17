@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
-import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit, AspectRatio as AspectRatioIcon } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit } from 'lucide-react';
 import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
@@ -572,7 +572,7 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'notice': 
-        const noticeType = content.type || 'info';  // Fixed: changed displayContent to content
+        const noticeType = content.type || 'info';
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
         let textColor = 'text-blue-800';
@@ -603,10 +603,10 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'faq': 
-        const items = content.items || []; // Fixed: changed displayContent to content
+        const faqItems = content.items || [];
         return (
           <div className="mt-4 space-y-6">
-            {items.length > 0 ? items.map((item: any, index: number) => (
+            {faqItems.length > 0 ? faqItems.map((item: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`faq-question-${index}`}>Question {index + 1}</Label>
@@ -664,7 +664,7 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'links': 
-        const links = content.links || []; // Fixed: changed displayContent to content
+        const links = content.links || [];
         return (
           <div className="mt-4 space-y-6">
             {links.length > 0 ? links.map((link: any, index: number) => (
@@ -735,14 +735,14 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'dropdown': 
-        const title = content.title || 'Dropdown Title'; // Fixed: changed displayContent to content
-        const items = content.items || []; // Fixed: changed displayContent to content
+        const dropdownTitle = content.title || 'Dropdown Title';
+        const dropdownItems = content.items || [];
         
         return (
           <div className="mt-4">
-            <h3 className="font-medium">{title}</h3>
+            <h3 className="font-medium">{dropdownTitle}</h3>
             <div className="mt-2 border rounded-md divide-y">
-              {items.length > 0 ? items.map((item: any, index: number) => (
+              {dropdownItems.length > 0 ? dropdownItems.map((item: any, index: number) => (
                 <div key={index} className="p-3">
                   <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
                   {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
@@ -883,10 +883,10 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'faq': 
-        const items = displayContent.items || [];
+        const faqPreviewItems = displayContent.items || [];
         return (
           <div className="mt-4 space-y-4">
-            {items.length > 0 ? items.map((item: any, index: number) => (
+            {faqPreviewItems.length > 0 ? faqPreviewItems.map((item: any, index: number) => (
               <div key={index}>
                 <h4 className="font-medium">{item.question || `Question ${index + 1}`}</h4>
                 <p className="mt-1">{item.answer || `Answer ${index + 1}`}</p>
@@ -901,10 +901,10 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'links': 
-        const links = displayContent.links || [];
+        const linksPreview = displayContent.links || [];
         return (
           <div className="mt-4 space-y-2">
-            {links.length > 0 ? links.map((link: any, index: number) => (
+            {linksPreview.length > 0 ? linksPreview.map((link: any, index: number) => (
               <div key={index} className="flex items-center">
                 <a href={link.url || '#'} className="text-blue-600 hover:underline">
                   {link.label || `Link ${index + 1}`}
@@ -919,14 +919,14 @@ const CompanyNewsBuilderPage = () => {
         );
       
       case 'dropdown': 
-        const title = displayContent.title || 'Dropdown Title';
-        const items = displayContent.items || [];
+        const dropdownPreviewTitle = displayContent.title || 'Dropdown Title';
+        const dropdownPreviewItems = displayContent.items || [];
         
         return (
           <div className="mt-4">
-            <h3 className="font-medium">{title}</h3>
+            <h3 className="font-medium">{dropdownPreviewTitle}</h3>
             <div className="mt-2 border rounded-md divide-y">
-              {items.length > 0 ? items.map((item: any, index: number) => (
+              {dropdownPreviewItems.length > 0 ? dropdownPreviewItems.map((item: any, index: number) => (
                 <div key={index} className="p-3">
                   <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
                   {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
