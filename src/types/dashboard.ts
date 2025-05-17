@@ -1,5 +1,5 @@
 
-export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown';
+export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image';
 
 export interface DashboardBlock {
   id: string;
@@ -54,4 +54,10 @@ export interface DropdownBlockContent {
     label: string;
     content: string;
   }[];
+}
+
+export interface ImageBlockContent {
+  url: string;
+  alt: string;
+  caption?: string;
 }
