@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -483,9 +484,15 @@ const CompanyDashboardBuilderPage = () => {
           )}
         </CardHeader>
         <CardContent>
-          <pre className="bg-muted p-2 rounded-md text-xs overflow-auto max-h-32">
-            {JSON.stringify(block.content, null, 2)}
-          </pre>
+          {isPreview ? (
+            <div className="p-4 border rounded-md bg-white">
+              {renderBlockContent(block)}
+            </div>
+          ) : (
+            <pre className="bg-muted p-2 rounded-md text-xs overflow-auto max-h-32">
+              {JSON.stringify(block.content, null, 2)}
+            </pre>
+          )}
           
           {/* Child blocks */}
           {getChildBlocks(block.id).length > 0 && (
@@ -515,6 +522,107 @@ const CompanyDashboardBuilderPage = () => {
         </CardContent>
       </Card>
     );
+  };
+
+  // New function to render block content based on type
+  const renderBlockContent = (block: DashboardBlock) => {
+    const content = block.content || {};
+    
+    switch (block.type) {
+      case 'heading': {
+        const level = content.level || 2;
+        const text = content.text || 'Heading';
+        
+        if (level === 1) return <h1 className="text-3xl font-bold">{text}</h1>;
+        if (level === 2) return <h2 className="text-2xl font-bold">{text}</h2>;
+        return <h3 className="text-xl font-bold">{text}</h3>;
+      }
+      
+      case 'text':
+        return (
+          <div className="prose max-w-none">
+            {content.text ? (
+              <p>{content.text}</p>
+            ) : (
+              <p className="text-muted-foreground">No text content</p>
+            )}
+          </div>
+        );
+      
+      case 'card':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>{content.title || 'Card Title'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>{content.content || 'Card content'}</p>
+            </CardContent>
+            {content.action?.label && (
+              <div className="p-4 pt-0">
+                <Button variant="outline" size="sm">
+                  {content.action.label}
+                </Button>
+              </div>
+            )}
+          </Card>
+        );
+      
+      case 'faq':
+        return (
+          <div className="space-y-4">
+            {content.items?.length > 0 ? (
+              content.items.map((item: any, i: number) => (
+                <div key={i} className="border-b pb-3">
+                  <h4 className="font-medium text-lg">{item.question || `Question ${i + 1}`}</h4>
+                  <p className="mt-1">{item.answer || `Answer ${i + 1}`}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-muted-foreground">No FAQ items</p>
+            )}
+          </div>
+        );
+      
+      case 'links':
+        return (
+          <div className="space-y-2">
+            {content.links?.length > 0 ? (
+              content.links.map((link: any, i: number) => (
+                <div key={i} className="flex items-center">
+                  <a href={link.url || '#'} className="text-primary hover:underline">
+                    {link.label || `Link ${i + 1}`}
+                  </a>
+                </div>
+              ))
+            ) : (
+              <p className="text-muted-foreground">No links</p>
+            )}
+          </div>
+        );
+      
+      case 'dropdown':
+        return (
+          <div>
+            <h3 className="font-medium">{content.title || 'Dropdown'}</h3>
+            <div className="mt-2 border rounded-lg">
+              {content.items?.length > 0 ? (
+                content.items.map((item: any, i: number) => (
+                  <div key={i} className="p-3 border-b last:border-b-0">
+                    <h4 className="font-medium">{item.label || `Item ${i + 1}`}</h4>
+                    {item.content && <p className="mt-1 text-sm">{item.content}</p>}
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-muted-foreground">No dropdown items</div>
+              )}
+            </div>
+          </div>
+        );
+      
+      default:
+        return <div className="text-muted-foreground">Preview not available for this block type</div>;
+    }
   };
   
   // Show loading when checking permissions or fetching data
