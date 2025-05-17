@@ -17,11 +17,55 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import TechlinxTestZone from './TechlinxTestZone';
+import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
+import { ensureTechlinxCompanyExists, assignConsultantToTechlinx, createTechlinxSampleContent } from '@/utils/techlinxTestCompany';
 
 const ConsultantDashboard = () => {
   const navigate = useNavigate();
-  const { cases, currentUser, users, companies } = useAppContext();
+  const { cases, currentUser, users, companies, refetchCompanies } = useAppContext();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [starredCases, setStarredCases] = useState<string[]>([]);
+  const [isSettingUpTechlinx, setIsSettingUpTechlinx] = useState(false);
+  
+  // Ensure Techlinx company exists on component mount
+  useEffect(() => {
+    const setupTechlinx = async () => {
+      if (currentUser?.role !== 'consultant' || isSettingUpTechlinx) return;
+      
+      setIsSettingUpTechlinx(true);
+      try {
+        // Check if Techlinx already exists
+        const techlinxCompany = await ensureTechlinxCompanyExists();
+        
+        if (techlinxCompany && user) {
+          // Ensure current consultant is assigned to Techlinx
+          if (!currentUser.companyId) {
+            await assignConsultantToTechlinx(currentUser.id, techlinxCompany.id);
+          }
+          
+          // Create sample content for Techlinx
+          await createTechlinxSampleContent(techlinxCompany.id, user.id);
+          
+          // Refresh companies list
+          await refetchCompanies();
+        }
+      } catch (error) {
+        console.error("Error setting up Techlinx:", error);
+        toast({
+          title: "Error Setting Up Test Zone",
+          description: "There was an error setting up the Techlinx test zone. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSettingUpTechlinx(false);
+      }
+    };
+    
+    setupTechlinx();
+  }, [currentUser, user, refetchCompanies, toast, isSettingUpTechlinx]);
   
   // Get user details by ID
   const getUserById = (id: string) => {
@@ -117,6 +161,9 @@ const ConsultantDashboard = () => {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Consultant Dashboard</h1>
+      
+      {/* Techlinx Test Zone */}
+      <TechlinxTestZone />
       
       {/* Case Overview Panels - Top Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

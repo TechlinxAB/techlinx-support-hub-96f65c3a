@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { DashboardBlock } from '@/types/dashboard';
 import { CompanyNewsBlock } from '@/types/companyNews';
+import { isTechlinxCompany } from '@/utils/techlinxTestCompany';
 
 // Define types
 export type UserRole = 'user' | 'consultant';
@@ -413,6 +414,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteCompany = async (companyId: string) => {
     try {
+      // First check if this is the Techlinx company
+      const companyToDelete = companies.find(c => c.id === companyId);
+      
+      if (companyToDelete && isTechlinxCompany(companyToDelete.name)) {
+        toast({
+          title: "Cannot Delete Techlinx",
+          description: "The Techlinx test company cannot be deleted as it serves as a test environment for consultants.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const { error } = await supabase
         .from('companies')
         .delete()
