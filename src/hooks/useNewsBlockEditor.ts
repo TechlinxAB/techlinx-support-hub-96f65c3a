@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
@@ -233,7 +232,7 @@ export const useNewsBlockEditor = (
     }
     
     try {
-      // Save without showing toast from saveNewsBlock (we'll handle it here)
+      // Save with toast only on success or error (no "Saving changes..." toast)
       await saveNewsBlock(
         selectedBlockId, 
         {
@@ -241,49 +240,18 @@ export const useNewsBlockEditor = (
           content: editedBlockData.content
         }, 
         {
-          showToast: false, // We'll handle toasts here for better control
+          showToast: true, // Let the save function handle toast management
           onStart: () => {
             setLocalSaving(true);
             console.log("Save operation started");
-            
-            // Show a single toast for the save operation
-            if (toastIdRef.current) {
-              toast.dismiss(toastIdRef.current);
-            }
-            
-            toastIdRef.current = toast({
-              title: "Saving changes...",
-              variant: "default"
-            });
           },
           onSuccess: () => {
             setHasUnsavedChanges(false);
-            
-            // Update toast to success
-            if (toastIdRef.current) {
-              toast.dismiss(toastIdRef.current);
-              toastIdRef.current = toast({
-                title: "Changes saved",
-                variant: "success"
-              });
-            }
-            
             options?.onSaveSuccess?.();
             console.log("Save operation completed successfully");
           },
           onError: (error) => {
             console.error("Save operation failed:", error);
-            
-            // Show error toast
-            if (toastIdRef.current) {
-              toast.dismiss(toastIdRef.current);
-              toastIdRef.current = toast({
-                title: "Could not save changes", 
-                description: "Please try again",
-                variant: "destructive"
-              });
-            }
-            
             options?.onSaveError?.(error);
           }
         }
@@ -293,11 +261,7 @@ export const useNewsBlockEditor = (
       
       // Only show the error toast if we haven't shown one already
       if (!errorToastShown.current) {
-        if (toastIdRef.current) {
-          toast.dismiss(toastIdRef.current);
-        }
-        
-        toastIdRef.current = toast({
+        toast({
           title: "Could not save changes", 
           description: "Please try again",
           variant: "destructive"

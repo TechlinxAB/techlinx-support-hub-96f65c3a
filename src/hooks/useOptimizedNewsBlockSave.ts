@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -92,33 +91,10 @@ export const useOptimizedNewsBlockSave = () => {
       const startTime = performance.now();
       lastSaveTimestamp.current = now;
       
-      // Show a loading toast only if requested
-      let toastId: string | number | undefined;
-      if (options?.showToast !== false) {
-        // If we already have a toast for this block, use that ID
-        if (activeToastIds.current.has(blockId)) {
-          toastId = activeToastIds.current.get(blockId);
-          console.log(`Using existing toast ID for saving: ${toastId}`);
-        } else {
-          // Using toast which returns string or number
-          toastId = toast({
-            title: "Saving changes...",
-            variant: "default"
-          });
-          
-          if (toastId && toastId !== -1) { // Skip if toast is a duplicate (-1)
-            activeToastIds.current.set(blockId, toastId);
-          }
-        }
-      }
-      
       // Log save operation details for debugging
       console.log(`Starting save for block ${blockId} at ${new Date().toISOString()}`);
       
       const timestamp = new Date().toISOString();
-
-      // Add a smaller delay to ensure UI updates show the loading state
-      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Send the actual request with proper error handling
       // Do NOT pass the abort signal to prevent automatic cancellation
@@ -137,22 +113,30 @@ export const useOptimizedNewsBlockSave = () => {
       console.log(`Save completed in ${saveTime.toFixed(2)}ms`);
       setLastSaveTime(saveTime);
       
-      // Update toast status if it was shown
-      if (toastId && toastId !== -1 && options?.showToast !== false) {
+      // Only show toast on success if requested
+      if (options?.showToast !== false) {
         // Clear previous toast first to avoid stacking
-        toast.dismiss(toastId);
+        if (activeToastIds.current.has(blockId)) {
+          const existingToastId = activeToastIds.current.get(blockId);
+          if (existingToastId) {
+            toast.dismiss(existingToastId);
+          }
+        }
         
         // Show success toast
-        toast({
+        const toastId = toast({
           title: "News Block Updated",
           description: "The news block has been successfully updated",
           variant: "success"
         });
         
-        // Remove this toast ID after a delay
-        setTimeout(() => {
-          activeToastIds.current.delete(blockId);
-        }, 2000);
+        // Store toast ID and remove after delay
+        if (toastId && toastId !== -1) {
+          activeToastIds.current.set(blockId, toastId);
+          setTimeout(() => {
+            activeToastIds.current.delete(blockId);
+          }, 2000);
+        }
       }
       
       if (options?.onSuccess) {
@@ -162,17 +146,6 @@ export const useOptimizedNewsBlockSave = () => {
       // Check if this was an abort error, which we can ignore
       if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
         console.log('Save operation was cancelled');
-        if (options?.showToast !== false) {
-          // Clear any existing toast
-          if (activeToastIds.current.has(blockId)) {
-            toast.dismiss(activeToastIds.current.get(blockId));
-          }
-          
-          toast({
-            title: "Save cancelled",
-            variant: "default"
-          });
-        }
         return;
       }
       
@@ -188,11 +161,18 @@ export const useOptimizedNewsBlockSave = () => {
       }
       
       if (options?.showToast !== false) {
-        toast({
+        const toastId = toast({
           title: "Failed to save changes",
           description: error.message || "Please try again",
           variant: "destructive"
         });
+        
+        if (toastId && toastId !== -1) {
+          activeToastIds.current.set(blockId, toastId);
+          setTimeout(() => {
+            activeToastIds.current.delete(blockId);
+          }, 5000); // Longer time for error messages
+        }
       }
       
       // Create a proper Error object if it isn't already one
@@ -202,9 +182,6 @@ export const useOptimizedNewsBlockSave = () => {
       if (options?.onError) {
         options.onError(errorObject);
       }
-      
-      // Clear any active toast IDs for this block
-      activeToastIds.current.delete(blockId);
     } finally {
       setSaving(false);
       saveInProgress.current = false;
