@@ -1,6 +1,6 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardBlock, BlockType } from '@/types/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,45 +29,56 @@ const CompanyDashboardBuilderPage = () => {
     deleteDashboardBlock
   } = useAppContext();
   
+  const { profile } = useAuth();
+  
   const [sortedBlocks, setSortedBlocks] = useState<DashboardBlock[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<DashboardBlock | null>(null);
   const [selectedBlockType, setSelectedBlockType] = useState<BlockType>('text');
   const [formData, setFormData] = useState<any>({});
   const [isPreview, setIsPreview] = useState(false);
-  const [shouldRedirect, setShouldRedirect] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Find the company
   const company = companies.find(c => c.id === companyId);
   
   // Check auth in useEffect, not during render
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'consultant') {
-      console.log("User is not a consultant, redirecting to home");
-      setShouldRedirect(true);
-    }
-  }, [currentUser]);
-
-  // Separate useEffect for navigation
-  useEffect(() => {
-    if (shouldRedirect) {
-      navigate('/');
-    }
-  }, [shouldRedirect, navigate]);
+    const checkAccess = async () => {
+      // Wait until we have the profile data to make the role check
+      if (profile !== null) {
+        console.log("Checking access, user role:", profile?.role, "company ID:", companyId);
+        
+        if (profile?.role !== 'consultant') {
+          console.log("Access denied: User is not a consultant");
+          toast.error("You don't have permission to access the dashboard builder");
+          navigate('/');
+          return;
+        }
+        
+        setIsLoading(false);
+      }
+    };
+    
+    checkAccess();
+  }, [profile, navigate, companyId]);
   
   useEffect(() => {
-    if (companyId) {
+    if (companyId && !isLoading) {
+      console.log("Fetching dashboard blocks for company:", companyId);
       refetchDashboardBlocks(companyId);
     }
-  }, [companyId, refetchDashboardBlocks]);
+  }, [companyId, refetchDashboardBlocks, isLoading]);
   
   useEffect(() => {
     // Sort blocks by position and filter to only include top-level blocks (no parentId)
-    const topLevelBlocks = dashboardBlocks
-      .filter(block => !block.parentId && block.companyId === companyId)
-      .sort((a, b) => a.position - b.position);
-    
-    setSortedBlocks(topLevelBlocks);
+    if (dashboardBlocks.length > 0 && companyId) {
+      const topLevelBlocks = dashboardBlocks
+        .filter(block => !block.parentId && block.companyId === companyId)
+        .sort((a, b) => a.position - b.position);
+      
+      setSortedBlocks(topLevelBlocks);
+    }
   }, [dashboardBlocks, companyId]);
   
   // Get child blocks for a given parent ID
@@ -494,12 +505,12 @@ const CompanyDashboardBuilderPage = () => {
     );
   };
   
-  // Show loading when checking auth
-  if (shouldRedirect) {
+  // Show loading when checking permissions or fetching data
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Redirecting...</span>
+        <span className="ml-2">Loading dashboard builder...</span>
       </div>
     );
   }
