@@ -269,6 +269,49 @@ const CompanyDashboardBuilderPage = () => {
             </div>
           </div>
         );
+
+      case 'image':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Image URL</label>
+              <Input 
+                value={formData.url || ''} 
+                onChange={e => setFormData({ ...formData, url: e.target.value })} 
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Alt Text</label>
+              <Input 
+                value={formData.alt || ''} 
+                onChange={e => setFormData({ ...formData, alt: e.target.value })} 
+                placeholder="Image description"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Caption (Optional)</label>
+              <Input 
+                value={formData.caption || ''} 
+                onChange={e => setFormData({ ...formData, caption: e.target.value })} 
+                placeholder="Image caption"
+              />
+            </div>
+            {formData.url && (
+              <div className="mt-2 border rounded p-3">
+                <p className="text-sm font-medium mb-2">Preview:</p>
+                <img 
+                  src={formData.url} 
+                  alt={formData.alt || "Preview"} 
+                  className="max-w-full h-auto rounded" 
+                />
+                {formData.caption && (
+                  <p className="text-sm text-center mt-1">{formData.caption}</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
         
       case 'faq':
         const items = formData.items || [{ question: '', answer: '' }];
@@ -456,9 +499,11 @@ const CompanyDashboardBuilderPage = () => {
       <Card className="mb-4">
         <CardHeader className="pb-2 pt-4 flex flex-row justify-between items-center">
           <div>
-            <div className="text-xs font-medium uppercase text-muted-foreground">
-              {block.type}
-            </div>
+            {!isPreview && (
+              <div className="text-xs font-medium uppercase text-muted-foreground">
+                {block.type}
+              </div>
+            )}
             <CardTitle className="text-lg">{block.title}</CardTitle>
           </div>
           
@@ -566,6 +611,30 @@ const CompanyDashboardBuilderPage = () => {
               </div>
             )}
           </Card>
+        );
+      
+      case 'image':
+        return (
+          <div className="space-y-2">
+            {content.url ? (
+              <>
+                <img 
+                  src={content.url} 
+                  alt={content.alt || 'Image'} 
+                  className="max-w-full h-auto rounded-md"
+                />
+                {content.caption && (
+                  <p className="text-sm text-center mt-1 text-muted-foreground">
+                    {content.caption}
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="bg-muted h-32 flex items-center justify-center rounded-md">
+                <p className="text-muted-foreground">No image provided</p>
+              </div>
+            )}
+          </div>
         );
       
       case 'faq':
@@ -742,6 +811,7 @@ const CompanyDashboardBuilderPage = () => {
                   <SelectItem value="heading">Heading</SelectItem>
                   <SelectItem value="text">Text</SelectItem>
                   <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="image">Image</SelectItem>
                   <SelectItem value="faq">FAQ</SelectItem>
                   <SelectItem value="links">Links</SelectItem>
                   <SelectItem value="dropdown">Dropdown</SelectItem>
