@@ -1,4 +1,3 @@
-
 export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image';
 
 export interface DashboardBlock {
@@ -12,7 +11,7 @@ export interface DashboardBlock {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
-  showTitle?: boolean; // Add this property to control title visibility
+  showTitle?: boolean; // We keep this for TypeScript type safety but store in content
 }
 
 export interface HeadingBlockContent {
