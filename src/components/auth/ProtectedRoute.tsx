@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
@@ -9,15 +9,22 @@ const ProtectedRoute = () => {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [redirectAttempted, setRedirectAttempted] = useState(false);
   
   useEffect(() => {
     // Only redirect if we're done loading and there's no user
-    if (!loading && !user) {
+    if (!loading && !user && !redirectAttempted) {
       console.log("No authenticated user, redirecting to auth");
       toast.error("Please sign in to continue");
+      setRedirectAttempted(true);
       navigate('/auth');
     }
-  }, [user, loading, navigate]);
+    
+    // Reset the redirect flag when user is present
+    if (user) {
+      setRedirectAttempted(false);
+    }
+  }, [user, loading, navigate, redirectAttempted]);
   
   // Check if the path requires a consultant role
   useEffect(() => {

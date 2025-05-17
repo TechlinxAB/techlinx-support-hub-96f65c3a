@@ -22,35 +22,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up the auth state listener
+    // Set up the auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         console.log("Auth state changed:", event, currentSession?.user?.id);
+        
+        // Update session and user state synchronously
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-
+        
+        // For profile fetching, use setTimeout to prevent deadlocks
         if (currentSession?.user) {
-          // Fetch user profile data in a separate operation
           setTimeout(() => {
             fetchUserProfile(currentSession.user.id);
           }, 0);
-        } else {
+        } else if (event === 'SIGNED_OUT') {
+          // Clear the profile when signing out
           setProfile(null);
         }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      console.log("Got existing session:", currentSession?.user?.id);
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-
-      if (currentSession?.user) {
-        fetchUserProfile(currentSession.user.id);
+    // Then check for existing session
+    const checkSession = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log("Got existing session:", currentSession?.user?.id);
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          await fetchUserProfile(currentSession.user.id);
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error("Error checking session:", error);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+
+    checkSession();
 
     return () => {
       subscription.unsubscribe();
@@ -82,8 +95,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      // Clear states first to prevent race conditions
       setProfile(null);
+      
+      // Then perform the signout operation
+      await supabase.auth.signOut();
+      
       toast({
         title: "Signed out successfully",
       });
