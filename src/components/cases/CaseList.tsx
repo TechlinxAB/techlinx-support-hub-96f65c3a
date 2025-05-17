@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Filter, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useStarredCases } from '@/hooks/useStarredCases';
 
 interface CaseListProps {
   title?: string;
@@ -30,6 +31,7 @@ interface CaseListProps {
   limit?: number;
   statusFilter?: CaseStatus | 'all';
   searchQuery?: string;
+  watchlistFilter?: boolean;
 }
 
 const CaseList = ({ 
@@ -37,10 +39,12 @@ const CaseList = ({
   showFilters = true, 
   limit, 
   statusFilter = 'all',
-  searchQuery = ''
+  searchQuery = '',
+  watchlistFilter = false
 }: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
+  const { starredCases } = useStarredCases();
   
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
@@ -67,6 +71,11 @@ const CaseList = ({
       c.title.toLowerCase().includes(query) || 
       c.description.toLowerCase().includes(query)
     );
+  }
+  
+  // Apply watchlist filter
+  if (watchlistFilter) {
+    filteredCases = filteredCases.filter(c => starredCases.includes(c.id));
   }
   
   // Apply status filter
