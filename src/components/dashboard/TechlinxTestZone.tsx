@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Beaker, Layout, Newspaper, FileText, Users, Settings } from 'lucide-react';
+import { Beaker, Layout, Newspaper, FileText, Users, Settings, Star } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
 
@@ -78,6 +78,10 @@ const TechlinxTestZone: React.FC = () => {
             <TabsTrigger value="users" className="flex items-center gap-1">
               <Users className="h-4 w-4" />
               <span>Users</span>
+            </TabsTrigger>
+            <TabsTrigger value="watchlist" className="flex items-center gap-1">
+              <Star className="h-4 w-4" />
+              <span>Watchlist</span>
             </TabsTrigger>
           </TabsList>
           
@@ -153,6 +157,19 @@ const TechlinxTestZone: React.FC = () => {
               >
                 <Settings className="h-6 w-6" />
                 <span>Company Settings</span>
+              </Button>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="watchlist" className="mt-0">
+            <div className="grid grid-cols-1 gap-4">
+              <Button
+                onClick={() => navigate(`/cases?filter=watchlist`)}
+                variant="outline"
+                className="h-24 flex flex-col items-center justify-center gap-2"
+              >
+                <Star className="h-6 w-6" />
+                <span>View Watchlist Cases</span>
               </Button>
             </div>
           </TabsContent>

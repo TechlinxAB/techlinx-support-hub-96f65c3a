@@ -21,13 +21,14 @@ import TechlinxTestZone from './TechlinxTestZone';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { ensureTechlinxCompanyExists, assignConsultantToTechlinx, createTechlinxSampleContent } from '@/utils/techlinxTestCompany';
+import { useStarredCases } from '@/hooks/useStarredCases';
 
 const ConsultantDashboard = () => {
   const navigate = useNavigate();
   const { cases, currentUser, users, companies, refetchCompanies } = useAppContext();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [starredCases, setStarredCases] = useState<string[]>([]);
+  const { starredCases, toggleStar } = useStarredCases();
   const [isSettingUpTechlinx, setIsSettingUpTechlinx] = useState(false);
   
   // Ensure Techlinx company exists on component mount
@@ -128,30 +129,8 @@ const ConsultantDashboard = () => {
       companyId: c.companyId
     }));
   
-  // Toggle star on a case
-  const toggleStar = (caseId: string) => {
-    if (starredCases.includes(caseId)) {
-      setStarredCases(starredCases.filter(id => id !== caseId));
-    } else {
-      setStarredCases([...starredCases, caseId]);
-    }
-  };
-  
-  // Load starred cases from localStorage on component mount
-  useEffect(() => {
-    const savedStarredCases = localStorage.getItem('starredCases');
-    if (savedStarredCases) {
-      setStarredCases(JSON.parse(savedStarredCases));
-    }
-  }, []);
-  
-  // Save starred cases to localStorage when changed
-  useEffect(() => {
-    localStorage.setItem('starredCases', JSON.stringify(starredCases));
-  }, [starredCases]);
-  
   // Filter cases that are starred
-  const watchlistCases = cases.filter(c => starredCases.includes(c.id)).slice(0, 3);
+  const watchlistCases = cases.filter(c => starredCases.includes(c.id));
   
   // Navigate to case detail
   const viewCase = (caseId: string) => {
