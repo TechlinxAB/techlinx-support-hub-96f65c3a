@@ -5,6 +5,7 @@ import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
@@ -25,6 +26,7 @@ const Dashboard = () => {
     if (redirectTarget) {
       // Remove the redirectTarget from the URL
       navigate(redirectTarget, { replace: true });
+      toast.info("Redirecting you to the requested page...");
     }
   }, [location, navigate]);
   
