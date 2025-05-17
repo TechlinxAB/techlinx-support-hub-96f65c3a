@@ -109,13 +109,19 @@ const CompanyDashboardBuilderPage = () => {
   };
   
   const handleEditBlock = (block: DashboardBlock) => {
-    setEditingBlock(block);
-    setSelectedBlockType(block.type);
-    setFormData({
-      ...block.content,
-      blockTitle: block.title // Store the current block title
-    });
-    setDialogOpen(true);
+    // Reset the dialog state completely before opening with new data
+    setDialogOpen(false); // Close first to ensure state reset
+    
+    // Use a small timeout to ensure React has time to process the close before reopening
+    setTimeout(() => {
+      setEditingBlock(block);
+      setSelectedBlockType(block.type);
+      setFormData({
+        ...block.content,
+        blockTitle: block.title // Store the current block title
+      });
+      setDialogOpen(true);
+    }, 50);
   };
   
   const handleDeleteBlock = async (blockId: string) => {
@@ -813,7 +819,18 @@ const CompanyDashboardBuilderPage = () => {
       )}
       
       {/* Add/Edit Block Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog 
+        open={dialogOpen} 
+        onOpenChange={(open) => {
+          // If dialog is being closed, reset all related state
+          if (!open) {
+            setDialogOpen(false);
+            // No need to reset other state here as we'll set them properly before opening again
+          } else {
+            setDialogOpen(true);
+          }
+        }}
+      >
         <DialogContent className="max-h-[90vh] p-0">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>{editingBlock ? 'Edit Block' : 'Add New Block'}</DialogTitle>
@@ -857,7 +874,14 @@ const CompanyDashboardBuilderPage = () => {
           </ScrollArea>
           
           <DialogFooter className="px-6 py-4 border-t">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setDialogOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
             <Button onClick={handleSaveBlock}>{editingBlock ? 'Update' : 'Create'}</Button>
           </DialogFooter>
         </DialogContent>
