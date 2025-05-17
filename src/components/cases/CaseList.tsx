@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
@@ -20,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Filter, RefreshCw } from 'lucide-react';
+import { Filter, RefreshCw, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useStarredCases } from '@/hooks/useStarredCases';
@@ -44,7 +43,7 @@ const CaseList = ({
 }: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
-  const { starredCases } = useStarredCases();
+  const { starredCases, toggleStar } = useStarredCases();
   
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
@@ -217,6 +216,7 @@ const CaseList = ({
                 <TableHead>User</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead className="w-[50px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -225,27 +225,45 @@ const CaseList = ({
                   ? companies.find(c => c.id === caseItem.userId)?.name
                   : null;
                 const company = companies.find(c => c.id === caseItem.companyId)?.name;
+                const isStarred = starredCases.includes(caseItem.id);
                 
                 return (
                   <TableRow 
                     key={caseItem.id}
-                    onClick={() => navigate(`/cases/${caseItem.id}`)}
                     className="cursor-pointer hover:bg-muted"
                   >
-                    <TableCell className="font-medium">{caseItem.title}</TableCell>
-                    <TableCell>
+                    <TableCell 
+                      className="font-medium"
+                      onClick={() => navigate(`/cases/${caseItem.id}`)}
+                    >
+                      {caseItem.title}
+                    </TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <Badge variant="outline" className={cn("status-badge", getStatusBadgeClass(caseItem.status))}>
                         {caseItem.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass(caseItem.priority))}>
                         {caseItem.priority}
                       </Badge>
                     </TableCell>
-                    <TableCell>{user || currentUser?.name}</TableCell>
-                    <TableCell>{company}</TableCell>
-                    <TableCell>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{user || currentUser?.name}</TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{company}</TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleStar(caseItem.id);
+                        }}
+                      >
+                        <Star className={`h-5 w-5 ${isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
