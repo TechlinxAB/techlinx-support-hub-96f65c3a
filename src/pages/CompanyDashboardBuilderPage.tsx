@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -15,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const CompanyDashboardBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -786,47 +786,49 @@ const CompanyDashboardBuilderPage = () => {
       
       {/* Add/Edit Block Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-h-[90vh] p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>{editingBlock ? 'Edit Block' : 'Add New Block'}</DialogTitle>
             <DialogDescription>
               Configure your dashboard block. Different block types have different options.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div>
-              <label className="text-sm font-medium">Block Type</label>
-              <Select 
-                value={selectedBlockType}
-                onValueChange={(value) => {
-                  setSelectedBlockType(value as BlockType);
-                  setFormData({});
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select block type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="heading">Heading</SelectItem>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="faq">FAQ</SelectItem>
-                  <SelectItem value="links">Links</SelectItem>
-                  <SelectItem value="dropdown">Dropdown</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {selectedBlockType && (
-              <div className="border rounded-md p-4 bg-muted/10">
-                {renderBlockForm()}
+          <ScrollArea className="max-h-[calc(90vh-180px)]">
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="text-sm font-medium">Block Type</label>
+                <Select 
+                  value={selectedBlockType}
+                  onValueChange={(value) => {
+                    setSelectedBlockType(value as BlockType);
+                    setFormData({});
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select block type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="heading">Heading</SelectItem>
+                    <SelectItem value="text">Text</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="faq">FAQ</SelectItem>
+                    <SelectItem value="links">Links</SelectItem>
+                    <SelectItem value="dropdown">Dropdown</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </div>
+              
+              {selectedBlockType && (
+                <div className="border rounded-md p-4 bg-muted/10">
+                  {renderBlockForm()}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
           
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveBlock}>{editingBlock ? 'Update' : 'Create'}</Button>
           </DialogFooter>
