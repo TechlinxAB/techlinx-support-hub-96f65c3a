@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -48,13 +48,13 @@ const ModalManager = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <AppProvider>
-        <TooltipProvider>
-          <ModalManager>
-            <Toaster />
-            <ModalReset />
-            <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppProvider>
+          <TooltipProvider>
+            <ModalManager>
+              <Toaster />
+              <ModalReset />
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 
@@ -79,11 +79,11 @@ const App = () => (
                   </Route>
                 </Route>
               </Routes>
-            </BrowserRouter>
-          </ModalManager>
-        </TooltipProvider>
-      </AppProvider>
-    </AuthProvider>
+            </ModalManager>
+          </TooltipProvider>
+        </AppProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 

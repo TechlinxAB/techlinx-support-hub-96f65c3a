@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
@@ -15,50 +16,24 @@ const AuthPage = () => {
   const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const mountedRef = useRef(true);
   
   // Check if user is already logged in
   useEffect(() => {
-    let mounted = true;
-    let authSubscription: { unsubscribe: () => void } | null = null;
+    setCheckingAuth(true);
     
-    const checkSession = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        
-        if (!mounted) return;
-        
-        // If already authenticated, redirect to home
-        if (data.session) {
-          navigate('/', { replace: true });
-        }
-        
-        setCheckingAuth(false);
-      } catch (error) {
-        console.error("Error checking auth session:", error);
-        if (mounted) {
-          setCheckingAuth(false);
-        }
-      }
-    };
+    // If authenticated, redirect to home
+    if (user) {
+      navigate('/', { replace: true });
+    }
     
-    // Set up minimal auth listener to detect when user becomes authenticated
-    authSubscription = supabase.auth.onAuthStateChange((event, session) => {
-      if (!mounted) return;
-      
-      if (session && event === 'SIGNED_IN') {
-        navigate('/', { replace: true });
-      }
-    }).data.subscription;
-    
-    checkSession();
+    setCheckingAuth(false);
     
     return () => {
-      mounted = false;
-      if (authSubscription) {
-        authSubscription.unsubscribe();
-      }
+      mountedRef.current = false;
     };
-  }, [navigate]);
+  }, [navigate, user]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,16 +62,21 @@ const AuthPage = () => {
         description: "You have been logged in",
       });
       
-      // Navigate is handled by the auth state listener
+      // Navigate to home
+      navigate('/', { replace: true });
       
     } catch (error: any) {
+      if (!mountedRef.current) return;
+      
       toast({
         title: "Error",
         description: error.message || "Invalid email or password",
         variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
   
@@ -128,6 +108,7 @@ const AuthPage = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             
@@ -142,6 +123,7 @@ const AuthPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
           </CardContent>

@@ -30,24 +30,27 @@ const Dashboard = () => {
       // Mark that we've attempted navigation to prevent loops
       setNavigationAttempted(true);
       
-      console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
-      
-      // For dashboard builder pages, verify role before redirecting
-      if (redirectTarget.includes('company-dashboard-builder')) {
-        if (profile?.role === 'consultant') {
-          toast.info("Loading dashboard builder...");
-          window.location.href = redirectTarget;
-          return;
-        } else {
-          console.log("Cannot redirect: User is not a consultant");
-          toast.error("You don't have permission to access the dashboard builder");
-          return;
+      // Delay redirect to ensure profile is fully loaded
+      setTimeout(() => {
+        console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
+        
+        // For dashboard builder pages, verify role before redirecting
+        if (redirectTarget.includes('company-dashboard-builder')) {
+          if (profile?.role === 'consultant') {
+            toast.info("Loading dashboard builder...");
+            navigate(redirectTarget, { replace: true });
+            return;
+          } else {
+            console.log("Cannot redirect: User is not a consultant");
+            toast.error("You don't have permission to access the dashboard builder");
+            return;
+          }
         }
-      }
-      
-      // For other pages, use React Router navigation
-      navigate(redirectTarget, { replace: true });
-      toast.info("Redirecting you to the requested page...");
+        
+        // For other pages, use React Router navigation
+        navigate(redirectTarget, { replace: true });
+        toast.info("Redirecting you to the requested page...");
+      }, 500);
     }
   }, [location, navigate, navigationAttempted, profile]);
   
