@@ -72,7 +72,14 @@ export const useNewsBlockEditor = (
           ]
         };
       case 'image':
-        return { url: '', alt: 'Image description', caption: '' };
+        return { 
+          url: '', 
+          alt: 'Image description', 
+          caption: '',
+          width: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center'
+        };
       case 'notice':
         return { 
           type: 'info', 
