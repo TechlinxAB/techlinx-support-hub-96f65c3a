@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -19,9 +18,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
-import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit, AspectRatio as AspectRatioIcon } from 'lucide-react';
 import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
+import { Slider } from '@/components/ui/slider';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -401,7 +402,7 @@ const CompanyNewsBuilderPage = () => {
       
       case 'image':
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="image-url">Image URL</Label>
               <Input 
@@ -426,17 +427,85 @@ const CompanyNewsBuilderPage = () => {
                 onChange={(e) => handleFormChange('content.caption', e.target.value)}
               />
             </div>
+            
+            {/* Image Width Control */}
+            <div className="space-y-2">
+              <Label htmlFor="image-width">Image Width ({content.width || '100%'})</Label>
+              <div className="flex gap-4 items-center">
+                <Slider 
+                  id="image-width"
+                  min={10}
+                  max={100}
+                  step={5}
+                  defaultValue={[parseInt(content.width) || 100]}
+                  onValueChange={(values) => handleFormChange('content.width', `${values[0]}%`)}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+
+            {/* Object Fit Control */}
+            <div className="space-y-2">
+              <Label htmlFor="image-object-fit">Object Fit</Label>
+              <Select 
+                value={content.objectFit || "cover"} 
+                onValueChange={(value) => handleFormChange('content.objectFit', value)}
+              >
+                <SelectTrigger id="image-object-fit">
+                  <SelectValue placeholder="Select how the image should fit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cover">Cover (fill space, may crop)</SelectItem>
+                  <SelectItem value="contain">Contain (show full image)</SelectItem>
+                  <SelectItem value="fill">Fill (stretch to fit)</SelectItem>
+                  <SelectItem value="none">None (original size)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Object Position Control */}
+            <div className="space-y-2">
+              <Label htmlFor="image-object-position">Focus Point</Label>
+              <Select 
+                value={content.objectPosition || "center"} 
+                onValueChange={(value) => handleFormChange('content.objectPosition', value)}
+              >
+                <SelectTrigger id="image-object-position">
+                  <SelectValue placeholder="Select image focus point" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="center">Center</SelectItem>
+                  <SelectItem value="top">Top</SelectItem>
+                  <SelectItem value="bottom">Bottom</SelectItem>
+                  <SelectItem value="left">Left</SelectItem>
+                  <SelectItem value="right">Right</SelectItem>
+                  <SelectItem value="top left">Top Left</SelectItem>
+                  <SelectItem value="top right">Top Right</SelectItem>
+                  <SelectItem value="bottom left">Bottom Left</SelectItem>
+                  <SelectItem value="bottom right">Bottom Right</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {content.url && (
               <div className="mt-4 border rounded-md p-4">
                 <p className="text-sm text-muted-foreground mb-2">Preview:</p>
-                <img 
-                  src={content.url} 
-                  alt={content.alt} 
-                  className="max-w-full h-auto rounded-md"
-                />
-                {content.caption && (
-                  <p className="text-sm text-center mt-2">{content.caption}</p>
-                )}
+                <div style={{ width: content.width || '100%' }}>
+                  <AspectRatio ratio={16 / 9} className="bg-muted">
+                    <img 
+                      src={content.url} 
+                      alt={content.alt} 
+                      className="w-full h-full rounded-md"
+                      style={{ 
+                        objectFit: content.objectFit || 'cover',
+                        objectPosition: content.objectPosition || 'center'
+                      }}
+                    />
+                  </AspectRatio>
+                  {content.caption && (
+                    <p className="text-sm text-center mt-2">{content.caption}</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -684,14 +753,20 @@ const CompanyNewsBuilderPage = () => {
       
       case 'image':
         return (
-          <div className="mt-4">
+          <div className="mt-4" style={{ width: displayContent.width || '100%' }}>
             {displayContent.url ? (
               <>
-                <img 
-                  src={displayContent.url} 
-                  alt={displayContent.alt || 'Image'} 
-                  className="max-w-full h-auto rounded-md"
-                />
+                <AspectRatio ratio={16 / 9} className="bg-muted">
+                  <img 
+                    src={displayContent.url} 
+                    alt={displayContent.alt || 'Image'} 
+                    className="w-full h-full rounded-md"
+                    style={{ 
+                      objectFit: displayContent.objectFit || 'cover',
+                      objectPosition: displayContent.objectPosition || 'center'
+                    }}
+                  />
+                </AspectRatio>
                 {displayContent.caption && (
                   <p className="text-sm text-center mt-2">{displayContent.caption}</p>
                 )}
@@ -1031,4 +1106,3 @@ const CompanyNewsBuilderPage = () => {
 };
 
 export default CompanyNewsBuilderPage;
-
