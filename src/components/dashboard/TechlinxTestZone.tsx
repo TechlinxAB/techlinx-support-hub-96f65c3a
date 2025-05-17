@@ -24,15 +24,25 @@ const TechlinxTestZone: React.FC = () => {
     }
   }, [companies]);
 
-  // Enhanced navigation handler to track failures
+  // Force direct URL navigation for dashboard builder
+  const handleDashboardNavigation = (companyId: string) => {
+    const path = `/company-dashboard-builder/${companyId}`;
+    console.log(`Direct navigation to: ${path}`);
+    // Force direct URL navigation to avoid routing issues
+    window.location.href = path;
+    // Show toast before navigating
+    toast.info("Opening dashboard builder...");
+    // Prevent event bubbling
+    return false;
+  };
+
+  // Regular navigation for other links
   const handleNavigation = (path: string) => {
     try {
       console.log(`Navigating to: ${path}`);
-      // Using navigate with replace to avoid adding to history
       navigate(path, { replace: true });
     } catch (error) {
       console.error(`Navigation error to ${path}:`, error);
-      // Add a fallback mechanism by using window.location as a last resort
       window.location.href = path;
     }
   };
@@ -103,12 +113,7 @@ const TechlinxTestZone: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <Button
                 type="button"
-                onClick={() => {
-                  const path = `/company-dashboard-builder/${techlinxId}`;
-                  console.log(`Attempting navigation to ${path}`);
-                  toast.info(`Navigating to dashboard builder...`);
-                  handleNavigation(path);
-                }}
+                onClick={() => handleDashboardNavigation(techlinxId)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >

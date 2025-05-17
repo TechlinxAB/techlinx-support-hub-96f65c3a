@@ -19,7 +19,7 @@ const Dashboard = () => {
     loadStarredCases();
   }, [loadStarredCases]);
   
-  // Enhanced navigation handling with more detailed logging
+  // Enhanced navigation handling with improved direct access for dashboard builder
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const redirectTarget = params.get('redirectTarget');
@@ -30,21 +30,16 @@ const Dashboard = () => {
       
       console.log(`Attempting to redirect to: ${redirectTarget}`);
       
-      // For dashboard builder pages, ensure we're using the correct format and have proper permissions
+      // For dashboard builder pages, use direct location change
       if (redirectTarget.includes('company-dashboard-builder')) {
-        toast.info("Loading dashboard builder...", {
-          duration: 3000,
-        });
-        
-        // Use setTimeout to ensure the redirect happens after state update
-        setTimeout(() => {
-          navigate(redirectTarget, { replace: true });
-        }, 100);
-      } else {
-        // Handle other redirects
-        navigate(redirectTarget, { replace: true });
-        toast.info("Redirecting you to the requested page...");
+        toast.info("Loading dashboard builder...");
+        window.location.href = redirectTarget;
+        return;
       }
+      
+      // For other pages, use React Router navigation
+      navigate(redirectTarget, { replace: true });
+      toast.info("Redirecting you to the requested page...");
     }
   }, [location, navigate, navigationAttempted]);
   

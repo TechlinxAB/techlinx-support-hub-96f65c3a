@@ -38,11 +38,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/components/ui/use-toast';
 import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   
   // Company management state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -58,12 +59,31 @@ const CompaniesPage = () => {
     navigate('/company-dashboard');
     return null;
   }
+
+  // Force direct URL navigation for dashboard builder
+  const handleDashboardNavigation = (companyId: string) => {
+    const path = `/company-dashboard-builder/${companyId}`;
+    console.log(`Direct navigation to: ${path}`);
+    // Force direct URL navigation to avoid routing issues
+    toast.info("Opening dashboard builder...");
+    window.location.href = path;
+  };
+  
+  // Regular navigation for other links
+  const handleNavigation = (path: string) => {
+    try {
+      navigate(path);
+    } catch (error) {
+      console.error(`Navigation error to ${path}:`, error);
+      window.location.href = path;
+    }
+  };
   
   // Functions for managing companies
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim()) {
-      toast({
+      uiToast({
         title: "Error",
         description: "Company name is required",
         variant: "destructive",
@@ -81,13 +101,13 @@ const CompaniesPage = () => {
       setIsDialogOpen(false);
       setCompanyName('');
       setCompanyLogo('');
-      toast({
+      uiToast({
         title: "Success",
         description: "Company created successfully",
       });
     } catch (error) {
       console.error('Error creating company:', error);
-      toast({
+      uiToast({
         title: "Error",
         description: "Failed to create company",
         variant: "destructive",
@@ -105,13 +125,13 @@ const CompaniesPage = () => {
       await deleteCompany(companyToDelete);
       setIsDeleteDialogOpen(false);
       setCompanyToDelete(null);
-      toast({
+      uiToast({
         title: "Success",
         description: "Company deleted successfully",
       });
     } catch (error) {
       console.error('Error deleting company:', error);
-      toast({
+      uiToast({
         title: "Error",
         description: "Failed to delete company",
         variant: "destructive",
@@ -202,7 +222,7 @@ const CompaniesPage = () => {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          onClick={() => navigate(`/company/${company.id}/settings`)}
+                          onClick={() => handleNavigation(`/company/${company.id}/settings`)}
                           className="cursor-pointer"
                         >
                           <Settings className="h-4 w-4 mr-2" />
@@ -242,7 +262,7 @@ const CompaniesPage = () => {
                     <Button 
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"
-                      onClick={() => navigate(`/companies/${company.id}`)}
+                      onClick={() => handleNavigation(`/companies/${company.id}`)}
                     >
                       <FileText className="h-4 w-4" />
                       <span className="hidden sm:inline">Documentation</span>
@@ -252,7 +272,7 @@ const CompaniesPage = () => {
                     <Button 
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"
-                      onClick={() => navigate(`/company-dashboard-builder/${company.id}`)}
+                      onClick={() => handleDashboardNavigation(company.id)}
                     >
                       <LayoutDashboard className="h-4 w-4" />
                       Dashboard
@@ -262,7 +282,7 @@ const CompaniesPage = () => {
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"
                       onClick={() => {
-                        navigate('/cases');
+                        handleNavigation('/cases');
                         // Here we would implement filtering by company
                       }}
                     >
@@ -277,7 +297,7 @@ const CompaniesPage = () => {
                       <Button 
                         variant="outline" 
                         className="flex gap-1 items-center justify-center h-11"
-                        onClick={() => navigate(`/company-news-builder/${company.id}`)}
+                        onClick={() => handleNavigation(`/company-news-builder/${company.id}`)}
                       >
                         <Edit className="h-4 w-4" />
                         Edit News
@@ -286,7 +306,7 @@ const CompaniesPage = () => {
                     <Button 
                       variant="outline" 
                       className={`flex gap-1 items-center justify-center h-11 ${currentUser?.role !== 'consultant' ? 'col-span-2' : ''}`}
-                      onClick={() => navigate(`/company-news/${company.id}`)}
+                      onClick={() => handleNavigation(`/company-news/${company.id}`)}
                     >
                       <Eye className="h-4 w-4" />
                       View News
