@@ -23,6 +23,12 @@ const TechlinxTestZone: React.FC = () => {
     }
   }, [companies]);
 
+  // Handle navigation with preventing default behavior
+  const handleNavigation = (path: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(path);
+  };
+
   if (!techlinxId) {
     return (
       <Card className="mb-6">
@@ -88,7 +94,7 @@ const TechlinxTestZone: React.FC = () => {
           <TabsContent value="dashboard" className="mt-0">
             <div className="grid grid-cols-2 gap-4">
               <Button
-                onClick={() => navigate(`/company-dashboard-builder/${techlinxId}`)}
+                onClick={handleNavigation(`/company-dashboard-builder/${techlinxId}`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -96,7 +102,7 @@ const TechlinxTestZone: React.FC = () => {
                 <span>Edit Dashboard</span>
               </Button>
               <Button
-                onClick={() => navigate(`/company-dashboard`)}
+                onClick={handleNavigation(`/company-dashboard`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -109,7 +115,7 @@ const TechlinxTestZone: React.FC = () => {
           <TabsContent value="news" className="mt-0">
             <div className="grid grid-cols-2 gap-4">
               <Button
-                onClick={() => navigate(`/company-news-builder/${techlinxId}`)}
+                onClick={handleNavigation(`/company-news-builder/${techlinxId}`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -117,7 +123,7 @@ const TechlinxTestZone: React.FC = () => {
                 <span>Edit News</span>
               </Button>
               <Button
-                onClick={() => navigate(`/company-news/${techlinxId}`)}
+                onClick={handleNavigation(`/company-news/${techlinxId}`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -130,7 +136,7 @@ const TechlinxTestZone: React.FC = () => {
           <TabsContent value="docs" className="mt-0">
             <div className="grid grid-cols-1 gap-4">
               <Button
-                onClick={() => navigate(`/companies/${techlinxId}`)}
+                onClick={handleNavigation(`/companies/${techlinxId}`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -143,7 +149,7 @@ const TechlinxTestZone: React.FC = () => {
           <TabsContent value="users" className="mt-0">
             <div className="grid grid-cols-2 gap-4">
               <Button
-                onClick={() => navigate('/users')}
+                onClick={handleNavigation('/users')}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -151,7 +157,7 @@ const TechlinxTestZone: React.FC = () => {
                 <span>Manage Users</span>
               </Button>
               <Button
-                onClick={() => navigate(`/company/${techlinxId}/settings`)}
+                onClick={handleNavigation(`/company/${techlinxId}/settings`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
@@ -164,7 +170,7 @@ const TechlinxTestZone: React.FC = () => {
           <TabsContent value="watchlist" className="mt-0">
             <div className="grid grid-cols-1 gap-4">
               <Button
-                onClick={() => navigate(`/cases?filter=watchlist`)}
+                onClick={handleNavigation(`/cases?filter=watchlist`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
