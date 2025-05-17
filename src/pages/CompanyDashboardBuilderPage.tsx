@@ -35,15 +35,31 @@ const CompanyDashboardBuilderPage = () => {
   const [selectedBlockType, setSelectedBlockType] = useState<BlockType>('text');
   const [formData, setFormData] = useState<any>({});
   const [isPreview, setIsPreview] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
   
   // Find the company
   const company = companies.find(c => c.id === companyId);
+  
+  // Check auth in useEffect, not during render
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'consultant') {
+      console.log("User is not a consultant, redirecting to home");
+      setShouldRedirect(true);
+    }
+  }, [currentUser]);
+
+  // Separate useEffect for navigation
+  useEffect(() => {
+    if (shouldRedirect) {
+      navigate('/');
+    }
+  }, [shouldRedirect, navigate]);
   
   useEffect(() => {
     if (companyId) {
       refetchDashboardBlocks(companyId);
     }
-  }, [companyId]);
+  }, [companyId, refetchDashboardBlocks]);
   
   useEffect(() => {
     // Sort blocks by position and filter to only include top-level blocks (no parentId)
@@ -478,9 +494,14 @@ const CompanyDashboardBuilderPage = () => {
     );
   };
   
-  if (!currentUser || currentUser.role !== 'consultant') {
-    navigate('/');
-    return null;
+  // Show loading when checking auth
+  if (shouldRedirect) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Redirecting...</span>
+      </div>
+    );
   }
   
   if (!company) {
