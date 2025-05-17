@@ -41,6 +41,9 @@ const CompanyDashboardPage = () => {
   
   // Render a specific block type
   const renderBlock = (block: DashboardBlock) => {
+    // Only render the title if showTitle is not explicitly false
+    const shouldShowTitle = block.showTitle !== false;
+    
     switch (block.type) {
       case 'heading':
         const level = block.content.level || 1;
@@ -71,6 +74,7 @@ const CompanyDashboardPage = () => {
       case 'text':
         return (
           <div className="prose max-w-none mb-4">
+            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
             <p>{block.content.text}</p>
           </div>
         );
@@ -79,6 +83,7 @@ const CompanyDashboardPage = () => {
         return (
           <Card className="mb-4">
             <CardContent className="p-6">
+              {shouldShowTitle && <h3 className="text-lg font-semibold mb-2">{block.title}</h3>}
               <h3 className="text-lg font-semibold mb-2">{block.content.title}</h3>
               <p className="text-muted-foreground">{block.content.content}</p>
               {block.content.action && (
@@ -96,51 +101,77 @@ const CompanyDashboardPage = () => {
       
       case 'faq':
         return (
-          <Accordion type="single" collapsible className="mb-6">
-            {block.content.items?.map((faq: any, index: number) => (
-              <AccordionItem value={`item-${index}`} key={index}>
-                <AccordionTrigger className="text-left">
-                  {faq.question}
-                </AccordionTrigger>
-                <AccordionContent>
-                  {faq.answer}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <>
+            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            <Accordion type="single" collapsible className="mb-6">
+              {block.content.items?.map((faq: any, index: number) => (
+                <AccordionItem value={`item-${index}`} key={index}>
+                  <AccordionTrigger className="text-left">
+                    {faq.question}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {faq.answer}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </>
         );
       
       case 'links':
         return (
-          <div className="flex flex-wrap gap-3 mb-6">
-            {block.content.links?.map((link: any, index: number) => (
-              <Button 
-                key={index}
-                variant="outline" 
-                onClick={() => window.open(link.url, '_blank')}
-              >
-                {link.label}
-              </Button>
-            ))}
-          </div>
+          <>
+            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            <div className="flex flex-wrap gap-3 mb-6">
+              {block.content.links?.map((link: any, index: number) => (
+                <Button 
+                  key={index}
+                  variant="outline" 
+                  onClick={() => window.open(link.url, '_blank')}
+                >
+                  {link.label}
+                </Button>
+              ))}
+            </div>
+          </>
         );
       
       case 'dropdown':
         return (
-          <Tabs defaultValue="item-0" className="mb-6">
-            <TabsList className="mb-2">
+          <>
+            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            <Tabs defaultValue="item-0" className="mb-6">
+              <TabsList className="mb-2">
+                {block.content.items?.map((item: any, index: number) => (
+                  <TabsTrigger key={index} value={`item-${index}`}>
+                    {item.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
               {block.content.items?.map((item: any, index: number) => (
-                <TabsTrigger key={index} value={`item-${index}`}>
-                  {item.label}
-                </TabsTrigger>
+                <TabsContent key={index} value={`item-${index}`} className="p-4 border rounded-md">
+                  {item.content}
+                </TabsContent>
               ))}
-            </TabsList>
-            {block.content.items?.map((item: any, index: number) => (
-              <TabsContent key={index} value={`item-${index}`} className="p-4 border rounded-md">
-                {item.content}
-              </TabsContent>
-            ))}
-          </Tabs>
+            </Tabs>
+          </>
+        );
+      
+      case 'image':
+        return (
+          <div className="mb-4">
+            {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
+            <img 
+              src={block.content.url} 
+              alt={block.content.alt || block.title} 
+              className="max-w-full h-auto rounded-md"
+            />
+            {block.content.caption && (
+              <p className="text-sm text-center mt-2 text-muted-foreground">
+                {block.content.caption}
+              </p>
+            )}
+          </div>
         );
       
       default:
