@@ -12,29 +12,52 @@ const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
   const { toast } = useToast();
   const navigate = useNavigate();
   
   // Check if user is already logged in
   useEffect(() => {
+    let mounted = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigate('/');
+      try {
+        const { data } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        // If already authenticated, redirect to home
+        if (data.session) {
+          navigate('/', { replace: true });
+        }
+        
+        setCheckingAuth(false);
+      } catch (error) {
+        console.error("Error checking auth session:", error);
+        if (mounted) {
+          setCheckingAuth(false);
+        }
       }
     };
     
+    // Set up minimal auth listener to detect when user becomes authenticated
+    authSubscription = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      
+      if (session && event === 'SIGNED_IN') {
+        navigate('/', { replace: true });
+      }
+    }).data.subscription;
+    
     checkSession();
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          navigate('/');
-        }
+    return () => {
+      mounted = false;
+      if (authSubscription) {
+        authSubscription.unsubscribe();
       }
-    );
-    
-    return () => subscription.unsubscribe();
+    };
   }, [navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
@@ -64,6 +87,8 @@ const AuthPage = () => {
         description: "You have been logged in",
       });
       
+      // Navigate is handled by the auth state listener
+      
     } catch (error: any) {
       toast({
         title: "Error",
@@ -74,6 +99,15 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
+  
+  // Show loading while checking auth status
+  if (checkingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">

@@ -9,22 +9,29 @@ const ProtectedRoute = () => {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [redirectAttempted, setRedirectAttempted] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
+  // Handle authentication redirect
   useEffect(() => {
-    // Only redirect if we're done loading and there's no user
-    if (!loading && !user && !redirectAttempted) {
+    // Only redirect if:
+    // 1. We're not already redirecting (prevents multiple redirects)
+    // 2. We're done loading
+    // 3. There's no user
+    if (!isRedirecting && !loading && !user) {
       console.log("No authenticated user, redirecting to auth");
+      // Set redirecting flag to prevent multiple redirects
+      setIsRedirecting(true);
+      // Show error toast
       toast.error("Please sign in to continue");
-      setRedirectAttempted(true);
-      navigate('/auth');
+      // Redirect to auth page
+      navigate('/auth', { replace: true });
     }
     
-    // Reset the redirect flag when user is present
+    // Reset redirecting flag when user is present
     if (user) {
-      setRedirectAttempted(false);
+      setIsRedirecting(false);
     }
-  }, [user, loading, navigate, redirectAttempted]);
+  }, [user, loading, navigate, isRedirecting]);
   
   // Check if the path requires a consultant role
   useEffect(() => {
