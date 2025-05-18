@@ -4,30 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
-import { hasValidSession } from '@/integrations/supabase/client';
 
 const Index = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   
-  // Add a secondary session check to avoid flashing the wrong UI
-  const [sessionValid, setSessionValid] = useState<boolean | null>(null);
-  
-  useEffect(() => {
-    const checkSession = async () => {
-      const valid = await hasValidSession();
-      setSessionValid(valid);
-    };
-    
-    if (!loading) {
-      checkSession();
-    }
-  }, [user, loading]);
-  
-  // Determine if we should show authenticated content
-  const isAuthenticated = user && sessionValid;
-  const isLoading = loading || sessionValid === null;
-
+  // Simpler implementation that relies on AuthContext
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <Card className="max-w-2xl w-full p-6 shadow-lg">
@@ -38,11 +20,11 @@ const Index = () => {
             Your central hub for technical support and service management
           </p>
           
-          {isLoading ? (
+          {loading ? (
             <div className="flex justify-center py-4">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
             </div>
-          ) : isAuthenticated ? (
+          ) : user ? (
             <div className="pt-4">
               <Button 
                 size="lg" 

@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, hasValidSession } from '@/integrations/supabase/client';
@@ -13,10 +14,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Simple state management to prevent auth loops
+// Global auth state to prevent loops and conflicts
 const AUTH_STATE = {
   INITIALIZED: false,
   LAST_USER_ID: null as string | null,
+  LAST_AUTH_ACTION: 0, // Timestamp of last auth action
+  SESSION_CHECKED: false, // Flag to track if session has been checked
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -29,20 +32,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const mountedRef = useRef(true);
   const authSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
   const profileFetchTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
-  const profileFetchAttempts = useRef<{[key: string]: number}>({});
   
-  // Fetch profile function with retry limits and debouncing
+  // Clean up function to prevent memory leaks and remove active timeouts
+  const cleanupResources = () => {
+    // Clear all profile fetch timeouts
+    profileFetchTimeoutsRef.current.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    profileFetchTimeoutsRef.current = [];
+    
+    // Unsubscribe from auth changes
+    if (authSubscriptionRef.current) {
+      console.log("Cleaning up auth subscription");
+      authSubscriptionRef.current.unsubscribe();
+      authSubscriptionRef.current = null;
+    }
+  };
+  
+  // Fetch profile function with better error handling
   const fetchUserProfile = async (userId: string) => {
     if (!mountedRef.current) return null;
-    
-    // Track fetch attempts to prevent infinite loops
-    profileFetchAttempts.current[userId] = (profileFetchAttempts.current[userId] || 0) + 1;
-    
-    // Limit fetch attempts per user to 3
-    if (profileFetchAttempts.current[userId] > 3) {
-      console.warn(`Too many profile fetch attempts for user: ${userId}`);
-      return null;
-    }
     
     try {
       console.log("Fetching profile for user:", userId);
@@ -69,22 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Clean up function to prevent memory leaks and remove active timeouts
-  const cleanupResources = () => {
-    // Clear all profile fetch timeouts
-    profileFetchTimeoutsRef.current.forEach(timeoutId => {
-      clearTimeout(timeoutId);
-    });
-    profileFetchTimeoutsRef.current = [];
-    
-    // Unsubscribe from auth changes
-    if (authSubscriptionRef.current) {
-      console.log("Cleaning up auth subscription");
-      authSubscriptionRef.current.unsubscribe();
-      authSubscriptionRef.current = null;
-    }
-  };
-
   // Effect for cleanup on unmount
   useEffect(() => {
     return () => {
@@ -100,43 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log("Initializing auth state");
         setLoading(true);
         
-        // First check for existing session synchronously
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error("Error getting session:", sessionError.message);
-          setSession(null);
-          setUser(null);
-          setLoading(false);
-          return;
-        }
-        
-        const initialSession = sessionData?.session;
-        
-        if (initialSession?.user) {
-          console.log("Found existing session for user:", initialSession.user.id);
-          setSession(initialSession);
-          setUser(initialSession.user);
-          
-          // Mark global state as initialized
-          AUTH_STATE.INITIALIZED = true;
-          AUTH_STATE.LAST_USER_ID = initialSession.user.id;
-          
-          // Fetch profile with a small delay to avoid potential deadlocks
-          const timeoutId = setTimeout(() => {
-            if (mountedRef.current) {
-              fetchUserProfile(initialSession.user.id);
-            }
-          }, 50);
-          profileFetchTimeoutsRef.current.push(timeoutId);
-        } else {
-          console.log("No existing session found");
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-        }
-        
-        // Set up the subscription for future auth changes
+        // First set up the subscription to avoid missing events
         if (!authSubscriptionRef.current && mountedRef.current) {
           const { data } = supabase.auth.onAuthStateChange((event, currentSession) => {
             if (!mountedRef.current) return;
@@ -168,7 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   if (mountedRef.current) {
                     fetchUserProfile(newUserId);
                   }
-                }, 50);
+                }, 100);
                 profileFetchTimeoutsRef.current.push(timeoutId);
               }
             }
@@ -176,24 +133,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           authSubscriptionRef.current = data.subscription;
         }
+        
+        // Now check for existing session
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error("Error getting session:", sessionError.message);
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          AUTH_STATE.SESSION_CHECKED = true;
+          return;
+        }
+        
+        const initialSession = sessionData?.session;
+        
+        if (initialSession?.user) {
+          console.log("Found existing session for user:", initialSession.user.id);
+          setSession(initialSession);
+          setUser(initialSession.user);
+          
+          // Mark global state as initialized
+          AUTH_STATE.INITIALIZED = true;
+          AUTH_STATE.LAST_USER_ID = initialSession.user.id;
+          
+          // Fetch profile with a small delay to avoid potential deadlocks
+          const timeoutId = setTimeout(() => {
+            if (mountedRef.current) {
+              fetchUserProfile(initialSession.user.id);
+            }
+          }, 100);
+          profileFetchTimeoutsRef.current.push(timeoutId);
+        } else {
+          console.log("No existing session found");
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        }
       } catch (error: any) {
         console.error("Error initializing auth:", error.message);
       } finally {
         if (mountedRef.current) {
           setLoading(false);
+          AUTH_STATE.SESSION_CHECKED = true;
         }
       }
     };
 
-    initAuth();
+    // Run init only if not already initialized to prevent double execution
+    if (!AUTH_STATE.SESSION_CHECKED) {
+      initAuth();
+    }
   }, []);
 
   // Improved signOut function that properly handles the auth flow
   const signOut = async () => {
     try {
       console.log("Attempting to sign out user");
+      AUTH_STATE.LAST_AUTH_ACTION = Date.now();
       
-      // Call Supabase signOut FIRST before clearing local state
+      // First clear local state to prevent flashing UI
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      AUTH_STATE.LAST_USER_ID = null;
+      
+      // Call Supabase signOut AFTER clearing local state
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -201,12 +206,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         toast.error("Error signing out: " + error.message);
         return;
       }
-      
-      // Clear local state after successful Supabase signOut
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      AUTH_STATE.LAST_USER_ID = null;
       
       // Clear localStorage items for a clean slate
       if (typeof window !== 'undefined') {

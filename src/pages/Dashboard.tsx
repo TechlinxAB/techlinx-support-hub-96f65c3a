@@ -8,6 +8,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
+// Anti-loop protection
+const DASHBOARD_STATE = {
+  NAVIGATION_ATTEMPTED: false,
+  LAST_NAVIGATION_TIME: 0,
+  NAVIGATION_COOLDOWN_MS: 1000
+};
+
 const Dashboard = () => {
   const { currentUser } = useAppContext();
   const { profile, user } = useAuth();
@@ -15,7 +22,7 @@ const Dashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [navigationAttempted, setNavigationAttempted] = useState(false);
-  const redirectTimeoutRef = useRef<number | null>(null);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Load starred cases on component mount
   useEffect(() => {
@@ -26,7 +33,7 @@ const Dashboard = () => {
     // Clean up any pending navigations on unmount
     return () => {
       if (redirectTimeoutRef.current) {
-        window.clearTimeout(redirectTimeoutRef.current);
+        clearTimeout(redirectTimeoutRef.current);
         redirectTimeoutRef.current = null;
       }
     };
@@ -35,7 +42,7 @@ const Dashboard = () => {
   // Enhanced navigation handling with improved direct access for dashboard builder
   useEffect(() => {
     // Skip if we've already attempted navigation or no user/profile
-    if (navigationAttempted || !profile || !user) {
+    if (DASHBOARD_STATE.NAVIGATION_ATTEMPTED || navigationAttempted || !profile || !user) {
       return;
     }
     
@@ -46,11 +53,20 @@ const Dashboard = () => {
       return;
     }
     
+    const now = Date.now();
+    
+    // Don't navigate if we've navigated too recently
+    if (now - DASHBOARD_STATE.LAST_NAVIGATION_TIME < DASHBOARD_STATE.NAVIGATION_COOLDOWN_MS) {
+      return;
+    }
+    
     // Mark that we've attempted navigation to prevent loops
     setNavigationAttempted(true);
+    DASHBOARD_STATE.NAVIGATION_ATTEMPTED = true;
+    DASHBOARD_STATE.LAST_NAVIGATION_TIME = now;
     
     // Use timeout for navigation to ensure separation from auth logic
-    redirectTimeoutRef.current = window.setTimeout(() => {
+    redirectTimeoutRef.current = setTimeout(() => {
       console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
       
       // Check role before redirecting to restricted areas

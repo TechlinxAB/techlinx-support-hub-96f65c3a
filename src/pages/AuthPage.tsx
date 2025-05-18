@@ -9,6 +9,13 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
+// Simple anti-loop protection
+const AUTH_PAGE_STATE = {
+  REDIRECTED: false, 
+  LAST_REDIRECT: 0,
+  REDIRECT_COOLDOWN_MS: 1000
+};
+
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -25,11 +32,21 @@ const AuthPage = () => {
     return params.get('returnUrl') || '/';
   };
   
-  // Check if user is already logged in
+  // Check if user is already logged in - with anti-loop protection
   useEffect(() => {
     if (user && !loading && !redirectedFromRef.current) {
+      const now = Date.now();
+      
+      // Don't redirect if we've redirected too recently
+      if (now - AUTH_PAGE_STATE.LAST_REDIRECT < AUTH_PAGE_STATE.REDIRECT_COOLDOWN_MS) {
+        return;
+      }
+      
       console.log("User already authenticated, redirecting to home");
       redirectedFromRef.current = true;
+      AUTH_PAGE_STATE.REDIRECTED = true;
+      AUTH_PAGE_STATE.LAST_REDIRECT = now;
+      
       const returnUrl = getReturnUrl();
       navigate(returnUrl, { replace: true });
     }
