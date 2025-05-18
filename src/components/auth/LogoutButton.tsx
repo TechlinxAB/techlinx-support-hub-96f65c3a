@@ -4,7 +4,6 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
 import { forceSignOut } from '@/integrations/supabase/client';
 
 interface LogoutButtonProps {
@@ -19,32 +18,37 @@ const LogoutButton = ({
   className = ''
 }: LogoutButtonProps) => {
   const { signOut } = useAuth();
-  const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
+      // Show a toast to indicate logout is in progress
+      const toastId = toast.loading('Logging out...');
+      
+      // Clear local storage directly to ensure clean state
+      localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      
       // First try the context method
       await signOut();
       
       // As a backup, also call our enhanced force signout method
-      const result = await forceSignOut();
+      await forceSignOut();
       
-      if (result.wasForced) {
-        toast.info('Forced logout completed. Please refresh if you encounter any issues.');
-      } else {
-        toast.success('Successfully logged out');
-      }
+      toast.success('Successfully logged out', { id: toastId });
       
-      // Force navigation to auth page with replace to prevent back button issues
-      window.location.href = '/auth';
+      // Use a small timeout before redirecting to ensure state is cleared
+      setTimeout(() => {
+        // Navigate to auth page with replace and clear state
+        window.location.replace('/auth');
+      }, 300);
     } catch (error) {
       console.error('Error during logout:', error);
       
       // Even if there's an error, try force signout as a last resort
       try {
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
         await forceSignOut();
         toast.info('Forced logout completed due to error in normal logout flow.');
-        window.location.href = '/auth';
+        window.location.replace('/auth');
       } catch (secondError) {
         toast.error('Failed to log out. Please try refreshing the page.');
       }

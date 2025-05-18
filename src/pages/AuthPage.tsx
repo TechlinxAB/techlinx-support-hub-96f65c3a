@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, resetAuthState } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,18 @@ const AuthPage = () => {
   // Check if user is already logged in
   useEffect(() => {
     let isMounted = true;
+    
+    // First clear any potential broken auth state on auth page loads
+    const clearBrokenState = async () => {
+      // Check if we have a session with invalid tokens causing 401s
+      const storage = localStorage.getItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      if (storage && storage.includes('error')) {
+        console.log('Found potentially corrupted auth state, cleaning up');
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      }
+    };
+    
+    clearBrokenState();
     
     const checkSession = async () => {
       try {
@@ -51,12 +63,15 @@ const AuthPage = () => {
       }
     };
     
-    // Run check immediately
-    checkSession();
+    // Run check with a short delay to allow for storage operations to complete
+    const timeoutId = setTimeout(() => {
+      checkSession();
+    }, 100);
     
     // Clean up function
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
     };
   }, [navigate, from]);
   

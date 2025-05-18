@@ -111,26 +111,43 @@ export const resetAuthState = async () => {
 // Enhanced signOut function that ensures local storage is cleared
 export const forceSignOut = async () => {
   try {
-    // Attempt normal signout first
-    await supabase.auth.signOut();
-    return { success: true };
-  } catch (error) {
-    console.error('Error during normal signout, forcing local cleanup:', error);
+    console.log('Force sign out: Starting cleanup process');
     
+    // First try removing the token directly from storage
     try {
-      // Force remove the token from storage directly
       localStorage.removeItem(STORAGE_KEY);
-      
-      // Also try the storage from the client
-      const storage = createFallbackStorage();
-      storage.removeItem(STORAGE_KEY);
-      
-      // Report success even though the server call failed
-      return { success: true, wasForced: true };
-    } catch (cleanupError) {
-      console.error('Failed to force clean up auth state:', cleanupError);
-      return { success: false, error: cleanupError };
+      console.log('Force sign out: Removed token from localStorage');
+    } catch (storageError) {
+      console.error('Error accessing localStorage:', storageError);
     }
+    
+    // Also try the storage from the client
+    const storage = createFallbackStorage();
+    storage.removeItem(STORAGE_KEY);
+    
+    // Try to sign out through the API (may fail if already signed out)
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+      console.log('Force sign out: API signout successful');
+    } catch (apiError) {
+      console.log('Force sign out: API call failed (expected if already signed out)');
+    }
+    
+    // Ensure session state is cleared from memory
+    try {
+      // @ts-ignore - Access internal session state (this is a hack but necessary)
+      if (supabase.auth.session) {
+        // @ts-ignore
+        supabase.auth.session = null;
+      }
+    } catch (memoryError) {
+      console.log('Force sign out: Memory cleanup failed');
+    }
+    
+    return { success: true, wasForced: true };
+  } catch (cleanupError) {
+    console.error('Failed to force clean up auth state:', cleanupError);
+    return { success: false, error: cleanupError };
   }
 };
 

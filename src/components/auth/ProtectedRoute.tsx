@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -15,6 +14,7 @@ const ProtectedRoute = () => {
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [navigationCount, setNavigationCount] = useState(0);
+  const [lastNavigationTime, setLastNavigationTime] = useState(0);
   
   // Set a loading timeout to prevent infinite loading states
   useEffect(() => {
@@ -41,10 +41,36 @@ const ProtectedRoute = () => {
     return () => clearTimeout(resetCountTimer);
   }, [navigationCount]);
   
+  // Special handle for the auth page
+  const isAuthPage = location.pathname === '/auth';
+  
   // Handle authentication redirects with loop detection
   useEffect(() => {
+    // Check if time since last navigation is too quick (potential loop)
+    const now = Date.now();
+    const timeSinceLastNav = now - lastNavigationTime;
+    
+    // If navigating too frequently, we might be in a loop
+    if (timeSinceLastNav < 500 && navigationCount > 3) {
+      console.error("Too many navigation attempts detected. Possible redirect loop.");
+      toast.error("Navigation loop detected", {
+        description: "Attempting to recover by resetting authentication state"
+      });
+      
+      // Force sign out and reset auth state when a loop is detected
+      forceSignOut().then(() => {
+        // Stay on current page and let user manually navigate
+        // This breaks the loop but keeps the UI usable
+        setNavigationCount(0);
+      });
+      
+      return;
+    }
+    
+    setLastNavigationTime(now);
+    
     // Skip auth check if we're already on the auth page
-    if (location.pathname === '/auth') {
+    if (isAuthPage) {
       console.log("Already on auth page, skipping redirect check");
       return;
     }
@@ -91,7 +117,7 @@ const ProtectedRoute = () => {
         setRedirectAttempted(false);
       }
     }
-  }, [user, profile, loading, loadingTimeout, navigate, location.pathname, redirectAttempted, navigationCount]);
+  }, [user, profile, loading, loadingTimeout, navigate, location.pathname, redirectAttempted, navigationCount, lastNavigationTime, isAuthPage]);
   
   // Check if the path requires a consultant role
   useEffect(() => {
@@ -172,7 +198,7 @@ const ProtectedRoute = () => {
   
   // Allow access to auth page without authentication
   // For all other routes, only render when authenticated
-  return location.pathname === '/auth' || user ? <Outlet /> : null;
+  return isAuthPage || user ? <Outlet /> : null;
 };
 
 export default ProtectedRoute;
