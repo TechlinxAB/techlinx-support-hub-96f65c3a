@@ -11,15 +11,26 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
-  // Core hooks must be called unconditionally at the top level
+  // Always call ALL hooks at the top level, unconditionally
   const { currentUser, cases } = useAppContext();
   const { authState } = useAuth();
-  
-  // Local state
   const [isReady, setIsReady] = useState(false);
   const [hasSettingsError, setHasSettingsError] = useState(false);
   
-  // Wait for auth to stabilize before processing
+  // Define safeCompanyId always, even if it's undefined
+  const safeCompanyId = currentUser?.companyId && 
+                        typeof currentUser.companyId === 'string' &&
+                        currentUser.companyId !== 'undefined' && 
+                        currentUser.companyId !== 'null' 
+                        ? currentUser.companyId 
+                        : undefined;
+  
+  // Always call these hooks, even if the data might not be ready
+  // React requires hooks to be called on every render in the same order
+  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
+  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
+  
+  // Update the isReady state based on auth status
   useEffect(() => {
     if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && currentUser) {
       setIsReady(true);
@@ -28,30 +39,7 @@ const UserDashboard = () => {
     }
   }, [authState, currentUser]);
   
-  // Show loading state until ready
-  if (!isReady) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Safe extraction of company ID - only after we've confirmed currentUser exists
-  const companyId = currentUser?.companyId;
-  const safeCompanyId = typeof companyId === 'string' && 
-                        companyId !== 'undefined' && 
-                        companyId !== 'null' ? 
-                        companyId : undefined;
-  
-  // Fetch data with the safe company ID
-  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
-  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
-  
-  // Handle settings error
+  // Handle settings error separately
   useEffect(() => {
     if (settingsError) {
       console.error("Dashboard settings error:", settingsError);
@@ -61,8 +49,24 @@ const UserDashboard = () => {
     }
   }, [settingsError]);
   
-  // Filter user cases - simple function call, not a hook
-  const getUserCases = () => {
+  // Create loading content - extracted as a constant to reduce repetition
+  const loadingContent = (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    </div>
+  );
+
+  // Early return for loading states
+  // Show loading when auth is not ready or when settings/announcements are loading
+  if (!isReady || settingsLoading || announcementsLoading) {
+    return loadingContent;
+  }
+  
+  // Filter user cases - this is a normal function, not a hook
+  const userCases = (() => {
     if (!currentUser?.id || !cases) return [];
     
     return cases
@@ -76,22 +80,10 @@ const UserDashboard = () => {
         status: c.status,
         updatedAt: c.updatedAt.toISOString()
       }));
-  };
+  })();
   
-  const userCases = getUserCases();
+  // Extract first name - move this here, after early returns
   const firstName = currentUser?.name?.split(' ')?.[0] || 'User';
-  
-  // Show loading state for settings and announcements
-  if (settingsLoading || announcementsLoading) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
   
   // Render the dashboard
   return (
