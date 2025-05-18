@@ -1,34 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import CaseList from '@/components/cases/CaseList';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Star } from 'lucide-react';
+import { Loader, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CaseStatus } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
-import { useStarredCases } from '@/hooks/useStarredCases';
-import { Badge } from '@/components/ui/badge';
 
 const CasesPage = () => {
-  const { loadingCases, cases } = useAppContext();
-  const [activeTab, setActiveTab] = useState<CaseStatus | 'all' | 'watchlist'>('all');
+  const { loadingCases } = useAppContext();
+  const [activeTab, setActiveTab] = useState<CaseStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { starredCases } = useStarredCases();
-  const location = useLocation();
-
-  // Check if we're being directed to watchlist filter
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const filter = params.get('filter');
-    if (filter === 'watchlist') {
-      setActiveTab('watchlist');
-    }
-  }, [location]);
-
-  // Get watchlist count for badge
-  const watchlistCount = cases.filter(c => starredCases.includes(c.id)).length;
 
   return (
     <div className="space-y-6">
@@ -54,24 +38,13 @@ const CasesPage = () => {
         </div>
       </div>
       
-      <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs defaultValue="all" onValueChange={(value) => setActiveTab(value as CaseStatus | 'all')}>
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="all">All Cases</TabsTrigger>
           <TabsTrigger value="new">New</TabsTrigger>
           <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
           <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="watchlist" className="relative">
-            <span className="flex items-center">
-              <Star className="h-4 w-4 mr-1" />
-              <span>Watchlist</span>
-              {watchlistCount > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
-                  {watchlistCount}
-                </Badge>
-              )}
-            </span>
-          </TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-6">
           {loadingCases ? (
@@ -116,15 +89,6 @@ const CasesPage = () => {
             </div>
           ) : (
             <CaseList statusFilter="completed" searchQuery={searchQuery} />
-          )}
-        </TabsContent>
-        <TabsContent value="watchlist" className="mt-6">
-          {loadingCases ? (
-            <div className="flex items-center justify-center p-12">
-              <Loader className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <CaseList watchlistFilter={true} searchQuery={searchQuery} />
           )}
         </TabsContent>
       </Tabs>

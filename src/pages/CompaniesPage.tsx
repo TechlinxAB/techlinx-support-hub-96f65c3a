@@ -14,8 +14,7 @@ import {
   Settings,
   Edit,
   Eye,
-  Search,
-  Beaker
+  Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -36,8 +35,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
-import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
-import { Badge } from '@/components/ui/badge';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
@@ -161,15 +158,8 @@ const CompaniesPage = () => {
           const companyCases = cases.filter(c => c.companyId === company.id);
           const activeCases = companyCases.filter(c => c.status !== 'completed').length;
           
-          // Check if this is the Techlinx test company
-          const isTechlinx = company.name === TECHLINX_NAME;
-          
           return (
-            <Card 
-              key={company.id} 
-              className={isTechlinx ? 
-                "border-purple-200 bg-gradient-to-r from-purple-50 to-white" : ""}
-            >
+            <Card key={company.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -180,14 +170,7 @@ const CompaniesPage = () => {
                         <Building className="h-5 w-5 text-muted-foreground" />
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold">{company.name}</h2>
-                      {isTechlinx && (
-                        <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-200">
-                          <Beaker className="h-3 w-3 mr-1" /> Test Zone
-                        </Badge>
-                      )}
-                    </div>
+                    <h2 className="text-lg font-semibold">{company.name}</h2>
                   </div>
                   
                   {currentUser?.role === 'consultant' && (
@@ -208,15 +191,13 @@ const CompaniesPage = () => {
                           <Settings className="h-4 w-4 mr-2" />
                           Company Settings
                         </DropdownMenuItem>
-                        {!isTechlinx && (
-                          <DropdownMenuItem
-                            onClick={() => confirmDeleteCompany(company.id)}
-                            className="text-red-600 cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Company
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem
+                          onClick={() => confirmDeleteCompany(company.id)}
+                          className="text-red-600 cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Company
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
