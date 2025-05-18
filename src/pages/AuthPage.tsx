@@ -13,39 +13,57 @@ const AuthPage = () => {
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Check if user is already logged in, but with a check to prevent infinite redirects
+  // Check if user is already logged in
   useEffect(() => {
+    let isMounted = true;
+    
     const checkSession = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
+        console.log('Checking for existing session...');
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session check error:', error);
+          if (isMounted) setAuthError(error.message);
+        } else if (data.session && isMounted) {
+          console.log('Active session found, redirecting to home');
           navigate('/');
         }
       } catch (error) {
-        console.error('Error checking session:', error);
+        console.error('Exception during session check:', error);
       } finally {
-        setCheckingSession(false);
+        if (isMounted) setCheckingSession(false);
       }
     };
     
-    checkSession();
+    // Small delay to ensure auth state is properly initialized
+    const timeoutId = setTimeout(checkSession, 100);
     
+    // Set up auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          navigate('/');
+      (event, session) => {
+        console.log('Auth state changed:', event);
+        if (session && isMounted) {
+          navigate('/', { replace: true });
         }
       }
     );
     
-    return () => subscription.unsubscribe();
+    // Cleanup
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, [navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     
     if (!email || !password) {
       toast({
@@ -59,6 +77,7 @@ const AuthPage = () => {
     setLoading(true);
     
     try {
+      console.log('Attempting to sign in...');
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -66,12 +85,15 @@ const AuthPage = () => {
       
       if (error) throw error;
       
+      console.log('Sign in successful:', data.session ? 'Session exists' : 'No session');
       toast({
         title: "Success!",
         description: "You have been logged in",
       });
       
     } catch (error: any) {
+      console.error('Sign in error:', error);
+      setAuthError(error.message);
       toast({
         title: "Error",
         description: error.message || "Invalid email or password",
@@ -98,6 +120,12 @@ const AuthPage = () => {
           <CardTitle className="text-2xl font-bold text-primary">Techlinx Helpdesk</CardTitle>
           <CardDescription>Sign in to access your support dashboard</CardDescription>
         </CardHeader>
+        
+        {authError && (
+          <div className="mx-6 mb-2 p-3 bg-destructive/10 text-destructive text-sm rounded-md">
+            {authError}
+          </div>
+        )}
         
         <form onSubmit={handleSignIn}>
           <CardContent className="space-y-4">

@@ -6,6 +6,61 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
+// Create a custom storage implementation that falls back to memory storage if localStorage isn't available
+const createFallbackStorage = () => {
+  // In-memory storage fallback
+  const inMemoryStorage = new Map<string, string>();
+
+  // Check if localStorage is available
+  const isLocalStorageAvailable = () => {
+    try {
+      const testKey = '__supabase_test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (e) {
+      console.warn('localStorage not available, using in-memory storage fallback');
+      return false;
+    }
+  };
+
+  return {
+    getItem: (key: string) => {
+      try {
+        if (isLocalStorageAvailable()) {
+          return localStorage.getItem(key);
+        }
+        return inMemoryStorage.get(key) || null;
+      } catch (error) {
+        console.error('Storage getItem error:', error);
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        if (isLocalStorageAvailable()) {
+          localStorage.setItem(key, value);
+        } else {
+          inMemoryStorage.set(key, value);
+        }
+      } catch (error) {
+        console.error('Storage setItem error:', error);
+      }
+    },
+    removeItem: (key: string) => {
+      try {
+        if (isLocalStorageAvailable()) {
+          localStorage.removeItem(key);
+        } else {
+          inMemoryStorage.delete(key);
+        }
+      } catch (error) {
+        console.error('Storage removeItem error:', error);
+      }
+    }
+  };
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -15,10 +70,27 @@ export const supabase = createClient<Database>(
   SUPABASE_PUBLISHABLE_KEY,
   {
     auth: {
-      persistSession: true
+      storage: createFallbackStorage(),
+      persistSession: true,
+      autoRefreshToken: true,
+      debug: true, // Enable debug mode to see auth-related logs
+      flowType: 'implicit' // More compatible flow type for iframe environments
     },
     db: {
       schema: 'public'
+    },
+    global: {
+      // Add additional fetch parameters for CORS
+      fetch: (url, options) => {
+        const headers = options?.headers || {};
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...headers,
+            'Cache-Control': 'no-cache'
+          }
+        });
+      }
     }
   }
 );

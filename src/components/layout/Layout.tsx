@@ -1,22 +1,15 @@
 
 import React, { useEffect, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import ImpersonationBanner from '@/components/auth/ImpersonationBanner';
+import { Loader } from 'lucide-react';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-
-  // If no user is found, redirect to auth page
-  useEffect(() => {
-    if (!user) {
-      navigate('/auth');
-    }
-  }, [user, navigate]);
+  const { user, profile, loading } = useAuth();
 
   useEffect(() => {
     const handleResize = () => {
@@ -39,8 +32,18 @@ const Layout = () => {
   };
 
   // Show a loading state until we have confirmed authentication
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Don't render layout if user isn't authenticated
+  // This prevents layout flash before redirect happens
   if (!user || !profile) {
-    return null; // Return nothing while checking auth, the ProtectedRoute will handle showing the loader
+    return null;
   }
 
   return (
