@@ -1,4 +1,3 @@
-
 export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image';
 
 export interface DashboardBlock {
@@ -61,8 +60,4 @@ export interface ImageBlockContent {
   url: string;
   alt: string;
   caption?: string;
-  width?: string | number; // Can be percentage (e.g., "100%") or pixels
-  height?: string | number; // Optional, can maintain aspect ratio if not specified
-  objectFit?: 'cover' | 'contain' | 'fill' | 'none'; // CSS object-fit property
-  objectPosition?: string; // CSS object-position property (e.g., "center", "top left")
 }

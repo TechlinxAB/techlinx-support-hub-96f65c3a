@@ -16,7 +16,6 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 
 const CompanyDashboardBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -354,128 +353,17 @@ const CompanyDashboardBuilderPage = () => {
                 placeholder="Image caption"
               />
             </div>
-            
-            {/* New image styling controls */}
-            <div className="border p-4 rounded-md bg-muted/20">
-              <h4 className="text-sm font-medium mb-3">Image Display Options</h4>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Width</label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      type="text"
-                      value={formData.width || ''} 
-                      onChange={e => setFormData({ ...formData, width: e.target.value })} 
-                      placeholder="e.g., 100%, 500px"
-                      className="w-full"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => setFormData({ ...formData, width: '100%' })}
-                      className="whitespace-nowrap"
-                    >
-                      Full Width
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Enter a value like "100%" or "500px"
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium">Object Fit</label>
-                  <Select 
-                    value={formData.objectFit || 'cover'} 
-                    onValueChange={value => setFormData({ ...formData, objectFit: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select how the image should fit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cover">Cover (fill container, crop if needed)</SelectItem>
-                      <SelectItem value="contain">Contain (show full image)</SelectItem>
-                      <SelectItem value="fill">Fill (stretch to fit)</SelectItem>
-                      <SelectItem value="none">None (original size)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium">Object Position</label>
-                  <div className="grid grid-cols-3 gap-2 my-2">
-                    {['top left', 'top', 'top right', 'left', 'center', 'right', 'bottom left', 'bottom', 'bottom right'].map(position => (
-                      <Button 
-                        key={position}
-                        variant={formData.objectPosition === position ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFormData({ ...formData, objectPosition: position })}
-                        className="h-8"
-                      >
-                        {position}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">Fixed Height</label>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <Switch
-                      id="use-fixed-height"
-                      checked={!!formData.height}
-                      onCheckedChange={checked => {
-                        if (checked) {
-                          setFormData({ ...formData, height: "auto" });
-                        } else {
-                          const { height, ...rest } = formData;
-                          setFormData(rest);
-                        }
-                      }}
-                    />
-                    <label htmlFor="use-fixed-height" className="text-sm">
-                      Use aspect ratio container
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
             {formData.url && (
               <div className="mt-2 border rounded p-3">
                 <p className="text-sm font-medium mb-2">Preview:</p>
-                <div style={{ 
-                  width: formData.width || 'auto',
-                  maxWidth: '100%'
-                }}>
-                  {formData.height ? (
-                    <AspectRatio ratio={16/9}>
-                      <img 
-                        src={formData.url} 
-                        alt={formData.alt || "Preview"} 
-                        className="rounded-md w-full h-full"
-                        style={{
-                          objectFit: formData.objectFit || 'cover',
-                          objectPosition: formData.objectPosition || 'center'
-                        }}
-                      />
-                    </AspectRatio>
-                  ) : (
-                    <img 
-                      src={formData.url} 
-                      alt={formData.alt || "Preview"} 
-                      className="max-w-full h-auto rounded-md"
-                      style={{
-                        objectFit: formData.objectFit || 'cover',
-                        objectPosition: formData.objectPosition || 'center'
-                      }}
-                    />
-                  )}
-                  {formData.caption && (
-                    <p className="text-sm text-center mt-1">{formData.caption}</p>
-                  )}
-                </div>
+                <img 
+                  src={formData.url} 
+                  alt={formData.alt || "Preview"} 
+                  className="max-w-full h-auto rounded" 
+                />
+                {formData.caption && (
+                  <p className="text-sm text-center mt-1">{formData.caption}</p>
+                )}
               </div>
             )}
           </div>
@@ -792,39 +680,18 @@ const CompanyDashboardBuilderPage = () => {
         return (
           <div className="space-y-2">
             {content.url ? (
-              <div style={{ 
-                width: content.width || 'auto',
-                maxWidth: '100%'
-              }}>
-                {content.height ? (
-                  <AspectRatio ratio={16/9}>
-                    <img 
-                      src={content.url} 
-                      alt={content.alt || 'Image'} 
-                      className="w-full h-full rounded-md"
-                      style={{
-                        objectFit: content.objectFit || 'cover',
-                        objectPosition: content.objectPosition || 'center'
-                      }}
-                    />
-                  </AspectRatio>
-                ) : (
-                  <img 
-                    src={content.url} 
-                    alt={content.alt || 'Image'} 
-                    className="max-w-full h-auto rounded-md"
-                    style={{
-                      objectFit: content.objectFit || 'cover',
-                      objectPosition: content.objectPosition || 'center'
-                    }}
-                  />
-                )}
+              <>
+                <img 
+                  src={content.url} 
+                  alt={content.alt || 'Image'} 
+                  className="max-w-full h-auto rounded-md"
+                />
                 {content.caption && (
                   <p className="text-sm text-center mt-1 text-muted-foreground">
                     {content.caption}
                   </p>
                 )}
-              </div>
+              </>
             ) : (
               <div className="bg-muted h-32 flex items-center justify-center rounded-md">
                 <p className="text-muted-foreground">No image provided</p>

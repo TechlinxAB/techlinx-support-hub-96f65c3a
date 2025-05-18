@@ -112,11 +112,6 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
   return toastId;
 };
 
-// Add dismiss method to the toast function
-toast.dismiss = (toastId?: string | number) => {
-  sonnerToast.dismiss(toastId);
-};
-
 export const useToast = () => {
   return {
     toast
