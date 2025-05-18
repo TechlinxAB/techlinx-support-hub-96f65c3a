@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, hasValidSession } from '@/integrations/supabase/client';
@@ -199,10 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         console.error("Supabase signOut error:", error.message);
-        toast({
-          title: "Error signing out",
-          description: error.message,
-        });
+        toast.error("Error signing out: " + error.message);
         return;
       }
       
@@ -218,16 +214,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // localStorage.removeItem('custom-auth-item');
       }
       
-      toast({
-        title: "Signed out successfully",
-      });
+      toast.success("Signed out successfully");
       
     } catch (error: any) {
       console.error('Error in signOut function:', error.message);
-      toast({
-        title: "Error signing out",
-        description: error.message || "An unknown error occurred",
-      });
+      toast.error("Error signing out: " + (error.message || "An unknown error occurred"));
     }
   };
 
