@@ -1,36 +1,36 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { supabase, resetAuthState } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import navigationService from '@/services/navigationService';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
-  const navigate = useNavigate();
   const location = useLocation();
+  const { user, authState, signIn } = useAuth();
   
   // Get the redirect path from location state
   const from = location.state?.from || '/';
   const searchParams = new URLSearchParams(location.search);
   const cleanSession = searchParams.get('clean') === 'true';
   const forcedLogout = searchParams.get('forced') === 'true';
-  const redirectTriggered = React.useRef(false);
+  const resetComplete = searchParams.get('reset') === 'complete';
   
-  // Reset any stale auth state that might cause issues
+  // Reset any stale auth state if requested
   useEffect(() => {
-    // If ?clean=true is in the URL, this was a manual logout so ensure clean state
-    if (cleanSession) {
+    if (cleanSession || resetComplete) {
       console.log('Clean session requested, resetting auth state');
       resetAuthState().then(() => {
-        // Remove the clean param to prevent infinite loops on page refresh
+        // Remove params to prevent infinite loops on page refresh
         if (window.history.replaceState) {
           const newUrl = window.location.pathname;
           window.history.replaceState(null, '', newUrl);
@@ -40,107 +40,25 @@ const AuthPage = () => {
     
     if (forcedLogout) {
       toast.info('You were logged out due to an authentication issue');
-      // Remove the forced param to prevent showing the message on refresh
+      // Remove the forced param
       if (window.history.replaceState) {
         const newUrl = window.location.pathname;
         window.history.replaceState(null, '', newUrl);
       }
     }
-  }, [cleanSession, forcedLogout]);
+  }, [cleanSession, forcedLogout, resetComplete]);
   
-  // Check if user is already logged in
+  // Redirect if user is authenticated
   useEffect(() => {
-    let isMounted = true;
-    let redirectTimeout: number;
-    
-    // First clear any potential broken auth state on auth page loads
-    const clearBrokenState = async () => {
-      try {
-        // Check if we have a session with invalid tokens causing 401s
-        const storage = localStorage.getItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
-        if (storage && (storage.includes('error') || storage.includes('401'))) {
-          console.log('Found potentially corrupted auth state, cleaning up');
-          localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
-        }
-      } catch (error) {
-        console.error('Error accessing localStorage:', error);
-      }
-    };
-    
-    clearBrokenState();
-    
-    // Add a small delay to avoid race conditions with multiple auth checks
-    const timeoutId = setTimeout(() => {
-      const checkSession = async () => {
-        if (redirectTriggered.current) {
-          console.log('Redirect already triggered, skipping session check');
-          return;
-        }
-        
-        try {
-          console.log('Checking for existing session...');
-          const { data, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('Session check error:', error);
-            if (isMounted) {
-              setAuthError(error.message);
-              toast.error("Authentication error", {
-                description: error.message
-              });
-            }
-            setCheckingSession(false);
-          } else if (data.session && isMounted) {
-            console.log('Active session found, redirecting to:', from);
-            
-            // Prevent multiple redirects
-            if (!redirectTriggered.current) {
-              redirectTriggered.current = true;
-              
-              // Use a small timeout to prevent immediate redirect that can cause loops
-              redirectTimeout = window.setTimeout(() => {
-                if (isMounted) {
-                  try {
-                    console.log('Navigating to:', from);
-                    navigate(from);
-                    
-                    // If still on auth page after navigation attempt,
-                    // we'll fall back but add a longer delay to avoid loops
-                    setTimeout(() => {
-                      if (window.location.pathname === '/auth' && isMounted && redirectTriggered.current) {
-                        console.log('Still on auth page after navigate, falling back to direct redirect');
-                        redirectTriggered.current = false; // Reset to allow one more try
-                        window.location.href = from;
-                      }
-                    }, 1000);
-                  } catch (navError) {
-                    console.error('Navigation error:', navError);
-                    // Fallback to direct navigation
-                    window.location.href = from;
-                  }
-                }
-              }, 500);
-            }
-          } else {
-            console.log('No active session found, showing login form');
-            setCheckingSession(false);
-          }
-        } catch (error) {
-          console.error('Exception during session check:', error);
-          setCheckingSession(false);
-        }
-      };
+    if (user && authState === 'AUTHENTICATED') {
+      // Use a small timeout to allow the UI to update first
+      const redirectTimeout = setTimeout(() => {
+        navigationService.navigate(from);
+      }, 300);
       
-      checkSession();
-    }, 200);
-    
-    // Clean up function
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-      clearTimeout(redirectTimeout);
-    };
-  }, [navigate, from]);
+      return () => clearTimeout(redirectTimeout);
+    }
+  }, [user, authState, from]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,41 +72,25 @@ const AuthPage = () => {
     setLoading(true);
     
     try {
-      console.log('Attempting to sign in...');
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { error } = await signIn(email, password);
       
       if (error) throw error;
       
-      console.log('Sign in successful:', data.session ? 'Session exists' : 'No session');
       toast.success("You have been logged in");
       
-      // Allow the toast to show before redirect
-      setTimeout(() => {
-        try {
-          // Use window.location for more reliable redirect after login
-          window.location.href = from === '/' ? '/' : from;
-        } catch (navError) {
-          console.error('Navigation error after login:', navError);
-          window.location.href = '/';
-        }
-      }, 300);
-      
+      // Navigation will happen automatically via the effect above
     } catch (error: any) {
       console.error('Sign in error:', error);
       setAuthError(error.message);
       toast.error("Login failed", {
         description: error.message || "Invalid email or password"
       });
-    } finally {
       setLoading(false);
     }
   };
   
-  // Show loading state while checking the session
-  if (checkingSession) {
+  // Show loading state if auth is initializing
+  if (authState === 'INITIALIZING') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />

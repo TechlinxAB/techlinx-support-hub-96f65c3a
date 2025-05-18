@@ -9,11 +9,19 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Storage key used by Supabase SDK
 export const STORAGE_KEY = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
 
+// SINGLETON IMPLEMENTATION: Ensure only one client instance is ever created
+// This prevents multiple re-initializations that can cause race conditions
+let clientInstance: ReturnType<typeof createClient<Database>> | null = null;
+
 // Create a custom storage implementation that falls back to memory storage if localStorage isn't available
 const createFallbackStorage = () => {
   // In-memory storage fallback
   const inMemoryStorage = new Map<string, string>();
-  console.log("Initializing fallback storage mechanism");
+  
+  // Only log once during app initialization to reduce console noise
+  if (!clientInstance) {
+    console.log("Initializing storage mechanism");
+  }
   
   return {
     getItem: (key: string) => {
@@ -27,7 +35,6 @@ const createFallbackStorage = () => {
         // Fall back to in-memory if needed
         return inMemoryStorage.get(key) || null;
       } catch (error) {
-        console.log('Storage getItem fallback used:', key);
         return inMemoryStorage.get(key) || null;
       }
     },
@@ -36,7 +43,6 @@ const createFallbackStorage = () => {
         // Try localStorage first
         localStorage.setItem(key, value);
       } catch (error) {
-        console.log('Storage setItem fallback used:', key);
         inMemoryStorage.set(key, value);
       }
     },
@@ -45,7 +51,6 @@ const createFallbackStorage = () => {
         // Try localStorage first
         localStorage.removeItem(key);
       } catch (error) {
-        console.log('Storage removeItem fallback used:', key);
         inMemoryStorage.delete(key);
       }
     },
@@ -53,50 +58,45 @@ const createFallbackStorage = () => {
       try {
         localStorage.clear();
       } catch (error) {
-        console.log('Storage clear fallback used');
         inMemoryStorage.clear();
       }
     }
   };
 };
 
-// Create and export the supabase client with proper typing
-export const supabase = createClient<Database>(
-  SUPABASE_URL, 
-  SUPABASE_PUBLISHABLE_KEY,
-  {
-    auth: {
-      storage: createFallbackStorage(),
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false, // Prevent auto-detection of OAuth redirects to avoid loops
-      flowType: 'implicit', // Use implicit flow instead of PKCE to be more resilient
-      debug: false // Disable debug logs to reduce console noise
-    },
-    global: {
-      headers: {
-        'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Content-Type': 'application/json'
+// Function to create or get the Supabase client instance
+const getSupabaseClient = () => {
+  if (clientInstance) {
+    return clientInstance;
+  }
+
+  // Create the client if it doesn't exist
+  clientInstance = createClient<Database>(
+    SUPABASE_URL, 
+    SUPABASE_PUBLISHABLE_KEY,
+    {
+      auth: {
+        storage: createFallbackStorage(),
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false, // Prevent auto-detection of OAuth redirects to avoid loops
+        flowType: 'implicit', // Use implicit flow instead of PKCE to be more resilient
+        debug: false // Disable debug logs to reduce console noise
+      },
+      global: {
+        headers: {
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json'
+        }
       }
     }
-  }
-);
+  );
+  
+  return clientInstance;
+};
 
-// Add a listener to log auth state changes for debugging
-// But limit the frequency of logged events to prevent console spam
-let lastAuthEvent = '';
-let lastAuthEventTime = 0;
-
-// Create a more efficient auth event handler
-supabase.auth.onAuthStateChange((event, session) => {
-  const now = Date.now();
-  // Only log if different event or same event but after 1 second
-  if (event !== lastAuthEvent || (now - lastAuthEventTime) > 1000) {
-    console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
-    lastAuthEvent = event;
-    lastAuthEventTime = now;
-  }
-});
+// Export the singleton instance
+export const supabase = getSupabaseClient();
 
 // Export a helper function to clear auth state in case of corruption
 export const resetAuthState = async () => {
@@ -105,61 +105,37 @@ export const resetAuthState = async () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
-      console.log('Error accessing localStorage during resetAuthState:', e);
+      console.log('Error accessing localStorage during resetAuthState');
     }
     
     // Then try official API signout
     try {
       await supabase.auth.signOut({ scope: 'global' });
     } catch (e) {
-      console.log('Error during supabase signout in resetAuthState:', e);
-    }
-    
-    // Finally ensure in-memory auth state is cleared
-    try {
-      // @ts-ignore - Access internal session state
-      if (supabase.auth.session) {
-        // @ts-ignore
-        supabase.auth.session = null;
-      }
-    } catch (e) {
-      console.log('Error resetting in-memory auth state:', e);
+      console.log('Error during supabase signout in resetAuthState');
     }
     
     return { success: true };
   } catch (error) {
-    console.error('Error resetting auth state:', error);
     return { success: false, error };
   }
 };
 
-// Enhanced signOut function that ensures local storage is cleared
+// Enhanced signOut function with better cleanup
 export const forceSignOut = async () => {
-  try {
-    console.log('Force sign out: Starting cleanup process');
-    
-    // First try removing the token directly from storage
-    // Do this in multiple ways to ensure it's fully removed
+  try {    
+    // First remove the token directly from storage
     try {
-      // Clear using both methods to be thorough
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(`${STORAGE_KEY}`); // Try with string concatenation
-      console.log('Force sign out: Removed token from localStorage');
     } catch (storageError) {
-      console.error('Error accessing localStorage:', storageError);
+      // Silent fail
     }
-    
-    // Also try the storage from the client
-    const storage = createFallbackStorage();
-    storage.removeItem(STORAGE_KEY);
     
     // Try to sign out through the API (all devices)
     try {
-      // Global scope to ensure all devices are logged out
       await supabase.auth.signOut({ scope: 'global' });
-      console.log('Force sign out: API signout successful');
     } catch (apiError) {
-      console.log('Force sign out: API call failed (expected if already signed out)');
+      // Silent fail
     }
     
     // Clear URL-based auth params if present
@@ -168,42 +144,8 @@ export const forceSignOut = async () => {
       window.history.replaceState(null, '', cleanUrl);
     }
     
-    // Try to directly clear the internal state of the client
-    try {
-      // @ts-ignore - Access internal state (this is a hack but necessary)
-      if (supabase.auth.session) {
-        // @ts-ignore
-        supabase.auth.session = null;
-      }
-      
-      // @ts-ignore - Direct approach to clear session
-      if (supabase.auth.currentSession) {
-        // @ts-ignore
-        supabase.auth.currentSession = null;
-      }
-    } catch (memoryError) {
-      console.log('Force sign out: Memory cleanup failed');
-    }
-    
-    // Reset any listeners or callbacks that might be pending
-    try {
-      // @ts-ignore - Force reset of auth state listeners
-      if (supabase.auth._listeners) {
-        // @ts-ignore
-        supabase.auth._listeners = new Map();
-      }
-    } catch (listenersError) {
-      console.log('Force sign out: Listener cleanup failed');
-    }
-    
-    // Add a slight delay to ensure cleanup completes
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    return { success: true, wasForced: true };
+    return { success: true };
   } catch (cleanupError) {
-    console.error('Failed to force clean up auth state:', cleanupError);
-    
-    // Even if we fail, try one more direct localStorage removal
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
@@ -214,13 +156,12 @@ export const forceSignOut = async () => {
   }
 };
 
-// Export a function to check if session is valid (without triggering refresh)
+// Simple session validity check
 export const isSessionValid = async () => {
   try {
     const { data } = await supabase.auth.getSession();
     return !!data.session;
   } catch (error) {
-    console.error('Error checking session validity:', error);
     return false;
   }
 };
