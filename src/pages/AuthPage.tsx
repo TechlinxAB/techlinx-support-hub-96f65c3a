@@ -23,6 +23,7 @@ const AuthPage = () => {
   // Check if user is already logged in
   useEffect(() => {
     let isMounted = true;
+    let redirectTimeout: number;
     
     // First clear any potential broken auth state on auth page loads
     const clearBrokenState = async () => {
@@ -49,17 +50,25 @@ const AuthPage = () => {
               description: error.message
             });
           }
+          setCheckingSession(false);
         } else if (data.session && isMounted) {
           console.log('Active session found, redirecting to:', from);
-          navigate(from, { replace: true });
+          // Use a small timeout to prevent immediate redirect that can cause loops
+          redirectTimeout = window.setTimeout(() => {
+            if (isMounted) {
+              // Only navigate if we're still on the auth page and not already navigating
+              if (window.location.pathname === '/auth') {
+                navigate(from, { replace: true });
+              }
+            }
+          }, 300);
         } else {
           console.log('No active session found, showing login form');
+          setCheckingSession(false);
         }
       } catch (error) {
         console.error('Exception during session check:', error);
-      } finally {
-        // Always finish checking session even if there was an error
-        if (isMounted) setCheckingSession(false);
+        setCheckingSession(false);
       }
     };
     
@@ -72,6 +81,7 @@ const AuthPage = () => {
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
+      clearTimeout(redirectTimeout);
     };
   }, [navigate, from]);
   
@@ -100,9 +110,12 @@ const AuthPage = () => {
       
       // Small delay before redirect to allow toast to show
       setTimeout(() => {
-        // Redirect after successful authentication
-        navigate(from, { replace: true });
-      }, 300);
+        // Make sure we're not already redirecting somewhere else
+        if (window.location.pathname === '/auth') {
+          // Redirect after successful authentication
+          navigate(from, { replace: true });
+        }
+      }, 500);
       
     } catch (error: any) {
       console.error('Sign in error:', error);

@@ -6,6 +6,9 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
+// Storage key used by Supabase SDK
+export const STORAGE_KEY = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
+
 // Create a custom storage implementation that falls back to memory storage if localStorage isn't available
 const createFallbackStorage = () => {
   // In-memory storage fallback
@@ -57,9 +60,6 @@ const createFallbackStorage = () => {
   };
 };
 
-// Storage key used by Supabase SDK
-const STORAGE_KEY = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
-
 // Create and export the supabase client with proper typing
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
@@ -101,6 +101,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 export const resetAuthState = async () => {
   try {
     await supabase.auth.signOut({ scope: 'local' });
+    localStorage.removeItem(STORAGE_KEY);
     return { success: true };
   } catch (error) {
     console.error('Error resetting auth state:', error);
@@ -127,6 +128,7 @@ export const forceSignOut = async () => {
     
     // Try to sign out through the API (may fail if already signed out)
     try {
+      // Global scope to ensure all devices are logged out
       await supabase.auth.signOut({ scope: 'global' });
       console.log('Force sign out: API signout successful');
     } catch (apiError) {

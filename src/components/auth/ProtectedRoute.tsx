@@ -46,6 +46,11 @@ const ProtectedRoute = () => {
   
   // Handle authentication redirects with loop detection
   useEffect(() => {
+    // Skip everything if already on auth page
+    if (isAuthPage) {
+      return;
+    }
+    
     // Check if time since last navigation is too quick (potential loop)
     const now = Date.now();
     const timeSinceLastNav = now - lastNavigationTime;
@@ -62,18 +67,18 @@ const ProtectedRoute = () => {
         // Stay on current page and let user manually navigate
         // This breaks the loop but keeps the UI usable
         setNavigationCount(0);
+        
+        // Redirect to auth page after forced logout
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+        setTimeout(() => {
+          window.location.href = '/auth';
+        }, 300);
       });
       
       return;
     }
     
     setLastNavigationTime(now);
-    
-    // Skip auth check if we're already on the auth page
-    if (isAuthPage) {
-      console.log("Already on auth page, skipping redirect check");
-      return;
-    }
     
     // Wait until auth state is fully loaded
     if (loading && !loadingTimeout) {
@@ -93,9 +98,12 @@ const ProtectedRoute = () => {
       
       // Force sign out and reset auth state when a loop is detected
       forceSignOut().then(() => {
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
         window.location.href = '/auth';
       }).catch(err => {
         console.error("Critical error during force sign out:", err);
+        // Last resort - force reload the page
+        window.location.reload();
       });
       
       return;
@@ -109,7 +117,12 @@ const ProtectedRoute = () => {
       setRedirectAttempted(true);
       
       // Store current path for redirect after login
-      const currentPath = location.pathname !== '/' ? location.pathname : '';
+      let currentPath = location.pathname;
+      if (currentPath === '/') {
+        currentPath = '';
+      }
+      
+      // Use the navigate function for the redirect
       navigate('/auth', { replace: true, state: { from: currentPath || '/' } });
     } else if (user) {
       // Reset the redirect flag when user is available
@@ -151,6 +164,9 @@ const ProtectedRoute = () => {
       
       // Then do the full reset
       await resetAuth();
+      
+      // Finally redirect to auth page
+      window.location.href = '/auth';
     } catch (error) {
       console.error("Critical error during auth reset:", error);
       toast.error("Failed to reset auth state. Please try refreshing your browser.");

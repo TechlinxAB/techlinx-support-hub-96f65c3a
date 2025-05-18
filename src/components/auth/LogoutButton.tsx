@@ -18,13 +18,17 @@ const LogoutButton = ({
   className = ''
 }: LogoutButtonProps) => {
   const { signOut } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const handleLogout = async () => {
+    if (isLoggingOut) return; // Prevent multiple clicks
+    
     try {
+      setIsLoggingOut(true);
       // Show a toast to indicate logout is in progress
       const toastId = toast.loading('Logging out...');
       
-      // Clear local storage directly to ensure clean state
+      // First clear local storage directly to ensure clean state
       localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
       
       // First try the context method
@@ -35,11 +39,8 @@ const LogoutButton = ({
       
       toast.success('Successfully logged out', { id: toastId });
       
-      // Use a small timeout before redirecting to ensure state is cleared
-      setTimeout(() => {
-        // Navigate to auth page with replace and clear state
-        window.location.replace('/auth');
-      }, 300);
+      // Hard redirect to auth page to ensure clean state
+      window.location.href = '/auth';
     } catch (error) {
       console.error('Error during logout:', error);
       
@@ -48,10 +49,12 @@ const LogoutButton = ({
         localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
         await forceSignOut();
         toast.info('Forced logout completed due to error in normal logout flow.');
-        window.location.replace('/auth');
+        window.location.href = '/auth';
       } catch (secondError) {
         toast.error('Failed to log out. Please try refreshing the page.');
       }
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -61,9 +64,10 @@ const LogoutButton = ({
       size={size}
       onClick={handleLogout}
       className={className}
+      disabled={isLoggingOut}
     >
       <LogOut className="h-4 w-4 mr-2" />
-      <span>Log out</span>
+      <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
     </Button>
   );
 };
