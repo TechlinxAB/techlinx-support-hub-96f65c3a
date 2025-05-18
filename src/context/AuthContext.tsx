@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
 // Define user profile type
 export type UserProfile = {
@@ -12,9 +13,12 @@ export type UserProfile = {
   companyId: string | null;
   preferredLanguage: string;
   avatar?: string | null;
+  phone?: string | null;
 };
 
-// Define auth context type with only essential properties
+export type AuthState = 'INITIAL_SESSION' | 'SIGNED_IN' | 'SIGNED_OUT' | 'AUTHENTICATED' | 'IMPERSONATING';
+
+// Define auth context type with all necessary properties
 type AuthContextType = {
   user: User | null;
   session: Session | null;
@@ -23,6 +27,15 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: any | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
+  
+  // Added impersonation properties
+  isImpersonating: boolean;
+  impersonatedProfile: UserProfile | null;
+  startImpersonation: (userId: string) => Promise<void>;
+  endImpersonation: () => Promise<void>;
+  
+  // Added authState property
+  authState: AuthState;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +52,7 @@ const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
     companyId: dbProfile.company_id,
     preferredLanguage: dbProfile.preferred_language,
     avatar: dbProfile.avatar,
+    phone: dbProfile.phone,
   };
 };
 
@@ -47,6 +61,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authState, setAuthState] = useState<AuthState>('INITIAL_SESSION');
+  
+  // Impersonation state
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
+  const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   
   // Simple derived state
   const isAuthenticated = !!session && !!user;
@@ -62,36 +82,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
       if (error) {
         console.error('Error fetching profile:', error);
-        return;
+        return null;
       }
       
       if (data) {
         const mappedProfile = mapDbProfileToUserProfile(data);
-        setProfile(mappedProfile);
+        return mappedProfile;
       }
+      
+      return null;
     } catch (err) {
       console.error('Exception fetching profile:', err);
+      return null;
     }
   };
 
   // Initialize auth state
   useEffect(() => {
-    console.log('Setting up auth subscription');
+    console.log('Initializing AuthContext');
     setLoading(true);
     
     // Set up auth listener
     const { data: authListener } = supabase.auth.onAuthStateChange((event, currentSession) => {
-      console.log('Auth state changed:', event, currentSession ? 'Has session' : 'No session');
+      console.log('Auth state changed:', authState, currentSession ? 'Session exists' : 'No session');
       setSession(currentSession);
       setUser(currentSession?.user || null);
       
       if (currentSession?.user) {
         // Use setTimeout to avoid potential deadlocks with Supabase client
-        setTimeout(() => {
-          fetchProfile(currentSession.user.id);
+        setTimeout(async () => {
+          const fetchedProfile = await fetchProfile(currentSession.user.id);
+          
+          if (fetchedProfile) {
+            setProfile(fetchedProfile);
+            
+            // If not impersonating, update auth state
+            if (!isImpersonating) {
+              setAuthState('AUTHENTICATED');
+              console.log('Profile fetch successful, user authenticated');
+            }
+          } else {
+            console.error('Failed to fetch profile for user:', currentSession.user.id);
+            setAuthState('SIGNED_IN');
+          }
+          
+          setLoading(false);
         }, 0);
       } else {
         setProfile(null);
+        setAuthState('SIGNED_OUT');
+        setLoading(false);
       }
     });
     
@@ -103,10 +143,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(data.session?.user || null);
         
         if (data.session?.user) {
-          await fetchProfile(data.session.user.id);
+          const fetchedProfile = await fetchProfile(data.session.user.id);
+          if (fetchedProfile) {
+            setProfile(fetchedProfile);
+            setAuthState('AUTHENTICATED');
+          }
+        } else {
+          setAuthState('SIGNED_OUT');
         }
       } catch (error) {
         console.error('Session check error:', error);
+        setAuthState('SIGNED_OUT');
       } finally {
         setLoading(false);
       }
@@ -118,6 +165,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       authListener?.subscription.unsubscribe();
     };
   }, []);
+
+  // Start impersonation function
+  const startImpersonation = async (userId: string) => {
+    if (isImpersonating) {
+      throw new Error("Already impersonating a user");
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Store original profile
+      setOriginalProfile(profile);
+      
+      // Fetch the user to impersonate
+      const impersonatedUser = await fetchProfile(userId);
+      
+      if (!impersonatedUser) {
+        throw new Error("Failed to fetch impersonated user profile");
+      }
+      
+      // Set impersonation state
+      setImpersonatedProfile(impersonatedUser);
+      setProfile(impersonatedUser);
+      setIsImpersonating(true);
+      setAuthState('IMPERSONATING');
+      
+      toast.success("Now viewing as impersonated user", {
+        description: `You are now viewing as ${impersonatedUser.name || impersonatedUser.email}`
+      });
+    } catch (error: any) {
+      toast.error("Failed to start impersonation", {
+        description: error.message
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // End impersonation function
+  const endImpersonation = async () => {
+    if (!isImpersonating || !originalProfile) {
+      throw new Error("Not currently impersonating");
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Restore original profile
+      setProfile(originalProfile);
+      setIsImpersonating(false);
+      setImpersonatedProfile(null);
+      setAuthState('AUTHENTICATED');
+      
+      toast.success("Returned to original account", {
+        description: `You are now back as ${originalProfile.name || originalProfile.email}`
+      });
+    } catch (error: any) {
+      toast.error("Failed to end impersonation", {
+        description: error.message
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
@@ -139,6 +252,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Sign out
   const signOut = async () => {
+    // If impersonating, end impersonation first
+    if (isImpersonating) {
+      await endImpersonation();
+    }
+    
     try {
       await supabase.auth.signOut();
       // State will be updated by the auth listener
@@ -156,6 +274,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setSession(null);
       setProfile(null);
+      setAuthState('SIGNED_OUT');
+      setIsImpersonating(false);
+      setImpersonatedProfile(null);
+      setOriginalProfile(null);
     }
   };
 
@@ -167,7 +289,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     signIn,
     signOut,
-    isAuthenticated
+    isAuthenticated,
+    isImpersonating,
+    impersonatedProfile,
+    startImpersonation,
+    endImpersonation,
+    authState
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
