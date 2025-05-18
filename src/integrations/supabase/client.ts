@@ -62,15 +62,14 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       // Reduce debug level to avoid console noise
-      debug: false
+      debug: true // Enable debug temporarily to troubleshoot auth issues
     },
     global: {
       headers: {
         'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
         'Content-Type': 'application/json'
       },
-      // Add additional fetch parameters for CORS
+      // Update fetch parameters for CORS and authentication
       fetch: (url, options = {}) => {
         // Properly type the options object to include headers property
         const fetchOptions = options as { headers?: Record<string, string> };
@@ -78,10 +77,10 @@ export const supabase = createClient<Database>(
         
         return fetch(url, {
           ...options,
+          credentials: 'include', // Include credentials in the request
           headers: {
             ...headers,
             'apikey': SUPABASE_PUBLISHABLE_KEY,
-            'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache'
           }
@@ -90,3 +89,8 @@ export const supabase = createClient<Database>(
     }
   }
 );
+
+// Add a listener to log auth state changes for debugging
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
+});

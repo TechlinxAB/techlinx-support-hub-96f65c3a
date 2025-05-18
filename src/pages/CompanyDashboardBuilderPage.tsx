@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +34,7 @@ const CompanyDashboardBuilderPage = () => {
     deleteDashboardBlock
   } = useAppContext();
   
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   
   const [sortedBlocks, setSortedBlocks] = useState<DashboardBlock[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -162,13 +163,17 @@ const CompanyDashboardBuilderPage = () => {
     try {
       const toastId = toast.loading("Saving dashboard block...");
       
-      // Get the current session to ensure we're authenticated
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      // Ensure we have valid authentication before proceeding
       if (!session) {
+        console.error("No session found. User might be logged out.");
         toast.error("You must be logged in to save dashboard blocks", { id: toastId });
         return;
       }
+      
+      // Enhanced logging for debugging
+      console.log("Current session:", session ? "Valid" : "Invalid");
+      console.log("Access token available:", !!session?.access_token);
+      console.log("User ID:", session?.user?.id);
       
       // Extract the block title and showTitle from formData
       const blockTitle = formData.blockTitle || `New ${selectedBlockType}`;
@@ -183,11 +188,17 @@ const CompanyDashboardBuilderPage = () => {
         showTitle: showTitle
       };
       
-      console.log("Current user ID:", session.user.id);
-      console.log("Using profile ID:", profile?.id || "No profile ID available");
+      // Always use the current user ID from the session
+      const currentUserId = session?.user?.id;
+      
+      if (!currentUserId) {
+        throw new Error("Cannot determine user ID from session");
+      }
       
       if (editingBlock) {
         // Update existing block
+        console.log(`Updating block ID: ${editingBlock.id}`);
+        
         const { error } = await supabase
           .from('dashboard_blocks')
           .update({
@@ -213,11 +224,10 @@ const CompanyDashboardBuilderPage = () => {
           ? Math.max(...sortedBlocks.map(b => b.position)) + 1
           : 0;
         
-        // Make sure we're using the authenticated user ID
-        const userId = session.user.id;
-        
-        console.log("Creating new block with company ID:", companyId);
-        console.log("Creating new block with user ID:", userId);
+        console.log("Creating new block with:");
+        console.log("- Company ID:", companyId);
+        console.log("- User ID:", currentUserId);
+        console.log("- Position:", maxPosition);
         
         // Make sure we're sending the correct data structure to match the table schema
         const { error, data } = await supabase
@@ -228,7 +238,7 @@ const CompanyDashboardBuilderPage = () => {
             content: finalContentData,
             type: selectedBlockType,
             position: maxPosition,
-            created_by: userId // Use the authenticated user's ID
+            created_by: currentUserId // Use the authenticated user's ID
           })
           .select();
         

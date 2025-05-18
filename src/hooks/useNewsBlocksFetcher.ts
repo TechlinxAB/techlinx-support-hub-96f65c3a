@@ -106,6 +106,15 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       console.log(`Fetching news blocks for company ${companyId}`);
       const fetchStartTime = performance.now();
       
+      // Check the auth status to ensure we're properly authenticated before making the request
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.warn("No active session found, request may fail");
+      } else {
+        console.log("Authenticated request with user ID:", session.user.id);
+      }
+      
       const { data, error } = await supabase
         .from('company_news_blocks')
         .select('*')
@@ -152,7 +161,10 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       
       // Only show fetch success toast if it was forced and we haven't shown one yet
       if (force && fetchForced.current && !successToastShown.current) {
-        toast("Content refreshed", { duration: 2000 });
+        toast({
+          title: "Content refreshed",
+          duration: 2000
+        });
         successToastShown.current = true;
       }
     } catch (err: any) {
@@ -168,8 +180,10 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         
         // Only show toast for forced fetches to avoid spamming the user
         if (force && fetchForced.current && !successToastShown.current) {
-          toast("Failed to load news content", {
-            description: err.message || "Please try again"
+          toast({
+            title: "Failed to load news content",
+            description: err.message || "Please try again",
+            variant: "destructive"
           });
           successToastShown.current = true;
         }
