@@ -15,6 +15,7 @@ import {
   FilePlus, 
   Users,
   ArrowRight,
+  Beaker,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import TechlinxTestZone from './TechlinxTestZone';
@@ -22,6 +23,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { ensureTechlinxCompanyExists, assignConsultantToTechlinx, createTechlinxSampleContent } from '@/utils/techlinxTestCompany';
 import { useStarredCases } from '@/hooks/useStarredCases';
+import { Switch } from '@/components/ui/switch';
 
 const ConsultantDashboard = () => {
   const navigate = useNavigate();
@@ -30,6 +32,18 @@ const ConsultantDashboard = () => {
   const { toast } = useToast();
   const { starredCases, toggleStar } = useStarredCases();
   const [isSettingUpTechlinx, setIsSettingUpTechlinx] = useState(false);
+  
+  // State for toggling the test zone visibility
+  const [showTestZone, setShowTestZone] = useState(() => {
+    // Get the stored preference or default to true (visible)
+    const stored = localStorage.getItem('showTechlinxTestZone');
+    return stored === null ? true : stored === 'true';
+  });
+  
+  // Store preference in localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('showTechlinxTestZone', String(showTestZone));
+  }, [showTestZone]);
   
   // Ensure Techlinx company exists on component mount
   useEffect(() => {
@@ -147,8 +161,8 @@ const ConsultantDashboard = () => {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Consultant Dashboard</h1>
       
-      {/* Techlinx Test Zone */}
-      <TechlinxTestZone />
+      {/* Techlinx Test Zone - conditionally rendered based on toggle */}
+      {showTestZone && <TechlinxTestZone />}
       
       {/* Case Overview Panels - Top Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -467,6 +481,26 @@ const ConsultantDashboard = () => {
           </Card>
         </div>
       </div>
+      
+      {/* Techlinx Test Zone Toggle at bottom */}
+      <Card className="mt-6">
+        <CardContent className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Beaker className="h-5 w-5 text-purple-500" />
+            <span className="text-sm font-medium">Techlinx Test Zone</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {showTestZone ? 'Visible' : 'Hidden'}
+            </span>
+            <Switch
+              checked={showTestZone}
+              onCheckedChange={setShowTestZone}
+              aria-label="Toggle Techlinx test zone visibility"
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
