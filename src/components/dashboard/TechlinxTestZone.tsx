@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Beaker, Layout, Newspaper, FileText, Users, Settings, Star } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
-import { toast } from 'sonner';
 
 const TechlinxTestZone: React.FC = () => {
   const { companies } = useAppContext();
@@ -24,27 +23,9 @@ const TechlinxTestZone: React.FC = () => {
     }
   }, [companies]);
 
-  // Force direct URL navigation for dashboard builder
-  const handleDashboardNavigation = (companyId: string) => {
-    const path = `/company-dashboard-builder/${companyId}`;
-    console.log(`Direct navigation to: ${path}`);
-    // Force direct URL navigation to avoid routing issues
-    window.location.href = path;
-    // Show toast before navigating
-    toast.info("Opening dashboard builder...");
-    // Prevent event bubbling
-    return false;
-  };
-
-  // Regular navigation for other links
+  // Fixed navigation handler - uses direct navigation rather than returning a function
   const handleNavigation = (path: string) => {
-    try {
-      console.log(`Navigating to: ${path}`);
-      navigate(path, { replace: true });
-    } catch (error) {
-      console.error(`Navigation error to ${path}:`, error);
-      window.location.href = path;
-    }
+    navigate(path);
   };
 
   if (!techlinxId) {
@@ -112,8 +93,7 @@ const TechlinxTestZone: React.FC = () => {
           <TabsContent value="dashboard" className="mt-0">
             <div className="grid grid-cols-2 gap-4">
               <Button
-                type="button"
-                onClick={() => handleDashboardNavigation(techlinxId)}
+                onClick={() => handleNavigation(`/company-dashboard-builder/${techlinxId}`)}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >

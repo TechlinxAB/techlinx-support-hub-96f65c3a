@@ -29,16 +29,8 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
-import Index from "./pages/Index";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    }
-  }
-});
+const queryClient = new QueryClient();
 
 // Modal Manager Component to initialize the modal manager hook
 const ModalManager = ({ children }: { children: React.ReactNode }) => {
@@ -49,19 +41,18 @@ const ModalManager = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <AuthProvider>
-        <AppProvider>
-          <TooltipProvider>
-            <ModalManager>
-              <Toaster />
-              <ModalReset />
+    <AuthProvider>
+      <AppProvider>
+        <TooltipProvider>
+          <ModalManager>
+            <Toaster />
+            <ModalReset />
+            <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
-                <Route path="/" element={<Index />} />
                 
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/dashboard" element={<Layout />}>
+                  <Route path="/" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="cases" element={<CasesPage />} />
                     <Route path="cases/new" element={<NewCasePage />} />
@@ -81,11 +72,11 @@ const App = () => (
                   </Route>
                 </Route>
               </Routes>
-            </ModalManager>
-          </TooltipProvider>
-        </AppProvider>
-      </AuthProvider>
-    </BrowserRouter>
+            </BrowserRouter>
+          </ModalManager>
+        </TooltipProvider>
+      </AppProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

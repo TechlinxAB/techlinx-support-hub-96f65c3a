@@ -10,7 +10,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/components/ui/use-toast';
 import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 
 const CompanyNewsPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -56,37 +55,14 @@ const CompanyNewsPage = () => {
       case 'image':
         return (
           <div className="my-4">
-            <div style={{ 
-              width: block.content.width || 'auto',
-              maxWidth: '100%'
-            }}>
-              {block.content.height ? (
-                <AspectRatio ratio={16/9}>
-                  <img 
-                    src={block.content.url} 
-                    alt={block.content.alt || "Image"} 
-                    className="w-full h-full rounded-md"
-                    style={{
-                      objectFit: block.content.objectFit || 'cover',
-                      objectPosition: block.content.objectPosition || 'center'
-                    }}
-                  />
-                </AspectRatio>
-              ) : (
-                <img 
-                  src={block.content.url} 
-                  alt={block.content.alt} 
-                  className="max-w-full h-auto rounded-md"
-                  style={{
-                    objectFit: block.content.objectFit || 'cover',
-                    objectPosition: block.content.objectPosition || 'center'
-                  }}
-                />
-              )}
-              {block.content.caption && (
-                <p className="text-sm text-center mt-1 text-muted-foreground">{block.content.caption}</p>
-              )}
-            </div>
+            <img 
+              src={block.content.url} 
+              alt={block.content.alt} 
+              className="max-w-full h-auto rounded-md"
+            />
+            {block.content.caption && (
+              <p className="text-sm text-center mt-1 text-muted-foreground">{block.content.caption}</p>
+            )}
           </div>
         );
       

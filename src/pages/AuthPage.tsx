@@ -1,83 +1,75 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
-  
+  const { toast } = useToast();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { status } = useAuth();
   
-  // Get return URL from query params or default to dashboard
-  const getReturnUrl = () => {
-    const returnUrl = searchParams.get('returnUrl');
-    return returnUrl ? decodeURIComponent(returnUrl) : '/dashboard';
-  };
-  
-  // Redirect authenticated users away from login page - with debounce
+  // Check if user is already logged in
   useEffect(() => {
-    let redirectTimeout: NodeJS.Timeout | null = null;
-    
-    // Only redirect if we're definitely authenticated
-    if (status === 'AUTHENTICATED') {
-      redirectTimeout = setTimeout(() => {
-        const returnUrl = getReturnUrl();
-        console.log(`User authenticated, redirecting to ${returnUrl}`);
-        navigate(returnUrl, { replace: true });
-      }, 100);
-    }
-    
-    return () => {
-      if (redirectTimeout) {
-        clearTimeout(redirectTimeout);
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate('/');
       }
     };
-  }, [status, navigate]);
+    
+    checkSession();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session) {
+          navigate('/');
+        }
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, [navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
-      setError("Please fill in all fields");
-      toast.error("Please fill in all fields");
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
       return;
     }
     
     setLoading(true);
-    setError('');
     
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
       if (error) throw error;
       
-      toast.success("Login successful");
+      toast({
+        title: "Success!",
+        description: "You have been logged in",
+      });
       
-      // Auth state change will trigger the redirect in the useEffect
     } catch (error: any) {
-      console.error("Login error:", error);
-      
-      if (error.message?.includes('Invalid login credentials')) {
-        setError("Invalid email or password");
-        toast.error("Invalid email or password");
-      } else {
-        setError(error.message || "Login failed");
-        toast.error(error.message || "Login failed");
-      }
+      toast({
+        title: "Error",
+        description: error.message || "Invalid email or password",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -93,12 +85,6 @@ const AuthPage = () => {
         
         <form onSubmit={handleSignIn}>
           <CardContent className="space-y-4">
-            {error && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {error}
-              </div>
-            )}
-            
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email</label>
               <Input
@@ -107,7 +93,7 @@ const AuthPage = () => {
                 placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                required
               />
             </div>
             
@@ -121,22 +107,24 @@ const AuthPage = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
+                required
               />
             </div>
           </CardContent>
           
           <CardFooter>
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loading || status === 'LOADING'}
-            >
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
           </CardFooter>
         </form>
+        
+        <CardFooter className="flex flex-col space-y-2 border-t border-border pt-4">
+          <p className="text-sm text-muted-foreground text-center">
+            New users must be created by an administrator through the User Management page.
+          </p>
+        </CardFooter>
       </Card>
     </div>
   );

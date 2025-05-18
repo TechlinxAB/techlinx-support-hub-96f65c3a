@@ -4,58 +4,35 @@ import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
 import { useStarredCases } from '@/hooks/useStarredCases';
-import { useAuth } from '@/context/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
-  const { profile, user, status } = useAuth();
   const { loadStarredCases } = useStarredCases();
+  const location = useLocation();
+  const navigate = useNavigate();
   
-  // Load starred cases when authenticated
+  // Load starred cases on component mount
   useEffect(() => {
-    // Only proceed if user is authenticated
-    if (status === 'AUTHENTICATED' && user) {
-      console.log("Dashboard: Loading starred cases for authenticated user");
-      loadStarredCases();
+    loadStarredCases();
+  }, [loadStarredCases]);
+  
+  // Check if we're coming back from a failed navigation
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const redirectTarget = params.get('redirectTarget');
+    
+    if (redirectTarget) {
+      // Remove the redirectTarget from the URL
+      navigate(redirectTarget, { replace: true });
+      toast.info("Redirecting you to the requested page...");
     }
-  }, [loadStarredCases, user, status]);
-  
-  // Show loading while waiting for profile data
-  if (status === 'AUTHENTICATED' && !profile) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-          <p className="text-muted-foreground">Loading your profile data...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Show loading during initial auth check
-  if (status === 'LOADING') {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Safety check to prevent rendering without auth
-  if (status !== 'AUTHENTICATED') {
-    return null;
-  }
-  
-  // Use profile role as a fallback if currentUser is not available
-  const role = currentUser?.role || profile?.role;
+  }, [location, navigate]);
   
   return (
     <>
-      {role === 'consultant' ? (
+      {currentUser?.role === 'consultant' ? (
         <ConsultantDashboard />
       ) : (
         <UserDashboard />

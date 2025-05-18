@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { Bell, Menu, LogOut, User, Settings } from 'lucide-react';
@@ -13,8 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -22,43 +20,17 @@ interface HeaderProps {
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
   const { language, setLanguage } = useAppContext();
-  const { signOut, user, profile, status } = useAuth();
+  const { signOut, user, profile } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const navigate = useNavigate();
   
   // Update time every minute
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000);
     
     return () => clearInterval(timer);
   }, []);
-  
-  // Handle sign out with proper state management
-  const handleSignOut = async () => {
-    if (isSigningOut) return; // Prevent multiple clicks
-    
-    try {
-      setIsSigningOut(true);
-      toast.loading("Signing out...");
-      
-      // Use the Auth context's signOut function
-      await signOut();
-      
-      // Navigate to auth page after a short delay
-      setTimeout(() => {
-        navigate('/auth', { replace: true });
-        toast.dismiss();
-      }, 300);
-    } catch (error) {
-      console.error("Error during sign out:", error);
-      toast.error("Error signing out. Please try again.");
-      setIsSigningOut(false);
-      toast.dismiss();
-    }
-  };
   
   return (
     <header className="bg-white dark:bg-card border-b border-border h-16 px-4 flex items-center justify-between shadow-sm">
@@ -98,44 +70,27 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full w-8 h-8 bg-muted">
-              <span className="font-medium text-xs">
-                {profile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-              </span>
+              <span className="font-medium text-xs">{profile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>
               My Account
-              <div className="text-xs text-muted-foreground">
-                {profile?.email || user?.email}
-              </div>
+              <div className="text-xs text-muted-foreground">{profile?.email || user?.email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
+            <DropdownMenuItem>
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
+            <DropdownMenuItem>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={handleSignOut} 
-              disabled={isSigningOut || status === 'LOADING'}
-              className={isSigningOut ? 'opacity-50 cursor-not-allowed' : ''}
-            >
-              {isSigningOut ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-                  Signing out...
-                </>
-              ) : (
-                <>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </>
-              )}
+            <DropdownMenuItem onClick={() => signOut()}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

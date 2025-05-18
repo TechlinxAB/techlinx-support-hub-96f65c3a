@@ -1,5 +1,5 @@
 
-export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image';
+export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown';
 
 export interface DashboardBlock {
   id: string;
@@ -12,7 +12,6 @@ export interface DashboardBlock {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
-  showTitle?: boolean; // We keep this for TypeScript type safety but store in content
 }
 
 export interface HeadingBlockContent {
@@ -55,14 +54,4 @@ export interface DropdownBlockContent {
     label: string;
     content: string;
   }[];
-}
-
-export interface ImageBlockContent {
-  url: string;
-  alt: string;
-  caption?: string;
-  width?: string | number; // Can be percentage (e.g., "100%") or pixels
-  height?: string | number; // Optional, can maintain aspect ratio if not specified
-  objectFit?: 'cover' | 'contain' | 'fill' | 'none'; // CSS object-fit property
-  objectPosition?: string; // CSS object-position property (e.g., "center", "top left")
 }
