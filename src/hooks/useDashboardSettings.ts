@@ -70,14 +70,15 @@ export const useDashboardSettings = (companyId: string | undefined) => {
         abortControllerRef.current = new AbortController();
         const signal = abortControllerRef.current.signal;
         
-        // Fix: Pass the signal correctly in the fetch options
-        const { data, error: settingsError } = await supabase
+        // Fix: Remove the options from maybeSingle() and use abortSignal on the query builder
+        const query = supabase
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)
-          .maybeSingle({
-            signal: signal // Correctly pass the abort signal in an options object
-          });
+          .abortSignal(signal);
+          
+        // Then call maybeSingle without arguments
+        const { data, error: settingsError } = await query.maybeSingle();
         
         if (settingsError) {
           // Check if request was aborted
