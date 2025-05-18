@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
@@ -8,11 +8,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
-// Anti-loop protection
-const DASHBOARD_STATE = {
+// Simple state tracking to prevent navigation loops
+const DASH_STATE = {
   NAVIGATION_ATTEMPTED: false,
-  LAST_NAVIGATION_TIME: 0,
-  NAVIGATION_COOLDOWN_MS: 1000
+  LAST_NAVIGATION: 0,
+  COOLDOWN_MS: 1000
 };
 
 const Dashboard = () => {
@@ -21,7 +21,6 @@ const Dashboard = () => {
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
-  const [navigationAttempted, setNavigationAttempted] = useState(false);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Load starred cases on component mount
@@ -39,10 +38,10 @@ const Dashboard = () => {
     };
   }, [loadStarredCases, user]);
   
-  // Enhanced navigation handling with improved direct access for dashboard builder
+  // Handle redirect targets from URL parameters
   useEffect(() => {
-    // Skip if we've already attempted navigation or no user/profile
-    if (DASHBOARD_STATE.NAVIGATION_ATTEMPTED || navigationAttempted || !profile || !user) {
+    // Skip if already attempted or no user/profile
+    if (DASH_STATE.NAVIGATION_ATTEMPTED || !profile || !user) {
       return;
     }
     
@@ -55,36 +54,34 @@ const Dashboard = () => {
     
     const now = Date.now();
     
-    // Don't navigate if we've navigated too recently
-    if (now - DASHBOARD_STATE.LAST_NAVIGATION_TIME < DASHBOARD_STATE.NAVIGATION_COOLDOWN_MS) {
+    // Prevent navigation if too recent
+    if (now - DASH_STATE.LAST_NAVIGATION < DASH_STATE.COOLDOWN_MS) {
       return;
     }
     
-    // Mark that we've attempted navigation to prevent loops
-    setNavigationAttempted(true);
-    DASHBOARD_STATE.NAVIGATION_ATTEMPTED = true;
-    DASHBOARD_STATE.LAST_NAVIGATION_TIME = now;
+    // Mark navigation as attempted
+    DASH_STATE.NAVIGATION_ATTEMPTED = true;
+    DASH_STATE.LAST_NAVIGATION = now;
     
-    // Use timeout for navigation to ensure separation from auth logic
+    // Use timeout for navigation
     redirectTimeoutRef.current = setTimeout(() => {
-      console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
+      console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile.role);
       
       // Check role before redirecting to restricted areas
       if (redirectTarget.includes('company-dashboard-builder')) {
-        if (profile?.role !== 'consultant') {
+        if (profile.role !== 'consultant') {
           console.log("Cannot redirect: User is not a consultant");
           toast.error("You don't have permission to access the dashboard builder");
           return;
         }
       }
       
-      // Navigate to the requested page
+      // Navigate to requested page
       navigate(redirectTarget, { replace: true });
       toast.info("Redirecting you to the requested page...");
       redirectTimeoutRef.current = null;
     }, 300);
-    
-  }, [location, navigate, navigationAttempted, profile, user]);
+  }, [location, navigate, profile, user]);
   
   // Show a loading state if no profile is available yet
   if (!profile) {

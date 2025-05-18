@@ -9,11 +9,11 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-// Simple anti-loop protection
-const AUTH_PAGE_STATE = {
-  REDIRECTED: false, 
+// Anti-loop protection for auth page
+const AUTH_PAGE = {
+  REDIRECT_ATTEMPTED: false,
   LAST_REDIRECT: 0,
-  REDIRECT_COOLDOWN_MS: 1000
+  COOLDOWN_MS: 1000
 };
 
 const AuthPage = () => {
@@ -21,36 +21,52 @@ const AuthPage = () => {
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  
   const navigate = useNavigate();
   const { user } = useAuth();
   const location = useLocation();
-  const redirectedFromRef = useRef<boolean>(false);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const authAttemptedRef = useRef(false);
   
   // Get return URL from query params if available
   const getReturnUrl = () => {
     const params = new URLSearchParams(location.search);
-    return params.get('returnUrl') || '/';
+    return params.get('returnUrl') || '/dashboard';
   };
   
-  // Check if user is already logged in - with anti-loop protection
+  // Clean up timeouts on unmount
   useEffect(() => {
-    if (user && !loading && !redirectedFromRef.current) {
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Redirect authenticated users away from login page
+  useEffect(() => {
+    // Skip if already attempted redirection
+    if (authAttemptedRef.current) return;
+    
+    if (user) {
       const now = Date.now();
       
-      // Don't redirect if we've redirected too recently
-      if (now - AUTH_PAGE_STATE.LAST_REDIRECT < AUTH_PAGE_STATE.REDIRECT_COOLDOWN_MS) {
-        return;
-      }
+      // Prevent redirect loops
+      if (now - AUTH_PAGE.LAST_REDIRECT < AUTH_PAGE.COOLDOWN_MS) return;
       
-      console.log("User already authenticated, redirecting to home");
-      redirectedFromRef.current = true;
-      AUTH_PAGE_STATE.REDIRECTED = true;
-      AUTH_PAGE_STATE.LAST_REDIRECT = now;
+      console.log("User already authenticated, redirecting away from auth page");
+      authAttemptedRef.current = true;
+      AUTH_PAGE.REDIRECT_ATTEMPTED = true;
+      AUTH_PAGE.LAST_REDIRECT = now;
       
-      const returnUrl = getReturnUrl();
-      navigate(returnUrl, { replace: true });
+      // Add a small delay to let state settle
+      redirectTimeoutRef.current = setTimeout(() => {
+        const returnUrl = getReturnUrl();
+        navigate(returnUrl, { replace: true });
+      }, 100);
     }
-  }, [user, navigate, loading, location]);
+  }, [user, navigate, location]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,19 +90,13 @@ const AuthPage = () => {
       if (error) throw error;
       
       console.log("Sign in successful");
-      
       toast.success("You have been logged in");
       
-      // Give a small delay before redirecting to allow auth state to update
-      setTimeout(() => {
-        const returnUrl = getReturnUrl();
-        navigate(returnUrl, { replace: true });
-      }, 500);
+      // Redirect will happen automatically through auth state change
       
     } catch (error: any) {
       console.error("Sign in error:", error);
       setErrorMessage(error.message || "Invalid email or password");
-      
       toast.error(error.message || "Invalid email or password");
     } finally {
       setLoading(false);

@@ -19,7 +19,7 @@ export const supabase = createClient<Database>(
       // Always use localStorage for session persistence for consistency
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       autoRefreshToken: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: false // Disable auto URL detection to prevent redirects
     }
   }
 );
