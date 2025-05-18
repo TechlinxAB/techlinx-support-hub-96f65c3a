@@ -71,7 +71,10 @@ export const supabase = createClient<Database>(
       },
       // Add additional fetch parameters for CORS
       fetch: (url, options = {}) => {
-        const headers = options.headers || {};
+        // Properly type the options object to include headers property
+        const fetchOptions = options as { headers?: Record<string, string> };
+        const headers = fetchOptions.headers || {};
+        
         return fetch(url, {
           ...options,
           headers: {
