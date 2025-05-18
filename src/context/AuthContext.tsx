@@ -56,44 +56,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
   
+  // Function to safely clear auth state in the context
+  const clearAuthState = () => {
+    if (!isMounted.current) return;
+    
+    setStatus('UNAUTHENTICATED');
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+  };
+  
   // Initialize auth state
   useEffect(() => {
     console.log("Initializing auth state");
     isMounted.current = true;
     
-    // First check for existing session
-    const checkSession = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error("Error getting session:", error.message);
-          setStatus('UNAUTHENTICATED');
-          setLoading(false);
-          return;
-        }
-        
-        if (data.session) {
-          console.log("Found existing session for user:", data.session.user.id);
-          setStatus('AUTHENTICATED');
-          setSession(data.session);
-          setUser(data.session.user);
-          fetchUserProfile(data.session.user.id);
-        } else {
-          console.log("No existing session");
-          setStatus('UNAUTHENTICATED');
-        }
-      } catch (error) {
-        console.error("Session check error:", error);
-        setStatus('UNAUTHENTICATED');
-      } finally {
-        if (isMounted.current) {
-          setLoading(false);
-        }
-      }
-    };
-    
-    // Set up auth change listener
+    // Set up auth change listener FIRST to catch all events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!isMounted.current) return;
       
@@ -117,10 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           break;
           
         case 'SIGNED_OUT':
-          setStatus('UNAUTHENTICATED');
-          setSession(null);
-          setUser(null);
-          setProfile(null);
+          clearAuthState();
           break;
         
         case 'TOKEN_REFRESHED':
@@ -138,6 +113,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
     
+    // THEN check for existing session
+    const checkSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Error getting session:", error.message);
+          clearAuthState();
+          setLoading(false);
+          return;
+        }
+        
+        if (data.session) {
+          console.log("Found existing session for user:", data.session.user.id);
+          setStatus('AUTHENTICATED');
+          setSession(data.session);
+          setUser(data.session.user);
+          fetchUserProfile(data.session.user.id);
+        } else {
+          console.log("No existing session");
+          clearAuthState();
+        }
+      } catch (error) {
+        console.error("Session check error:", error);
+        clearAuthState();
+      } finally {
+        if (isMounted.current) {
+          setLoading(false);
+        }
+      }
+    };
+    
     // Call checkSession after setting up listener
     checkSession();
     
@@ -148,31 +155,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
   
-  // Sign out function - improved to handle errors better
+  // Enhanced sign out function with multiple fallbacks
   const signOut = async () => {
     try {
       console.log("Attempting to sign out user");
       
-      // Clear local state first for faster UI feedback
+      // Update local state immediately for UI feedback
       setStatus('LOADING');
       
-      // Clean up local storage before signing out
-      clearAuthData();
+      // First clear local storage to prevent auto-relogin after redirect
+      await clearAuthData();
       
-      // Try global signout - this might fail on the backend with 403
+      // Try local signout first (safer than global)
       try {
-        await supabase.auth.signOut({ scope: 'global' });
-      } catch (error) {
-        console.warn("Global signout failed, falling back to local:", error);
-        // This is expected in many cases, we'll continue with local cleanup
+        const { error: localError } = await supabase.auth.signOut({ scope: 'local' });
+        if (localError) {
+          console.warn("Local signout error:", localError);
+          // Continue with fallbacks even if this fails
+        }
+      } catch (localErr) {
+        console.warn("Local signout exception:", localErr);
+        // Continue with fallbacks
       }
       
-      // Force local state update even if backend signout failed
-      setStatus('UNAUTHENTICATED');
-      setSession(null);
-      setUser(null);
-      setProfile(null);
+      // Force clear auth state
+      clearAuthState();
       
+      // If we reach here, consider it successful from the user's perspective
       toast.success("Signed out successfully");
       return;
       
@@ -181,10 +190,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast.error("Error signing out");
       
       // Force auth state reset even on error
-      setStatus('UNAUTHENTICATED');
-      setSession(null);
-      setUser(null);
-      setProfile(null);
+      clearAuthState();
     }
   };
   

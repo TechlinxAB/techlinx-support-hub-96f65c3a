@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { Bell, Menu, LogOut, User, Settings } from 'lucide-react';
@@ -28,7 +28,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const navigate = useNavigate();
   
   // Update time every minute
-  useEffect(() => {
+  React.useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000);
@@ -36,24 +36,30 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     return () => clearInterval(timer);
   }, []);
   
-  // Handle sign out with proper feedback and redirection
+  // Enhanced sign out with better UI feedback and error handling
   const handleSignOut = async () => {
     try {
       if (isSigningOut) return; // Prevent multiple clicks
       
       setIsSigningOut(true);
+      
+      // Update UI state to show signout in progress
+      toast.loading("Signing out...");
+      
+      // Execute sign out process from auth context
       await signOut();
       
-      // Redirect to auth page after successful logout
-      // Using a timeout to ensure the auth state has time to update
+      // Force a redirect to auth page - this happens regardless of signout success
       setTimeout(() => {
         navigate('/auth', { replace: true });
       }, 300);
+      
     } catch (error) {
       console.error("Error during sign out:", error);
       toast.error("Error signing out. Please try again.");
     } finally {
       setIsSigningOut(false);
+      toast.dismiss(); // Clear any loading toasts
     }
   };
   
