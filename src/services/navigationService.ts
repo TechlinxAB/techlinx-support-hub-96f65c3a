@@ -8,8 +8,8 @@ class NavigationService {
   private lastNavigationTime = 0;
   private lastNavigationPath = '';
   private navigationCount: Record<string, { count: number, firstTime: number }> = {};
-  private maxNavigationsPerPath = 3;
-  private minNavigationInterval = 500; // ms
+  private maxNavigationsPerPath = 5; // Increased from 3 to 5
+  private minNavigationInterval = 800; // Increased from 500ms to 800ms
   private resetTimeout = 10000; // 10 seconds
   private isInitialized = false;
   
@@ -26,9 +26,14 @@ class NavigationService {
   }
   
   public setNavigateFunction(navigate: NavigateFunction): void {
-    this.navigateFunction = navigate;
-    this.isInitialized = true;
-    console.log('NavigationService: Navigate function set');
+    if (!this.navigateFunction) {
+      this.navigateFunction = navigate;
+      this.isInitialized = true;
+      console.log('NavigationService: Navigate function set');
+    } else {
+      // If already set, don't overwrite
+      console.log('NavigationService: Navigate function already set');
+    }
   }
   
   public isReady(): boolean {
@@ -72,7 +77,7 @@ class NavigationService {
             this.navigationCount[to].count = 0;
             this.navigationCount[to].firstTime = now;
           }
-        }, 1000);
+        }, 2000); // Increased from 1000ms to 2000ms
         
         return false;
       } else {

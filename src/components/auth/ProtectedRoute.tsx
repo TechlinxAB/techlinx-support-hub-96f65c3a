@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
@@ -15,19 +15,25 @@ const ProtectedRoute = () => {
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [authResetAttempted, setAuthResetAttempted] = React.useState(false);
+  const [authResetAttempted, setAuthResetAttempted] = useState(false);
+  const [navigationAttempted, setNavigationAttempted] = useState(false);
 
   // Register the navigate function with the navigation service on mount
   // This is crucial for proper navigation throughout the app
   useEffect(() => {
     console.log('ProtectedRoute: Registering navigation service');
     navigationService.setNavigateFunction(navigate);
-  }, [navigate]);
+    
+    // Reset navigation tracking when route changes
+    return () => {
+      setNavigationAttempted(false);
+    };
+  }, [navigate, location.pathname]);
   
   // Special handle for the auth page
   const isAuthPage = location.pathname === '/auth';
   
-  // Handle authentication redirects
+  // Handle authentication redirects with improved debouncing
   useEffect(() => {
     // Skip everything if already on auth page
     if (isAuthPage) {
@@ -36,6 +42,11 @@ const ProtectedRoute = () => {
     
     // Wait until auth state is fully loaded
     if (loading) {
+      return;
+    }
+    
+    // Only attempt navigation once per route change to prevent loops
+    if (navigationAttempted) {
       return;
     }
 
@@ -48,6 +59,7 @@ const ProtectedRoute = () => {
       }
       
       console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
+      setNavigationAttempted(true);
       
       // Use navigation service to prevent loops
       if (navigationService.isReady()) {
@@ -57,7 +69,7 @@ const ProtectedRoute = () => {
         });
       }
     }
-  }, [authState, loading, isAuthPage, location.pathname]);
+  }, [authState, loading, isAuthPage, location.pathname, navigationAttempted]);
   
   // Function to handle auth reset if user is stuck
   const handleResetAuth = async () => {

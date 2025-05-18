@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,11 +30,13 @@ import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
 
+// Initialize the query client outside of the component to prevent re-creation on renders
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 30000, // 30 seconds
     }
   }
 });
@@ -48,6 +50,7 @@ const ModalManager = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    {/* AuthProvider must come before AppProvider to resolve the circular dependency */}
     <AuthProvider>
       <AppProvider>
         <TooltipProvider>

@@ -49,6 +49,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Helper function to map database fields to UserProfile type
 const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
+  if (!dbProfile) return null as unknown as UserProfile;
+  
   return {
     id: dbProfile.id,
     email: dbProfile.email,
@@ -81,6 +83,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const profileFetchInProgress = useRef<Record<string, boolean>>({});
   const initializationTimeout = useRef<number | null>(null);
   const profileFetchDebounceTimer = useRef<number | null>(null);
+  const authErrorCount = useRef<number>(0);
+  const maxErrorsBeforeUnauthenticated = 5;
   
   // Calculate loading state from auth state
   const loading = authState === 'INITIALIZING';
@@ -107,6 +111,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setOriginalProfile(null);
       setImpersonatedProfile(null);
       setError(null);
+      
+      // Reset error counts
+      authErrorCount.current = 0;
       
       // Finally set unauthenticated state
       setAuthState('UNAUTHENTICATED');
@@ -189,6 +196,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(null);
       setOriginalProfile(null);
       setImpersonatedProfile(null);
+      
+      // Reset error counts
+      authErrorCount.current = 0;
       
       // Clean storage with direct access - most reliable
       try {
@@ -299,8 +309,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         console.error('Error fetching profile:', error);
-        throw error;
+        
+        // Increment error count to handle persistent errors
+        authErrorCount.current += 1;
+        
+        if (authErrorCount.current >= maxErrorsBeforeUnauthenticated) {
+          console.error(`Too many profile fetch errors (${authErrorCount.current}), setting unauthenticated`);
+          setAuthState('UNAUTHENTICATED');
+        } else {
+          // For fewer errors, just throw without changing auth state
+          throw error;
+        }
+        return;
       }
+      
+      // Reset error count on successful fetch
+      authErrorCount.current = 0;
       
       if (data) {
         setProfile(mapDbProfileToUserProfile(data));
@@ -315,7 +339,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (err) {
       console.error('Exception fetching profile:', err);
-      setAuthState('ERROR');
+      
+      // Only set ERROR state after multiple failures
+      if (authErrorCount.current >= maxErrorsBeforeUnauthenticated) {
+        setAuthState('ERROR');
+      }
     } finally {
       profileFetchInProgress.current[userId] = false;
     }
@@ -343,20 +371,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const setupAuthListener = () => {
       try {
         // IMPORTANT: Set up the auth listener first
-        const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
           // Handle auth state changes
-          console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
+          console.log('Auth state changed:', event, newSession ? 'Session exists' : 'No session');
           
           // Simple state updates only - no API calls inside the callback
-          setSession(session);
-          setUser(session?.user ?? null);
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
           
           // Defer any API calls or complex state updates
-          if (session?.user) {
+          if (newSession?.user) {
             // Using setTimeout with 0ms delay moves this to the next tick
             // This is crucial to prevent deadlocks in the auth state
             setTimeout(() => {
-              debounceFetchProfile(session.user.id);
+              debounceFetchProfile(newSession.user.id);
             }, 0);
           } else {
             setTimeout(() => {

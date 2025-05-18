@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import DashboardWelcome from './DashboardWelcome';
 import QuickActionButtons from './QuickActionButtons';
@@ -8,9 +8,11 @@ import CompanyAnnouncements from './CompanyAnnouncements';
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 import { useCompanyAnnouncements } from '@/hooks/useCompanyAnnouncements';
 import { UserCaseItem } from '@/types/dashboardTypes';
+import { AlertCircle } from 'lucide-react';
 
 const UserDashboard = () => {
   const { currentUser, cases } = useAppContext();
+  const [hasSettingsError, setHasSettingsError] = useState(false);
   
   // Get user's cases only and map to UserCaseItem format
   const userCases: UserCaseItem[] = cases
@@ -25,9 +27,25 @@ const UserDashboard = () => {
       updatedAt: c.updatedAt.toISOString() // Convert Date to string
     }));
   
+  // Safety check for company ID before fetching settings
+  const safeCompanyId = currentUser?.companyId && 
+    currentUser.companyId !== "undefined" && 
+    currentUser.companyId !== "null" ? 
+    currentUser.companyId : undefined;
+  
   // Fetch company settings and announcements
-  const { settings, loading: settingsLoading } = useDashboardSettings(currentUser?.companyId);
-  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(currentUser?.companyId);
+  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
+  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
+  
+  // Track settings errors
+  useEffect(() => {
+    if (settingsError) {
+      console.error("Dashboard settings error:", settingsError);
+      setHasSettingsError(true);
+    } else {
+      setHasSettingsError(false);
+    }
+  }, [settingsError]);
   
   const loading = settingsLoading || announcementsLoading;
   
@@ -42,10 +60,25 @@ const UserDashboard = () => {
     );
   }
   
+  // Even if settings failed, show the dashboard with default settings
   return (
     <div className="space-y-6">
+      {hasSettingsError && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-amber-800 text-sm font-medium">
+              Some dashboard settings could not be loaded
+            </p>
+            <p className="text-amber-700 text-xs mt-1">
+              Using default settings instead. This won't affect your ability to use the dashboard.
+            </p>
+          </div>
+        </div>
+      )}
+      
       <DashboardWelcome 
-        userName={currentUser?.name.split(' ')[0] || ''} 
+        userName={currentUser?.name?.split(' ')[0] || 'User'} 
         settings={settings} 
       />
       
