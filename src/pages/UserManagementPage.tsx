@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +21,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,  // This import was missing
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -128,15 +127,14 @@ const UserManagementPage = () => {
       await userManagementService.deleteUser(userToDelete);
       
       toast("User Deleted", {
-        description: "The user has been successfully removed",
+        description: "The user has been successfully removed"
       });
       
       // Refresh the users list
       await refetchUsers();
     } catch (error: any) {
-      toast("Error Deleting User", {
-        description: error.message,
-        variant: "destructive",
+      toast.error("Error Deleting User", {
+        description: error.message
       });
     } finally {
       setLoading(false);
@@ -162,7 +160,7 @@ const UserManagementPage = () => {
         });
         
         toast("User Created", {
-          description: "New user has been successfully created",
+          description: "New user has been successfully created"
         });
         
         // Refresh the users list
@@ -180,7 +178,7 @@ const UserManagementPage = () => {
         });
         
         toast("User Updated", {
-          description: "User information has been successfully updated",
+          description: "User information has been successfully updated"
         });
         
         // Refresh the users list
@@ -192,7 +190,7 @@ const UserManagementPage = () => {
         });
         
         toast("Password Reset", {
-          description: "User password has been successfully reset",
+          description: "User password has been successfully reset"
         });
       }
       
@@ -200,9 +198,8 @@ const UserManagementPage = () => {
       setIsDialogOpen(false);
     } catch (error: any) {
       console.error('Error submitting form:', error);
-      toast("Error", {
-        description: error.message,
-        variant: "destructive",
+      toast.error("Error", {
+        description: error.message
       });
     } finally {
       setLoading(false);
@@ -521,10 +518,8 @@ const UserManagementPage = () => {
     try {
       await startImpersonation(userId);
     } catch (error: any) {
-      toast({
-        title: "Error starting impersonation",
-        description: error.message,
-        variant: "destructive",
+      toast.error("Error starting impersonation", {
+        description: error.message
       });
     }
   };

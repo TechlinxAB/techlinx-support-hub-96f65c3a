@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
@@ -8,7 +9,7 @@ export type AuthContextType = {
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
-  originalProfile: UserProfile | null;  // Added missing property for the original user during impersonation
+  originalProfile: UserProfile | null;
   loading: boolean;
   error: AuthError | null;
   isImpersonating: boolean;
@@ -31,10 +32,26 @@ export type UserProfile = {
   preferredLanguage: string;
   phone?: string | null;
   createdAt?: string;
+  avatar?: string | null;
 };
 
 // Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Helper function to map database fields to UserProfile type
+const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
+  return {
+    id: dbProfile.id,
+    email: dbProfile.email,
+    name: dbProfile.name,
+    role: dbProfile.role,
+    companyId: dbProfile.company_id,
+    preferredLanguage: dbProfile.preferred_language,
+    phone: dbProfile.phone,
+    createdAt: dbProfile.created_at,
+    avatar: dbProfile.avatar,
+  };
+};
 
 // Provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -112,8 +129,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Set impersonation state
       setIsImpersonating(true);
-      setImpersonatedProfile(data);
-      setProfile(data);
+      const mappedProfile = mapDbProfileToUserProfile(data);
+      setImpersonatedProfile(mappedProfile);
+      setProfile(mappedProfile);
       
       toast.success(`Now viewing as ${data.name || data.email}`);
     } catch (error: any) {
@@ -155,7 +173,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .single();
       
       if (error) throw error;
-      setProfile(data);
+      if (data) {
+        setProfile(mapDbProfileToUserProfile(data));
+      }
     } catch (err) {
       console.error('Error fetching profile:', err);
     }
