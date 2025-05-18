@@ -12,15 +12,22 @@ const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Check if user is already logged in
+  // Check if user is already logged in, but with a check to prevent infinite redirects
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigate('/');
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setCheckingSession(false);
       }
     };
     
@@ -74,6 +81,15 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
+  
+  // Show loading state while checking the session
+  if (checkingSession) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">

@@ -8,8 +8,15 @@ import ImpersonationBanner from '@/components/auth/ImpersonationBanner';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
+
+  // If no user is found, redirect to auth page
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -30,6 +37,11 @@ const Layout = () => {
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
+
+  // Show a loading state until we have confirmed authentication
+  if (!user || !profile) {
+    return null; // Return nothing while checking auth, the ProtectedRoute will handle showing the loader
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
