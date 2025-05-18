@@ -1,74 +1,53 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const { toast } = useToast();
-  const navigate = useNavigate();
   
-  // Check if user is already logged in
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, signIn } = useAuth();
+  
+  // Get redirect path from state or default to home
+  const from = location.state?.from || '/';
+  
+  // Redirect if user is already authenticated
   useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigate('/');
-      }
-    };
-    
-    checkSession();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          navigate('/');
-        }
-      }
-    );
-    
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (isAuthenticated) {
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, from]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
+      toast.error("Please fill in all fields");
       return;
     }
     
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { error } = await signIn(email, password);
       
       if (error) throw error;
       
-      toast({
-        title: "Success!",
-        description: "You have been logged in",
-      });
-      
+      toast.success("You have been logged in");
+      // Navigation will happen via the effect above
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Invalid email or password",
-        variant: "destructive"
+      console.error('Sign in error:', error);
+      toast.error("Login failed", {
+        description: error.message || "Invalid email or password"
       });
     } finally {
       setLoading(false);

@@ -245,9 +245,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: profile.name,
         email: profile.email,
         phone: profile.phone || undefined,
-        companyId: profile.company_id || '',
+        companyId: profile.companyId || '',
         role: profile.role as UserRole,
-        preferredLanguage: (profile.preferred_language as Language) || 'en',
+        preferredLanguage: (profile.preferredLanguage as Language) || 'en',
         avatar: profile.avatar || undefined,
       };
       
@@ -596,19 +596,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       if (data) {
-        const mappedBlocks: DashboardBlock[] = data.map(block => ({
-          id: block.id,
-          companyId: block.company_id,
-          title: block.title,
-          content: block.content,
-          type: block.type as DashboardBlock['type'], // Cast to ensure compatibility
-          position: block.position,
-          parentId: block.parent_id || undefined,
-          createdAt: new Date(block.created_at),
-          updatedAt: new Date(block.updated_at),
-          createdBy: block.created_by,
-          showTitle: block.content?.showTitle !== false // Extract showTitle from content field
-        }));
+        const mappedBlocks: DashboardBlock[] = data.map(block => {
+          // Safely extract showTitle from content if it exists
+          const content = block.content as Record<string, any> || {};
+          const showTitle = content.showTitle !== false; // Default to true if not specified
+          
+          return {
+            id: block.id,
+            companyId: block.company_id,
+            title: block.title,
+            content: block.content,
+            type: block.type as DashboardBlock['type'],
+            position: block.position,
+            parentId: block.parent_id || undefined,
+            createdAt: new Date(block.created_at),
+            updatedAt: new Date(block.updated_at),
+            createdBy: block.created_by,
+            showTitle: showTitle
+          };
+        });
         setDashboardBlocks(mappedBlocks);
       }
     } catch (error: any) {
@@ -686,10 +692,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       // For content updates, merge with existing content
       if (updates.content !== undefined || updates.showTitle !== undefined) {
-        // Start with existing content or empty object
+        // Start with existing content as a Record<string, any> to avoid type errors
+        const existingContent = (existingBlock.content as Record<string, any>) || {};
         const updatedContent = { 
-          ...(existingBlock.content || {}),
-          ...updates.content,
+          ...existingContent,
+          ...(updates.content as Record<string, any> || {}),
           // Always include showTitle in content
           showTitle: updates.showTitle !== undefined ? updates.showTitle : existingBlock.showTitle
         };

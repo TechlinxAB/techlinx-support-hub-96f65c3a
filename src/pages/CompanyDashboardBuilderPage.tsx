@@ -8,14 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader, PlusCircle, Trash, MoveUp, MoveDown, Edit, Eye, EyeOff } from 'lucide-react';
+import { Loader, PlusCircle, Trash, MoveUp, MoveDown, Edit, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
+import { supabase } from '@/integrations/supabase/client';
+import { hasCompanyAccess, isConsultant } from '@/utils/authHelpers';
 
 const CompanyDashboardBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -31,7 +33,7 @@ const CompanyDashboardBuilderPage = () => {
     deleteDashboardBlock
   } = useAppContext();
   
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   
   const [sortedBlocks, setSortedBlocks] = useState<DashboardBlock[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,44 +42,57 @@ const CompanyDashboardBuilderPage = () => {
   const [formData, setFormData] = useState<any>({});
   const [isPreview, setIsPreview] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [fetchTriggered, setFetchTriggered] = useState(false); // Add flag to track if fetch has been triggered
+  const [fetchTriggered, setFetchTriggered] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   
-  // Find the company
   const company = companies.find(c => c.id === companyId);
   
-  // Check auth in useEffect, not during render
   useEffect(() => {
     const checkAccess = async () => {
-      // Wait until we have the profile data to make the role check
-      if (profile !== null) {
-        console.log("Checking access, user role:", profile?.role, "company ID:", companyId);
+      if (!companyId) {
+        toast.error("Company ID is missing");
+        navigate('/');
+        return;
+      }
+      
+      try {
+        const isUserConsultant = await isConsultant();
         
-        if (profile?.role !== 'consultant') {
-          console.log("Access denied: User is not a consultant");
-          toast.error("You don't have permission to access the dashboard builder");
-          navigate('/');
-          return;
+        if (!isUserConsultant) {
+          const hasAccess = await hasCompanyAccess(companyId);
+          
+          if (!hasAccess) {
+            console.log("Access denied: User does not have permission to access this company");
+            toast.error("You don't have permission to access this dashboard builder");
+            navigate('/');
+            return;
+          }
         }
         
+        setAuthChecked(true);
         setIsLoading(false);
+      } catch (error) {
+        console.error("Error checking access:", error);
+        toast.error("Error verifying permissions");
+        navigate('/');
       }
     };
     
-    checkAccess();
-  }, [profile, navigate, companyId]);
+    if (profile !== null && session !== null) {
+      console.log("Checking access with profile:", profile?.role, "company ID:", companyId);
+      checkAccess();
+    }
+  }, [profile, session, navigate, companyId]);
   
-  // Fix infinite reloading by using a flag to ensure we only fetch once
   useEffect(() => {
-    if (companyId && !isLoading && !fetchTriggered) {
+    if (companyId && !isLoading && authChecked && !fetchTriggered) {
       console.log("Fetching dashboard blocks for company:", companyId);
       refetchDashboardBlocks(companyId);
-      setFetchTriggered(true); // Set flag to prevent continuous fetching
+      setFetchTriggered(true);
     }
-  }, [companyId, refetchDashboardBlocks, isLoading, fetchTriggered]);
+  }, [companyId, refetchDashboardBlocks, isLoading, fetchTriggered, authChecked]);
   
-  // Update the sorted blocks when dashboard blocks change
   useEffect(() => {
-    // Sort blocks by position and filter to only include top-level blocks (no parentId)
     if (dashboardBlocks.length > 0 && companyId) {
       const topLevelBlocks = dashboardBlocks
         .filter(block => !block.parentId && block.companyId === companyId)
@@ -87,14 +102,12 @@ const CompanyDashboardBuilderPage = () => {
     }
   }, [dashboardBlocks, companyId]);
   
-  // Get child blocks for a given parent ID
   const getChildBlocks = (parentId: string) => {
     return dashboardBlocks
       .filter(block => block.parentId === parentId)
       .sort((a, b) => a.position - b.position);
   };
   
-  // Create a memoized function to handle manual refetching
   const handleManualRefetch = useCallback(() => {
     if (companyId) {
       refetchDashboardBlocks(companyId);
@@ -110,17 +123,14 @@ const CompanyDashboardBuilderPage = () => {
   };
   
   const handleEditBlock = (block: DashboardBlock) => {
-    // Reset the dialog state completely before opening with new data
-    setDialogOpen(false); // Close first to ensure state reset
-    
-    // Use a small timeout to ensure React has time to process the close before reopening
+    setDialogOpen(false);
     setTimeout(() => {
       setEditingBlock(block);
       setSelectedBlockType(block.type);
       setFormData({
         ...block.content,
-        blockTitle: block.title, // Store the current block title
-        showTitle: block.showTitle !== false // Default to true if not explicitly set to false
+        blockTitle: block.title,
+        showTitle: block.showTitle !== false
       });
       setDialogOpen(true);
     }, 50);
@@ -159,400 +169,84 @@ const CompanyDashboardBuilderPage = () => {
     try {
       const toastId = toast.loading("Saving dashboard block...");
       
-      // Extract the block title from formData
+      if (!session) {
+        console.error("No session found. User might be logged out.");
+        toast.error("You must be logged in to save dashboard blocks", { id: toastId });
+        return;
+      }
+      
+      console.log("Current session:", session ? "Valid" : "Invalid");
+      console.log("Access token available:", !!session?.access_token);
+      
       const blockTitle = formData.blockTitle || `New ${selectedBlockType}`;
-      // Extract showTitle option
-      const showTitle = formData.showTitle !== false; // Default to true if not explicitly set to false
-      
-      console.log('Saving block with showTitle:', showTitle, 'and formData:', formData);
-      
-      // Remove blockTitle and showTitle from the content data
+      const showTitle = formData.showTitle !== false;
       const { blockTitle: _, showTitle: __, ...contentData } = formData;
       
+      if (!companyId) {
+        throw new Error("No company ID provided");
+      }
+
+      const currentUserId = session.user.id;
+      
+      if (!currentUserId) {
+        throw new Error("Cannot determine user ID from session");
+      }
+      
       if (editingBlock) {
-        // Update existing block
-        await updateDashboardBlock(editingBlock.id, {
-          title: blockTitle,
-          content: contentData,
-          type: selectedBlockType,
-          showTitle: showTitle
-        });
+        console.log(`Updating block ID: ${editingBlock.id}`);
         
-        console.log('Updated block with showTitle:', showTitle);
+        const { error } = await supabase
+          .from('dashboard_blocks')
+          .update({
+            title: blockTitle,
+            content: contentData,
+            type: selectedBlockType,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingBlock.id);
+        
+        if (error) {
+          console.error("Error updating block:", error);
+          throw error;
+        }
+        
       } else {
-        // Create new block
-        // Get max position for new block
         const maxPosition = sortedBlocks.length > 0
           ? Math.max(...sortedBlocks.map(b => b.position)) + 1
           : 0;
         
-        await addDashboardBlock({
-          companyId: companyId!,
-          title: blockTitle,
-          content: contentData,
-          type: selectedBlockType,
-          position: maxPosition,
-          showTitle: showTitle
-        });
+        console.log("Creating new block with:");
+        console.log("- Company ID:", companyId);
+        console.log("- User ID:", currentUserId);
+        console.log("- Position:", maxPosition);
         
-        console.log('Created new block with showTitle:', showTitle);
+        const { error } = await supabase
+          .from('dashboard_blocks')
+          .insert({
+            company_id: companyId,
+            title: blockTitle,
+            content: contentData,
+            type: selectedBlockType,
+            position: maxPosition,
+            created_by: currentUserId
+          });
+        
+        if (error) {
+          console.error("Error creating block:", error);
+          throw error;
+        }
       }
+      
+      await refetchDashboardBlocks(companyId);
       
       toast.success("Block saved successfully", { id: toastId });
       setDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving block:', error);
-      toast.error("Failed to save dashboard block", {
-        description: error.message || "Please try again"
-      });
+      toast.error(`Failed to save dashboard block: ${error.message || "Unknown error"}`);
     }
   };
   
-  const renderBlockForm = () => {
-    // Common title field and visibility toggle to be shown for all block types
-    const commonTitleField = (
-      <div className="mb-4 space-y-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Block Title/Name</label>
-          <Input 
-            value={formData.blockTitle || ''}
-            onChange={e => setFormData({ ...formData, blockTitle: e.target.value })}
-            placeholder="Enter block title"
-          />
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="show-title"
-            checked={formData.showTitle !== false} // Default to true if not explicitly false
-            onCheckedChange={checked => setFormData({ ...formData, showTitle: checked })}
-          />
-          <label htmlFor="show-title" className="text-sm font-medium">
-            Show title on dashboard
-          </label>
-        </div>
-      </div>
-    );
-    
-    switch (selectedBlockType) {
-      case 'heading':
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            <div>
-              <label className="text-sm font-medium">Text</label>
-              <Input 
-                value={formData.text || ''} 
-                onChange={e => setFormData({ ...formData, text: e.target.value })} 
-                placeholder="Heading text"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Level</label>
-              <Select 
-                value={String(formData.level || '1')} 
-                onValueChange={value => setFormData({ ...formData, level: Number(value) })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select heading level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Heading 1 (Largest)</SelectItem>
-                  <SelectItem value="2">Heading 2</SelectItem>
-                  <SelectItem value="3">Heading 3</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        );
-        
-      case 'text':
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            <div>
-              <label className="text-sm font-medium">Text</label>
-              <Textarea 
-                value={formData.text || ''} 
-                onChange={e => setFormData({ ...formData, text: e.target.value })} 
-                placeholder="Content text"
-                rows={6}
-              />
-            </div>
-          </div>
-        );
-        
-      case 'card':
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            <div>
-              <label className="text-sm font-medium">Title</label>
-              <Input 
-                value={formData.title || ''} 
-                onChange={e => setFormData({ ...formData, title: e.target.value })} 
-                placeholder="Card title"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Content</label>
-              <Textarea 
-                value={formData.content || ''} 
-                onChange={e => setFormData({ ...formData, content: e.target.value })} 
-                placeholder="Card content"
-                rows={4}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Action (Optional)</label>
-              <Input 
-                value={formData.action?.label || ''} 
-                onChange={e => setFormData({ 
-                  ...formData, 
-                  action: { ...formData.action, label: e.target.value } 
-                })} 
-                placeholder="Button label"
-              />
-              <Input 
-                value={formData.action?.link || ''} 
-                onChange={e => setFormData({ 
-                  ...formData, 
-                  action: { ...formData.action, link: e.target.value } 
-                })} 
-                placeholder="Button link URL"
-              />
-            </div>
-          </div>
-        );
-
-      case 'image':
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            <div>
-              <label className="text-sm font-medium">Image URL</label>
-              <Input 
-                value={formData.url || ''} 
-                onChange={e => setFormData({ ...formData, url: e.target.value })} 
-                placeholder="https://example.com/image.jpg"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Alt Text</label>
-              <Input 
-                value={formData.alt || ''} 
-                onChange={e => setFormData({ ...formData, alt: e.target.value })} 
-                placeholder="Image description"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Caption (Optional)</label>
-              <Input 
-                value={formData.caption || ''} 
-                onChange={e => setFormData({ ...formData, caption: e.target.value })} 
-                placeholder="Image caption"
-              />
-            </div>
-            {formData.url && (
-              <div className="mt-2 border rounded p-3">
-                <p className="text-sm font-medium mb-2">Preview:</p>
-                <img 
-                  src={formData.url} 
-                  alt={formData.alt || "Preview"} 
-                  className="max-w-full h-auto rounded" 
-                />
-                {formData.caption && (
-                  <p className="text-sm text-center mt-1">{formData.caption}</p>
-                )}
-              </div>
-            )}
-          </div>
-        );
-        
-      case 'faq':
-        const items = formData.items || [{ question: '', answer: '' }];
-        
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            {items.map((item: any, index: number) => (
-              <div key={index} className="space-y-2 pb-4 border-b">
-                <div>
-                  <label className="text-sm font-medium">Question {index + 1}</label>
-                  <Input 
-                    value={item.question} 
-                    onChange={e => {
-                      const newItems = [...items];
-                      newItems[index].question = e.target.value;
-                      setFormData({ ...formData, items: newItems });
-                    }} 
-                    placeholder="FAQ question"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Answer {index + 1}</label>
-                  <Textarea 
-                    value={item.answer} 
-                    onChange={e => {
-                      const newItems = [...items];
-                      newItems[index].answer = e.target.value;
-                      setFormData({ ...formData, items: newItems });
-                    }} 
-                    placeholder="FAQ answer"
-                    rows={3}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    const newItems = items.filter((_: any, i: number) => i !== index);
-                    setFormData({ ...formData, items: newItems.length ? newItems : [{ question: '', answer: '' }] });
-                  }}
-                >
-                  <Trash className="h-4 w-4 mr-1" /> Remove
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              onClick={() => {
-                setFormData({ ...formData, items: [...items, { question: '', answer: '' }] });
-              }}
-            >
-              <PlusCircle className="h-4 w-4 mr-1" /> Add FAQ Item
-            </Button>
-          </div>
-        );
-        
-      case 'links':
-        const links = formData.links || [{ label: '', url: '' }];
-        
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            {links.map((link: any, index: number) => (
-              <div key={index} className="space-y-2 pb-4 border-b">
-                <div>
-                  <label className="text-sm font-medium">Label {index + 1}</label>
-                  <Input 
-                    value={link.label} 
-                    onChange={e => {
-                      const newLinks = [...links];
-                      newLinks[index].label = e.target.value;
-                      setFormData({ ...formData, links: newLinks });
-                    }} 
-                    placeholder="Link label"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">URL {index + 1}</label>
-                  <Input 
-                    value={link.url} 
-                    onChange={e => {
-                      const newLinks = [...links];
-                      newLinks[index].url = e.target.value;
-                      setFormData({ ...formData, links: newLinks });
-                    }} 
-                    placeholder="Link URL"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    const newLinks = links.filter((_: any, i: number) => i !== index);
-                    setFormData({ ...formData, links: newLinks.length ? newLinks : [{ label: '', url: '' }] });
-                  }}
-                >
-                  <Trash className="h-4 w-4 mr-1" /> Remove
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              onClick={() => {
-                setFormData({ ...formData, links: [...links, { label: '', url: '' }] });
-              }}
-            >
-              <PlusCircle className="h-4 w-4 mr-1" /> Add Link
-            </Button>
-          </div>
-        );
-        
-      case 'dropdown':
-        const dropdownItems = formData.items || [{ label: '', content: '' }];
-        
-        return (
-          <div className="space-y-4">
-            {commonTitleField}
-            <div>
-              <label className="text-sm font-medium">Title</label>
-              <Input 
-                value={formData.title || ''} 
-                onChange={e => setFormData({ ...formData, title: e.target.value })} 
-                placeholder="Dropdown title"
-              />
-            </div>
-            {dropdownItems.map((item: any, index: number) => (
-              <div key={index} className="space-y-2 pb-4 border-b">
-                <div>
-                  <label className="text-sm font-medium">Tab Label {index + 1}</label>
-                  <Input 
-                    value={item.label} 
-                    onChange={e => {
-                      const newItems = [...dropdownItems];
-                      newItems[index].label = e.target.value;
-                      setFormData({ ...formData, items: newItems });
-                    }} 
-                    placeholder="Tab label"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Tab Content {index + 1}</label>
-                  <Textarea 
-                    value={item.content} 
-                    onChange={e => {
-                      const newItems = [...dropdownItems];
-                      newItems[index].content = e.target.value;
-                      setFormData({ ...formData, items: newItems });
-                    }} 
-                    placeholder="Tab content"
-                    rows={3}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    const newItems = dropdownItems.filter((_: any, i: number) => i !== index);
-                    setFormData({ ...formData, items: newItems.length ? newItems : [{ label: '', content: '' }] });
-                  }}
-                >
-                  <Trash className="h-4 w-4 mr-1" /> Remove
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              onClick={() => {
-                setFormData({ ...formData, items: [...dropdownItems, { label: '', content: '' }] });
-              }}
-            >
-              <PlusCircle className="h-4 w-4 mr-1" /> Add Tab Item
-            </Button>
-          </div>
-        );
-        
-      default:
-        return <div>Select a block type</div>;
-    }
-  };
-  
-  // Render a preview of a dashboard block
   const renderBlockPreview = (block: DashboardBlock) => {
     return (
       <Card className="mb-4">
@@ -600,7 +294,6 @@ const CompanyDashboardBuilderPage = () => {
             </pre>
           )}
           
-          {/* Child blocks */}
           {getChildBlocks(block.id).length > 0 && (
             <div className="mt-4 border-l-2 border-muted pl-4">
               <div className="text-sm font-medium mb-2">Child Blocks:</div>
@@ -632,7 +325,6 @@ const CompanyDashboardBuilderPage = () => {
     );
   };
 
-  // New function to render block content based on type
   const renderBlockContent = (block: DashboardBlock) => {
     const content = block.content || {};
     
@@ -680,18 +372,39 @@ const CompanyDashboardBuilderPage = () => {
         return (
           <div className="space-y-2">
             {content.url ? (
-              <>
-                <img 
-                  src={content.url} 
-                  alt={content.alt || 'Image'} 
-                  className="max-w-full h-auto rounded-md"
-                />
+              <div style={{ 
+                width: content.width || 'auto',
+                maxWidth: '100%'
+              }}>
+                {content.height ? (
+                  <AspectRatio ratio={16/9}>
+                    <img 
+                      src={content.url} 
+                      alt={content.alt || 'Image'} 
+                      className="w-full h-full rounded-md"
+                      style={{
+                        objectFit: content.objectFit || 'cover',
+                        objectPosition: content.objectPosition || 'center'
+                      }}
+                    />
+                  </AspectRatio>
+                ) : (
+                  <img 
+                    src={content.url} 
+                    alt={content.alt || 'Image'} 
+                    className="max-w-full h-auto rounded-md"
+                    style={{
+                      objectFit: content.objectFit || 'cover',
+                      objectPosition: content.objectPosition || 'center'
+                    }}
+                  />
+                )}
                 {content.caption && (
                   <p className="text-sm text-center mt-1 text-muted-foreground">
                     {content.caption}
                   </p>
                 )}
-              </>
+              </div>
             ) : (
               <div className="bg-muted h-32 flex items-center justify-center rounded-md">
                 <p className="text-muted-foreground">No image provided</p>
@@ -757,7 +470,397 @@ const CompanyDashboardBuilderPage = () => {
     }
   };
   
-  // Show loading when checking permissions or fetching data
+  const renderBlockForm = () => {
+    const commonFields = (
+      <>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Block Title</label>
+          <Input 
+            value={formData.blockTitle || ''} 
+            onChange={(e) => setFormData({ ...formData, blockTitle: e.target.value })}
+            placeholder="Enter block title"
+          />
+        </div>
+        
+        <div className="mb-4 flex items-center space-x-2">
+          <Switch 
+            id="show-title"
+            checked={formData.showTitle !== false} 
+            onCheckedChange={(checked) => setFormData({ ...formData, showTitle: checked })}
+          />
+          <label htmlFor="show-title" className="text-sm font-medium">
+            Show block title
+          </label>
+        </div>
+      </>
+    );
+    
+    switch (selectedBlockType) {
+      case 'heading':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Heading Text</label>
+              <Input 
+                value={formData.text || ''} 
+                onChange={(e) => setFormData({ ...formData, text: e.target.value })}
+                placeholder="Enter heading text"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Heading Level</label>
+              <Select
+                value={formData.level?.toString() || '2'}
+                onValueChange={(value) => setFormData({ ...formData, level: parseInt(value) })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select heading level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">H1 - Large</SelectItem>
+                  <SelectItem value="2">H2 - Medium</SelectItem>
+                  <SelectItem value="3">H3 - Small</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+        
+      case 'text':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Text Content</label>
+              <Textarea 
+                value={formData.text || ''} 
+                onChange={(e) => setFormData({ ...formData, text: e.target.value })}
+                placeholder="Enter text content"
+                rows={5}
+              />
+            </div>
+          </div>
+        );
+        
+      case 'card':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Card Title</label>
+              <Input 
+                value={formData.title || ''} 
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Enter card title"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Card Content</label>
+              <Textarea 
+                value={formData.content || ''} 
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                placeholder="Enter card content"
+                rows={4}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Action Button (optional)</label>
+              <Input 
+                value={(formData.action?.label) || ''} 
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  action: { 
+                    ...(formData.action || {}), 
+                    label: e.target.value 
+                  } 
+                })}
+                placeholder="Button label (leave empty to hide button)"
+              />
+            </div>
+          </div>
+        );
+        
+      case 'image':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Image URL</label>
+              <Input 
+                value={formData.url || ''} 
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder="Enter image URL"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Alt Text</label>
+              <Input 
+                value={formData.alt || ''} 
+                onChange={(e) => setFormData({ ...formData, alt: e.target.value })}
+                placeholder="Enter alt text for accessibility"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Caption (optional)</label>
+              <Input 
+                value={formData.caption || ''} 
+                onChange={(e) => setFormData({ ...formData, caption: e.target.value })}
+                placeholder="Enter image caption"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Width (optional)</label>
+                <Input 
+                  value={formData.width || ''} 
+                  onChange={(e) => setFormData({ ...formData, width: e.target.value })}
+                  placeholder="e.g., 100%, 400px"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Height (optional)</label>
+                <Input 
+                  value={formData.height || ''} 
+                  onChange={(e) => setFormData({ ...formData, height: e.target.value })}
+                  placeholder="e.g., auto, 300px"
+                />
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 'faq':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-3">FAQ Items</label>
+              
+              {(formData.items || []).map((item: any, index: number) => (
+                <div key={index} className="border rounded-md p-4 mb-3 bg-background">
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Question {index + 1}</label>
+                    <Input 
+                      value={item.question || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], question: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter question"
+                    />
+                  </div>
+                  
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Answer {index + 1}</label>
+                    <Textarea 
+                      value={item.answer || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], answer: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter answer"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      const newItems = [...(formData.items || [])];
+                      newItems.splice(index, 1);
+                      setFormData({ ...formData, items: newItems });
+                    }}
+                  >
+                    Remove Item
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => {
+                  const newItems = [...(formData.items || []), { question: '', answer: '' }];
+                  setFormData({ ...formData, items: newItems });
+                }}
+              >
+                Add FAQ Item
+              </Button>
+            </div>
+          </div>
+        );
+        
+      case 'links':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-3">Links</label>
+              
+              {(formData.links || []).map((link: any, index: number) => (
+                <div key={index} className="border rounded-md p-4 mb-3 bg-background">
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Link Label {index + 1}</label>
+                    <Input 
+                      value={link.label || ''} 
+                      onChange={(e) => {
+                        const newLinks = [...(formData.links || [])];
+                        newLinks[index] = { ...newLinks[index], label: e.target.value };
+                        setFormData({ ...formData, links: newLinks });
+                      }}
+                      placeholder="Enter link text"
+                    />
+                  </div>
+                  
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">URL {index + 1}</label>
+                    <Input 
+                      value={link.url || ''} 
+                      onChange={(e) => {
+                        const newLinks = [...(formData.links || [])];
+                        newLinks[index] = { ...newLinks[index], url: e.target.value };
+                        setFormData({ ...formData, links: newLinks });
+                      }}
+                      placeholder="Enter URL"
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      const newLinks = [...(formData.links || [])];
+                      newLinks.splice(index, 1);
+                      setFormData({ ...formData, links: newLinks });
+                    }}
+                  >
+                    Remove Link
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => {
+                  const newLinks = [...(formData.links || []), { label: '', url: '' }];
+                  setFormData({ ...formData, links: newLinks });
+                }}
+              >
+                Add Link
+              </Button>
+            </div>
+          </div>
+        );
+        
+      case 'dropdown':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Dropdown Title</label>
+              <Input 
+                value={formData.title || ''} 
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Enter dropdown title"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-3">Dropdown Items</label>
+              
+              {(formData.items || []).map((item: any, index: number) => (
+                <div key={index} className="border rounded-md p-4 mb-3 bg-background">
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Item Label {index + 1}</label>
+                    <Input 
+                      value={item.label || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], label: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter item label"
+                    />
+                  </div>
+                  
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Item Content {index + 1}</label>
+                    <Textarea 
+                      value={item.content || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], content: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter item content"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      const newItems = [...(formData.items || [])];
+                      newItems.splice(index, 1);
+                      setFormData({ ...formData, items: newItems });
+                    }}
+                  >
+                    Remove Item
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => {
+                  const newItems = [...(formData.items || []), { label: '', content: '' }];
+                  setFormData({ ...formData, items: newItems });
+                }}
+              >
+                Add Dropdown Item
+              </Button>
+            </div>
+          </div>
+        );
+        
+      default:
+        return (
+          <div className="p-4 text-center text-muted-foreground">
+            <p>Please select a block type to continue</p>
+          </div>
+        );
+    }
+  };
+  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -847,14 +950,11 @@ const CompanyDashboardBuilderPage = () => {
         </div>
       )}
       
-      {/* Add/Edit Block Dialog */}
       <Dialog 
         open={dialogOpen} 
         onOpenChange={(open) => {
-          // If dialog is being closed, reset all related state
           if (!open) {
             setDialogOpen(false);
-            // No need to reset other state here as we'll set them properly before opening again
           } else {
             setDialogOpen(true);
           }

@@ -9,6 +9,7 @@ import { Loader } from 'lucide-react';
 import { Heading1, Heading2, Heading3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
 
 const CompanyDashboardPage = () => {
   const { currentUser, companies, dashboardBlocks, loadingDashboardBlocks, refetchDashboardBlocks } = useAppContext();
@@ -161,15 +162,46 @@ const CompanyDashboardPage = () => {
         return (
           <div className="mb-4">
             {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
-            <img 
-              src={block.content.url} 
-              alt={block.content.alt || block.title} 
-              className="max-w-full h-auto rounded-md"
-            />
-            {block.content.caption && (
-              <p className="text-sm text-center mt-2 text-muted-foreground">
-                {block.content.caption}
-              </p>
+            
+            {block.content.url ? (
+              <div className={`relative ${block.content.width ? '' : 'max-w-full'}`} style={{ 
+                width: block.content.width || 'auto',
+                maxWidth: '100%'
+              }}>
+                {block.content.height ? (
+                  <AspectRatio ratio={16 / 9}>
+                    <img 
+                      src={block.content.url} 
+                      alt={block.content.alt || block.title} 
+                      className="rounded-md h-full w-full"
+                      style={{
+                        objectFit: block.content.objectFit || 'cover',
+                        objectPosition: block.content.objectPosition || 'center'
+                      }}
+                    />
+                  </AspectRatio>
+                ) : (
+                  <img 
+                    src={block.content.url} 
+                    alt={block.content.alt || block.title} 
+                    className="max-w-full h-auto rounded-md"
+                    style={{
+                      objectFit: block.content.objectFit || 'cover',
+                      objectPosition: block.content.objectPosition || 'center'
+                    }}
+                  />
+                )}
+                
+                {block.content.caption && (
+                  <p className="text-sm text-center mt-2 text-muted-foreground">
+                    {block.content.caption}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-muted h-40 flex items-center justify-center rounded-md">
+                <p className="text-muted-foreground">No image URL provided</p>
+              </div>
             )}
           </div>
         );

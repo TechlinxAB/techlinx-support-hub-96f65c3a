@@ -459,6 +459,33 @@ export type Database = {
           },
         ]
       }
+      impersonation_sessions: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          impersonated_user_id: string
+          original_user_id: string
+          status: Database["public"]["Enums"]["impersonation_status"]
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          impersonated_user_id: string
+          original_user_id: string
+          status?: Database["public"]["Enums"]["impersonation_status"]
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          impersonated_user_id?: string
+          original_user_id?: string
+          status?: Database["public"]["Enums"]["impersonation_status"]
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           case_id: string
@@ -607,6 +634,7 @@ export type Database = {
     Enums: {
       case_priority: "low" | "medium" | "high"
       case_status: "new" | "ongoing" | "resolved" | "completed" | "draft"
+      impersonation_status: "active" | "ended"
       language_preference: "en" | "sv"
       user_role: "user" | "consultant"
     }
@@ -726,6 +754,7 @@ export const Constants = {
     Enums: {
       case_priority: ["low", "medium", "high"],
       case_status: ["new", "ongoing", "resolved", "completed", "draft"],
+      impersonation_status: ["active", "ended"],
       language_preference: ["en", "sv"],
       user_role: ["user", "consultant"],
     },

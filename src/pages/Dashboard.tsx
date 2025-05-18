@@ -1,64 +1,49 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
 import { useStarredCases } from '@/hooks/useStarredCases';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { Loader } from 'lucide-react';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
-  const { profile } = useAuth();
+  const { profile, loading } = useAuth();
   const { loadStarredCases } = useStarredCases();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [navigationAttempted, setNavigationAttempted] = useState(false);
   
-  // Load starred cases on component mount
+  // Load starred cases when component mounts
   useEffect(() => {
-    loadStarredCases();
-  }, [loadStarredCases]);
-  
-  // Enhanced navigation handling with improved direct access for dashboard builder
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const redirectTarget = params.get('redirectTarget');
-    
-    if (redirectTarget && !navigationAttempted) {
-      // Mark that we've attempted navigation to prevent loops
-      setNavigationAttempted(true);
-      
-      console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
-      
-      // For dashboard builder pages, verify role before redirecting
-      if (redirectTarget.includes('company-dashboard-builder')) {
-        if (profile?.role === 'consultant') {
-          toast.info("Loading dashboard builder...");
-          window.location.href = redirectTarget;
-          return;
-        } else {
-          console.log("Cannot redirect: User is not a consultant");
-          toast.error("You don't have permission to access the dashboard builder");
-          return;
-        }
+    if (profile) {
+      try {
+        loadStarredCases();
+      } catch (error) {
+        console.error("Error loading starred cases:", error);
       }
-      
-      // For other pages, use React Router navigation
-      navigate(redirectTarget, { replace: true });
-      toast.info("Redirecting you to the requested page...");
     }
-  }, [location, navigate, navigationAttempted, profile]);
+  }, [profile, loadStarredCases]);
+  
+  // Show loading state
+  if (loading || !profile || !currentUser) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-[80vh]">
+        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Loading dashboard content...</p>
+      </div>
+    );
+  }
+  
+  // Determine which dashboard to show based on user role
+  const showConsultantDashboard = profile.role === 'consultant';
   
   return (
-    <>
-      {currentUser?.role === 'consultant' ? (
+    <div className="w-full">
+      {showConsultantDashboard ? (
         <ConsultantDashboard />
       ) : (
         <UserDashboard />
       )}
-    </>
+    </div>
   );
 };
 
