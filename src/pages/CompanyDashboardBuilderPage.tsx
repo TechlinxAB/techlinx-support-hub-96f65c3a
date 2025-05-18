@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
+import { supabase } from '@/integrations/supabase/client';
 
 const CompanyDashboardBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -156,28 +157,31 @@ const CompanyDashboardBuilderPage = () => {
     }
   };
   
+  // Modified function to directly use Supabase to save block
   const handleSaveBlock = async () => {
     try {
       const toastId = toast.loading("Saving dashboard block...");
       
-      // Extract the block title from formData
+      // Extract the block title and showTitle from formData
       const blockTitle = formData.blockTitle || `New ${selectedBlockType}`;
-      // Extract showTitle option
       const showTitle = formData.showTitle !== false; // Default to true if not explicitly set to false
-      
-      console.log('Saving block with showTitle:', showTitle, 'and formData:', formData);
       
       // Remove blockTitle and showTitle from the content data
       const { blockTitle: _, showTitle: __, ...contentData } = formData;
       
       if (editingBlock) {
         // Update existing block
-        await updateDashboardBlock(editingBlock.id, {
-          title: blockTitle,
-          content: contentData,
-          type: selectedBlockType,
-          showTitle: showTitle
-        });
+        const { error } = await supabase
+          .from('dashboard_blocks')
+          .update({
+            title: blockTitle,
+            content: contentData,
+            type: selectedBlockType,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingBlock.id);
+        
+        if (error) throw error;
         
         console.log('Updated block with showTitle:', showTitle);
       } else {
@@ -187,21 +191,32 @@ const CompanyDashboardBuilderPage = () => {
           ? Math.max(...sortedBlocks.map(b => b.position)) + 1
           : 0;
         
-        await addDashboardBlock({
-          companyId: companyId!,
-          title: blockTitle,
-          content: contentData,
-          type: selectedBlockType,
-          position: maxPosition,
-          showTitle: showTitle
-        });
+        // Make sure we're sending the correct data structure to match the table schema
+        const { error } = await supabase
+          .from('dashboard_blocks')
+          .insert({
+            company_id: companyId!,
+            title: blockTitle,
+            content: contentData,
+            type: selectedBlockType,
+            position: maxPosition,
+            created_by: currentUser?.id || profile?.id || 'unknown'
+          });
+        
+        if (error) {
+          console.error("Supabase insert error:", error);
+          throw error;
+        }
         
         console.log('Created new block with showTitle:', showTitle);
       }
       
+      // After successful save, refresh the dashboard blocks
+      await refetchDashboardBlocks(companyId!);
+      
       toast.success("Block saved successfully", { id: toastId });
       setDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving block:', error);
       toast.error("Failed to save dashboard block", {
         description: error.message || "Please try again"
