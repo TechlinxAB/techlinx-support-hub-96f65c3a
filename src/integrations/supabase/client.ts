@@ -71,7 +71,7 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       detectSessionInUrl: false, // Prevent auto-detection of OAuth redirects to avoid loops
       flowType: 'implicit', // Use implicit flow instead of PKCE to be more resilient
-      debug: process.env.NODE_ENV === 'development' // Enable debug logs in development only
+      debug: false // Disable debug logs to reduce console noise
     },
     global: {
       headers: {
@@ -100,8 +100,31 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Export a helper function to clear auth state in case of corruption
 export const resetAuthState = async () => {
   try {
-    await supabase.auth.signOut({ scope: 'local' });
-    localStorage.removeItem(STORAGE_KEY);
+    // First try storage direct removal for cleaner state
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.log('Error accessing localStorage during resetAuthState:', e);
+    }
+    
+    // Then try official API signout
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch (e) {
+      console.log('Error during supabase signout in resetAuthState:', e);
+    }
+    
+    // Finally ensure in-memory auth state is cleared
+    try {
+      // @ts-ignore - Access internal session state
+      if (supabase.auth.session) {
+        // @ts-ignore
+        supabase.auth.session = null;
+      }
+    } catch (e) {
+      console.log('Error resetting in-memory auth state:', e);
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Error resetting auth state:', error);
@@ -115,6 +138,7 @@ export const forceSignOut = async () => {
     console.log('Force sign out: Starting cleanup process');
     
     // First try removing the token directly from storage
+    // Do this in multiple ways to ensure it's fully removed
     try {
       localStorage.removeItem(STORAGE_KEY);
       console.log('Force sign out: Removed token from localStorage');
@@ -126,13 +150,18 @@ export const forceSignOut = async () => {
     const storage = createFallbackStorage();
     storage.removeItem(STORAGE_KEY);
     
-    // Try to sign out through the API (may fail if already signed out)
+    // Try to sign out through the API (all devices)
     try {
       // Global scope to ensure all devices are logged out
       await supabase.auth.signOut({ scope: 'global' });
       console.log('Force sign out: API signout successful');
     } catch (apiError) {
       console.log('Force sign out: API call failed (expected if already signed out)');
+    }
+    
+    // Clear URL-based auth params if present
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname);
     }
     
     // Ensure session state is cleared from memory
@@ -146,9 +175,28 @@ export const forceSignOut = async () => {
       console.log('Force sign out: Memory cleanup failed');
     }
     
+    // Reset any listeners or callbacks that might be pending
+    try {
+      // @ts-ignore - Force reset of auth state listeners
+      if (supabase.auth._listeners) {
+        // @ts-ignore
+        supabase.auth._listeners = new Map();
+      }
+    } catch (listenersError) {
+      console.log('Force sign out: Listener cleanup failed');
+    }
+    
     return { success: true, wasForced: true };
   } catch (cleanupError) {
     console.error('Failed to force clean up auth state:', cleanupError);
+    
+    // Even if we fail, try one more direct localStorage removal
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      // Ignore
+    }
+    
     return { success: false, error: cleanupError };
   }
 };

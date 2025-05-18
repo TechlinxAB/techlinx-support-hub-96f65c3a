@@ -7,26 +7,37 @@ import { useStarredCases } from '@/hooks/useStarredCases';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { Loader } from 'lucide-react';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
-  const { profile, isImpersonating } = useAuth();
+  const { profile, isImpersonating, loading } = useAuth();
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
   const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  
+  // Wait for auth to be fully ready before showing dashboard
+  useEffect(() => {
+    if (!loading && profile) {
+      setIsReady(true);
+    }
+  }, [loading, profile]);
   
   // Load starred cases on component mount
   useEffect(() => {
-    loadStarredCases();
-  }, [loadStarredCases]);
+    if (profile) {
+      loadStarredCases();
+    }
+  }, [loadStarredCases, profile]);
   
   // Enhanced navigation handling with improved direct access for dashboard builder
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const redirectTarget = params.get('redirectTarget');
     
-    if (redirectTarget && !navigationAttempted) {
+    if (redirectTarget && !navigationAttempted && profile) {
       // Mark that we've attempted navigation to prevent loops
       setNavigationAttempted(true);
       
@@ -36,7 +47,13 @@ const Dashboard = () => {
       if (redirectTarget.includes('company-dashboard-builder')) {
         if (profile?.role === 'consultant') {
           toast.info("Loading dashboard builder...");
-          window.location.href = redirectTarget;
+          try {
+            navigate(redirectTarget);
+          } catch (error) {
+            console.error('Navigation error:', error);
+            // Fallback to direct URL change
+            window.location.href = redirectTarget;
+          }
           return;
         } else {
           console.log("Cannot redirect: User is not a consultant");
@@ -46,10 +63,26 @@ const Dashboard = () => {
       }
       
       // For other pages, use React Router navigation
-      navigate(redirectTarget, { replace: true });
-      toast.info("Redirecting you to the requested page...");
+      try {
+        navigate(redirectTarget, { replace: true });
+        toast.info("Redirecting you to the requested page...");
+      } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to direct URL change
+        window.location.href = redirectTarget;
+      }
     }
   }, [location, navigate, navigationAttempted, profile]);
+  
+  // Show loading state until profile is loaded
+  if (!isReady) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-[80vh]">
+        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    );
+  }
   
   // Determine which dashboard to show based on role
   // When impersonating, use the impersonated user's role

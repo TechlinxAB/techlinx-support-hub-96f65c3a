@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase, resetAuthState, forceSignOut } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -55,7 +55,7 @@ const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
 };
 
 // Maximum time to wait for auth loading before forcing completion
-const MAX_AUTH_LOADING_TIME = 5000; // 5 seconds
+const MAX_AUTH_LOADING_TIME = 8000; // 8 seconds - increased to allow for longer loading
 
 // Provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -65,11 +65,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
   
   // Impersonation state
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
+  
+  // Prevent redundant profile fetches
+  const fetchingProfileRef = useRef<{[key: string]: boolean}>({});
+  const profileFetchAttempts = useRef<{[key: string]: number}>({});
 
   // Reset auth state (for troubleshooting auth issues)
   const resetAuth = useCallback(async () => {
@@ -86,7 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       toast.success('Authentication state has been reset');
       
       // Force reload the page to ensure clean state
-      window.location.href = '/auth';
+      window.location.href = '/auth?reset=complete';
     } catch (err) {
       console.error('Failed to reset auth state:', err);
       toast.error('Failed to reset authentication state');
@@ -134,10 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log('Attempting to sign out');
       
-      // First try the normal sign out
-      await supabase.auth.signOut();
-      
-      // Reset local state regardless of the API call result
+      // First clear local state to prevent any UI flicker
       setUser(null);
       setSession(null);
       setProfile(null);
@@ -146,11 +148,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setImpersonatedProfile(null);
       setProfileLoaded(false);
       
+      // First clear storage directly for reliability
+      try {
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      } catch (e) {
+        console.log('Error accessing localStorage during signOut:', e);
+      }
+      
+      // Then try the normal sign out API
+      await supabase.auth.signOut();
+      
       console.log('Sign out completed and state reset');
     } catch (err) {
       console.error('Error during normal sign out:', err);
       
-      // Even if the normal signout fails, reset state and use the force method
+      // Even if the normal signout fails, ensure state is reset
       setUser(null);
       setSession(null);
       setProfile(null);
@@ -226,15 +238,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Fetch user profile with retry mechanism
+  // Fetch user profile with retry mechanism and timeout handling
   const fetchProfile = useCallback(async (userId: string, retryCount = 0) => {
+    // Use ref to track if we're already fetching profile for this user
+    if (fetchingProfileRef.current[userId]) {
+      console.log(`Already fetching profile for user ${userId}`);
+      return;
+    }
+    
+    // Track profile fetch attempts
+    if (!profileFetchAttempts.current[userId]) {
+      profileFetchAttempts.current[userId] = 0;
+    }
+    profileFetchAttempts.current[userId]++;
+    
+    // Prevent excessive retries
+    if (profileFetchAttempts.current[userId] > 5) {
+      console.error(`Excessive profile fetching attempts for user ${userId}`);
+      setProfileLoaded(true); // Mark as loaded to exit loading state
+      return;
+    }
+    
     try {
       console.log('Fetching profile for user:', userId);
+      fetchingProfileRef.current[userId] = true;
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
+      
+      fetchingProfileRef.current[userId] = false;
       
       if (error) {
         console.error('Error fetching profile:', error);
@@ -244,6 +279,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data) {
         console.log('Profile data received:', data.email);
         setProfile(mapDbProfileToUserProfile(data));
+        setProfileLoaded(true);
       } else {
         console.log('No profile found for user:', userId);
         // If no profile is found and we have retries left, try again after a delay
@@ -253,13 +289,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return; // Exit without marking profile as loaded yet
         }
         setProfile(null);
+        setProfileLoaded(true);
       }
-      
-      // Mark profile as loaded regardless of result
-      setProfileLoaded(true);
-      
     } catch (err) {
       console.error('Exception fetching profile:', err);
+      fetchingProfileRef.current[userId] = false;
+      
       // If we have retries left, try again after a delay
       if (retryCount < 3) {
         console.log(`Retrying profile fetch (${retryCount + 1}/3) in 1 second...`);
@@ -271,7 +306,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Listen for auth changes
+  // Listen for auth changes - with improved error handling and deadlock prevention
   useEffect(() => {
     console.log('Setting up authentication state');
     setLoading(true);
@@ -279,54 +314,91 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Safety timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
       console.log('Auth loading timeout reached, forcing completion');
-      setLoading(false);
+      if (!authInitialized) {
+        setLoading(false);
+        setAuthInitialized(true);
+      }
     }, MAX_AUTH_LOADING_TIME);
     
-    // Set up auth listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
-        setTimeout(() => {
-          fetchProfile(session.user.id);
-        }, 0);
-      } else {
-        setProfile(null);
-        setProfileLoaded(true);
-        setLoading(false);
-      }
-    });
+    // Set up auth listener but use setTimeout to defer Supabase calls to avoid potential deadlocks
+    let subscription: { unsubscribe: () => void } | null = null;
     
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session check:', session ? 'Session found' : 'No session');
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
-        setTimeout(() => {
-          fetchProfile(session.user.id);
-        }, 0);
-      } else {
-        setProfile(null);
-        setProfileLoaded(true);
+    setTimeout(() => {
+      try {
+        const { data } = supabase.auth.onAuthStateChange((event, session) => {
+          // Use setTimeout to avoid Supabase SDK deadlock when callback logic triggers more auth operations
+          setTimeout(() => {
+            console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
+            setSession(session);
+            setUser(session?.user ?? null);
+            
+            if (session?.user) {
+              // Use setTimeout again to defer the profile fetch to avoid Supabase SDK deadlock
+              setTimeout(() => {
+                fetchProfile(session.user.id);
+              }, 0);
+            } else {
+              setProfile(null);
+              setProfileLoaded(true);
+              setLoading(false);
+            }
+            
+            // Mark auth as initialized
+            if (!authInitialized) {
+              setAuthInitialized(true);
+            }
+          }, 0);
+        });
+        
+        subscription = data.subscription;
+      } catch (error) {
+        console.error('Error setting up auth listener:', error);
         setLoading(false);
+        setAuthInitialized(true);
       }
-    }).catch(err => {
-      console.error('Error during initial session check:', err);
-      setLoading(false);
-      setProfileLoaded(true);
-    });
+    }, 0);
+    
+    // Check for existing session - wrapped in setTimeout to avoid potential deadlock
+    setTimeout(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        console.log('Initial session check:', session ? 'Session found' : 'No session');
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
+          setTimeout(() => {
+            fetchProfile(session.user.id);
+          }, 0);
+        } else {
+          setProfile(null);
+          setProfileLoaded(true);
+          setLoading(false);
+          
+          // Mark auth as initialized
+          if (!authInitialized) {
+            setAuthInitialized(true);
+          }
+        }
+      }).catch(err => {
+        console.error('Error during initial session check:', err);
+        setLoading(false);
+        setProfileLoaded(true);
+        
+        // Mark auth as initialized
+        if (!authInitialized) {
+          setAuthInitialized(true);
+        }
+      });
+    }, 100); // Small delay to ensure auth listener is set up first
     
     return () => {
-      subscription.unsubscribe();
       clearTimeout(loadingTimeout);
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, authInitialized]);
   
   // Update loading state when profile is loaded
   useEffect(() => {

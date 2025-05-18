@@ -16,13 +16,15 @@ const ProtectedRoute = () => {
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [navigationCount, setNavigationCount] = useState(0);
   const [lastNavigationTime, setLastNavigationTime] = useState(0);
+  const [profileNotFound, setProfileNotFound] = useState(false);
+  const [isJustLoggedIn, setIsJustLoggedIn] = useState(false);
   
   // Set a loading timeout to prevent infinite loading states
   useEffect(() => {
     if (loading) {
       const timer = setTimeout(() => {
         setLoadingTimeout(true);
-      }, 10000); // 10 seconds
+      }, 5000); // 5 seconds timeout
       
       return () => clearTimeout(timer);
     }
@@ -45,7 +47,40 @@ const ProtectedRoute = () => {
   // Special handle for the auth page
   const isAuthPage = location.pathname === '/auth';
   
-  // Handle authentication redirects with loop detection
+  // Profile timing check - after user becomes available but profile doesn't come through
+  useEffect(() => {
+    // Only start this check when we have a user but no profile
+    if (user && !profile && !loading && !profileNotFound) {
+      const profileTimer = setTimeout(() => {
+        setProfileNotFound(true);
+      }, 3000); // 3 seconds timeout
+      
+      return () => clearTimeout(profileTimer);
+    }
+    
+    // If profile is found, reset the flag
+    if (profile) {
+      setProfileNotFound(false);
+    }
+    
+    return undefined;
+  }, [user, profile, loading, profileNotFound]);
+  
+  // Track when user is freshly logged in to avoid immediate redirects
+  useEffect(() => {
+    if (user && !isJustLoggedIn) {
+      setIsJustLoggedIn(true);
+      // Reset after a bit
+      const timer = setTimeout(() => {
+        setIsJustLoggedIn(false);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [user, isJustLoggedIn]);
+  
+  // Handle authentication redirects with more resilient loop detection
   useEffect(() => {
     // Skip everything if already on auth page to prevent loop
     if (isAuthPage) {
@@ -77,7 +112,7 @@ const ProtectedRoute = () => {
         setRedirectAttempted(false);
         
         // Hard redirect to break any React Router loops
-        window.location.href = '/auth';
+        window.location.href = '/auth?reset=true';
       });
       
       return;
@@ -96,13 +131,25 @@ const ProtectedRoute = () => {
       // Force sign out and reset auth state
       forceSignOut().then(() => {
         // Hard redirect to break loops
-        window.location.href = '/auth';
+        window.location.href = '/auth?reset=true';
       });
       
       return;
     }
     
     console.log("Auth state loaded, user:", !!user, "profile:", !!profile);
+    
+    // Special case: if we have user but can't get profile after a timeout
+    if (user && !profile && profileNotFound && !isJustLoggedIn) {
+      console.log("Profile could not be loaded, redirecting to auth for clean session");
+      toast.error("Authentication issue", {
+        description: "Could not load your user profile. Please sign in again."
+      });
+      forceSignOut().then(() => {
+        window.location.href = '/auth?profile=missing';
+      });
+      return;
+    }
     
     // If there's no user and we haven't attempted redirect yet
     if (!user && !redirectAttempted) {
@@ -118,15 +165,37 @@ const ProtectedRoute = () => {
         currentPath = '';
       }
       
-      // Use the navigate function for the redirect
-      navigate('/auth', { replace: true, state: { from: currentPath || '/' } });
+      // Try to use navigate for better UX but fallback to hard redirect if needed
+      try {
+        navigate('/auth', { 
+          replace: true, 
+          state: { from: currentPath || '/' } 
+        });
+      } catch (error) {
+        console.error("Navigation error:", error);
+        // Fallback to direct redirect
+        window.location.href = '/auth';
+      }
     } else if (user && profile) {
       // Reset the redirect flag when user is available
       if (redirectAttempted) {
         setRedirectAttempted(false);
       }
     }
-  }, [user, profile, loading, loadingTimeout, navigate, location.pathname, redirectAttempted, navigationCount, lastNavigationTime, isAuthPage]);
+  }, [
+    user, 
+    profile, 
+    loading, 
+    loadingTimeout, 
+    navigate, 
+    location.pathname, 
+    redirectAttempted, 
+    navigationCount, 
+    lastNavigationTime, 
+    isAuthPage, 
+    profileNotFound, 
+    isJustLoggedIn
+  ]);
   
   // Check if the path requires a consultant role
   useEffect(() => {
@@ -184,13 +253,15 @@ const ProtectedRoute = () => {
   }
   
   // Show recovery option if loading is taking too long
-  if (loadingTimeout && !authResetAttempted) {
+  if ((loadingTimeout && !authResetAttempted) || (user && !profile && profileNotFound)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <div className="max-w-md p-6 space-y-4 bg-white shadow-md rounded-md">
           <h2 className="text-xl font-semibold text-red-600">Authentication Issue</h2>
           <p className="text-gray-600">
-            Authentication is taking longer than expected. You might be experiencing an issue with your auth session.
+            {user && !profile && profileNotFound 
+              ? "Your user profile could not be loaded. This might indicate a data issue."
+              : "Authentication is taking longer than expected. You might be experiencing an issue with your auth session."}
           </p>
           <Button 
             onClick={handleResetAuth} 

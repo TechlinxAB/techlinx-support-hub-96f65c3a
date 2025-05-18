@@ -25,38 +25,32 @@ const LogoutButton = ({
     
     try {
       setIsLoggingOut(true);
-      // Show a toast to indicate logout is in progress
       const toastId = toast.loading('Logging out...');
       
-      // First clear local storage directly to ensure clean state
+      // First clear the Supabase token directly from localStorage
       localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
       
-      // First try the context method
-      await signOut();
-      
-      // As a backup, also call our enhanced force signout method
-      await forceSignOut();
+      // Use a Promise.allSettled to ensure we try all logout methods
+      // even if some fail - this is more reliable than sequential try/catch
+      await Promise.allSettled([
+        signOut(),  // AuthContext method
+        forceSignOut() // Direct client method
+      ]);
       
       toast.success('Successfully logged out', { id: toastId });
       
-      // Small delay to allow toast to show
-      setTimeout(() => {
-        // Hard redirect to auth page to ensure clean state
-        window.location.href = '/auth';
-      }, 100);
+      // Hard redirect to auth page with a clean slate
+      window.location.href = '/auth?clean=true';
+      
     } catch (error) {
       console.error('Error during logout:', error);
+      toast.error('Failed to log out. Trying force logout...');
       
-      // Even if there's an error, try force signout as a last resort
       try {
+        // Last resort: clear storage and force redirect
         localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
         await forceSignOut();
-        toast.info('Forced logout completed due to error in normal logout flow.');
-        
-        // Small delay to allow toast to show
-        setTimeout(() => {
-          window.location.href = '/auth';
-        }, 100);
+        window.location.href = '/auth?forced=true';
       } catch (secondError) {
         console.error('Critical error during forced logout:', secondError);
         toast.error('Failed to log out. Please try refreshing the page.');

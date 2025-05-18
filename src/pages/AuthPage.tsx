@@ -19,6 +19,33 @@ const AuthPage = () => {
   
   // Get the redirect path from location state
   const from = location.state?.from || '/';
+  const searchParams = new URLSearchParams(location.search);
+  const cleanSession = searchParams.get('clean') === 'true';
+  const forcedLogout = searchParams.get('forced') === 'true';
+  
+  // Reset any stale auth state that might cause issues
+  useEffect(() => {
+    // If ?clean=true is in the URL, this was a manual logout so ensure clean state
+    if (cleanSession) {
+      console.log('Clean session requested, resetting auth state');
+      resetAuthState().then(() => {
+        // Remove the clean param to prevent infinite loops on page refresh
+        if (window.history.replaceState) {
+          const newUrl = window.location.pathname;
+          window.history.replaceState(null, '', newUrl);
+        }
+      });
+    }
+    
+    if (forcedLogout) {
+      toast.info('You were logged out due to an authentication issue');
+      // Remove the forced param to prevent showing the message on refresh
+      if (window.history.replaceState) {
+        const newUrl = window.location.pathname;
+        window.history.replaceState(null, '', newUrl);
+      }
+    }
+  }, [cleanSession, forcedLogout]);
   
   // Check if user is already logged in
   useEffect(() => {
@@ -30,7 +57,7 @@ const AuthPage = () => {
       try {
         // Check if we have a session with invalid tokens causing 401s
         const storage = localStorage.getItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
-        if (storage && storage.includes('error')) {
+        if (storage && (storage.includes('error') || storage.includes('401'))) {
           console.log('Found potentially corrupted auth state, cleaning up');
           localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
         }
@@ -60,11 +87,20 @@ const AuthPage = () => {
           // Use a small timeout to prevent immediate redirect that can cause loops
           redirectTimeout = window.setTimeout(() => {
             if (isMounted) {
-              // Use window.location.href to avoid React Router potential loops
-              if (from === '/') {
-                window.location.href = '/';
-              } else {
-                window.location.href = from;
+              try {
+                // First try React Router navigation
+                navigate(from);
+                
+                // If we're still on the auth page after navigation attempt,
+                // use a hard redirect as fallback
+                setTimeout(() => {
+                  if (window.location.pathname === '/auth' && isMounted) {
+                    window.location.href = from === '/' ? '/' : from;
+                  }
+                }, 100);
+              } catch (navError) {
+                // Fallback to direct navigation
+                window.location.href = from === '/' ? '/' : from;
               }
             }
           }, 500);
@@ -114,13 +150,21 @@ const AuthPage = () => {
       console.log('Sign in successful:', data.session ? 'Session exists' : 'No session');
       toast.success("You have been logged in");
       
-      // Use window.location.href for a clean navigation that avoids React Router
-      // Small delay before redirect to allow toast to show
+      // Allow the toast to show before redirect
       setTimeout(() => {
-        if (from && from !== '/auth') {
-          window.location.href = from;
-        } else {
-          window.location.href = '/';
+        try {
+          // First try React Router navigation
+          navigate(from);
+          
+          // Fallback to direct navigation if React Router fails
+          setTimeout(() => {
+            if (window.location.pathname === '/auth') {
+              window.location.href = from === '/' ? '/' : from;
+            }
+          }, 100);
+        } catch (navError) {
+          // Direct navigation fallback
+          window.location.href = from === '/' ? '/' : from;
         }
       }, 300);
       
