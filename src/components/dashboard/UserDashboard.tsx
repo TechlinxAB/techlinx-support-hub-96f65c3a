@@ -11,7 +11,6 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
-  // Context values
   const { currentUser, cases } = useAppContext();
   const { authState } = useAuth();
   
@@ -20,27 +19,18 @@ const UserDashboard = () => {
   const [isReady, setIsReady] = useState(false);
   const errorHandledRef = useRef(false);
   
-  // Create stable primitive references to prevent hook dependency issues
-  // These must be unconditionally called at the top level
-  const userId = currentUser?.id;
-  const userName = currentUser?.name;
-  const userCompanyId = currentUser?.companyId;
-  
-  // Only proceed if auth is stable and user is authenticated
-  const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
-  
   // Wait for auth to stabilize before processing
   useEffect(() => {
-    if (isAuthReady && currentUser) {
+    if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && currentUser) {
       setIsReady(true);
     } else if (authState === 'UNAUTHENTICATED') {
       // If user is unauthenticated, don't try to render dashboard
       setIsReady(false);
     }
-  }, [isAuthReady, currentUser, authState]);
+  }, [authState, currentUser]);
   
-  // Early return for loading state - must be placed after all hooks
-  if (!isReady || !isAuthReady) {
+  // Show loading state until ready
+  if (!isReady) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -50,26 +40,26 @@ const UserDashboard = () => {
       </div>
     );
   }
-
-  // Safely derive companyId without creating new objects
-  const safeCompanyId = useMemo(() => {
-    if (!userCompanyId) return undefined;
-    if (typeof userCompanyId !== 'string') return undefined;
-    if (userCompanyId === "undefined" || userCompanyId === "null") return undefined;
-    
-    return userCompanyId;
-  }, [userCompanyId]); // Only depend on the userCompanyId primitive
   
-  // Fetch company settings and announcements
+  // Process safe company ID - do this after ready check to ensure currentUser exists
+  const safeCompanyId = (() => {
+    const companyId = currentUser?.companyId;
+    if (!companyId) return undefined;
+    if (typeof companyId !== 'string') return undefined;
+    if (companyId === "undefined" || companyId === "null") return undefined;
+    return companyId;
+  })();
+  
+  // Fetch data - these will be skipped if not ready
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
   const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
-
-  // Memoize user's cases to prevent recreation on each render
-  const userCases = useMemo(() => {
-    if (!userId || !cases) return [];
+  
+  // Filter user cases - do this after all other hooks
+  const userCases = (() => {
+    if (!currentUser?.id || !cases) return [];
     
     return cases
-      .filter(c => c.userId === userId)
+      .filter(c => c.userId === currentUser.id)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .filter(c => c.status !== 'completed')
       .slice(0, 3)
@@ -77,12 +67,12 @@ const UserDashboard = () => {
         id: c.id,
         title: c.title,
         status: c.status,
-        updatedAt: c.updatedAt.toISOString() // Convert Date to string
+        updatedAt: c.updatedAt.toISOString()
       }));
-  }, [userId, cases]);
+  })();
   
-  // Track settings errors - with useCallback to ensure stable function reference
-  const handleSettingsError = useCallback(() => {
+  // Handle settings error - use useEffect to avoid direct function calls during render
+  useEffect(() => {
     if (settingsError && !errorHandledRef.current) {
       console.error("Dashboard settings error:", settingsError);
       setHasSettingsError(true);
@@ -93,20 +83,11 @@ const UserDashboard = () => {
     }
   }, [settingsError]);
   
-  // Handle errors with useEffect to avoid direct function calls during render
-  useEffect(() => {
-    handleSettingsError();
-  }, [handleSettingsError]);
+  // Get first name for welcome message
+  const firstName = currentUser?.name?.split(' ')?.[0] || 'User';
   
-  // Get user's first name for welcome message - ensure stable reference
-  const firstName = useMemo(() => {
-    return userName?.split(' ')?.[0] || 'User';
-  }, [userName]);
-  
-  const loading = settingsLoading || announcementsLoading;
-  
-  // Second loading state - must be consistent across renders
-  if (loading) {
+  // Show loading state for settings and announcements
+  if (settingsLoading || announcementsLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -117,7 +98,7 @@ const UserDashboard = () => {
     );
   }
   
-  // Use the dashboard with default settings if needed
+  // Render the dashboard
   return (
     <div className="space-y-6">
       {hasSettingsError && (
