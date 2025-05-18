@@ -7,16 +7,21 @@ import ActiveCasesList from './ActiveCasesList';
 import CompanyAnnouncements from './CompanyAnnouncements';
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 import { useCompanyAnnouncements } from '@/hooks/useCompanyAnnouncements';
-import { UserCaseItem } from '@/types/dashboardTypes';
 import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
+  // Use primitive references to context values to prevent re-renders
   const { currentUser, cases } = useAppContext();
   const { authState } = useAuth();
   const [hasSettingsError, setHasSettingsError] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const errorHandledRef = useRef(false);
+  
+  // Create stable primitive references to prevent hook dependency issues
+  const userId = useMemo(() => currentUser?.id, [currentUser?.id]);
+  const userName = useMemo(() => currentUser?.name, [currentUser?.name]);
+  const userCompanyId = useMemo(() => currentUser?.companyId, [currentUser?.companyId]);
   
   // Only proceed if auth is stable and user is authenticated
   const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
@@ -42,9 +47,6 @@ const UserDashboard = () => {
       </div>
     );
   }
-  
-  // Safely extract user ID once to prevent multiple object creation
-  const userId = currentUser?.id;
 
   // Memoize user's cases to prevent recreation on each render
   const userCases = useMemo(() => {
@@ -65,13 +67,12 @@ const UserDashboard = () => {
   
   // Safely derive companyId without creating new objects
   const safeCompanyId = useMemo(() => {
-    if (!currentUser) return undefined;
-    if (!currentUser.companyId) return undefined;
-    if (typeof currentUser.companyId !== 'string') return undefined;
-    if (currentUser.companyId === "undefined" || currentUser.companyId === "null") return undefined;
+    if (!userCompanyId) return undefined;
+    if (typeof userCompanyId !== 'string') return undefined;
+    if (userCompanyId === "undefined" || userCompanyId === "null") return undefined;
     
-    return currentUser.companyId;
-  }, [currentUser?.companyId]); // Only depend on the companyId property
+    return userCompanyId;
+  }, [userCompanyId]); // Only depend on the userCompanyId primitive
   
   // Fetch company settings and announcements
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
@@ -107,10 +108,10 @@ const UserDashboard = () => {
     );
   }
   
-  // Get user's first name for welcome message
+  // Get user's first name for welcome message - ensure stable reference
   const firstName = useMemo(() => {
-    return currentUser?.name?.split(' ')[0] || 'User';
-  }, [currentUser?.name]);
+    return userName?.split(' ')[0] || 'User';
+  }, [userName]);
   
   // Use the dashboard with default settings if needed
   return (
