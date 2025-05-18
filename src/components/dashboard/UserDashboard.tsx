@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import DashboardWelcome from './DashboardWelcome';
 import QuickActionButtons from './QuickActionButtons';
@@ -11,20 +11,19 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
+  // Core hooks must be called unconditionally at the top level
   const { currentUser, cases } = useAppContext();
   const { authState } = useAuth();
   
   // Local state
-  const [hasSettingsError, setHasSettingsError] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const errorHandledRef = useRef(false);
+  const [hasSettingsError, setHasSettingsError] = useState(false);
   
   // Wait for auth to stabilize before processing
   useEffect(() => {
     if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && currentUser) {
       setIsReady(true);
     } else if (authState === 'UNAUTHENTICATED') {
-      // If user is unauthenticated, don't try to render dashboard
       setIsReady(false);
     }
   }, [authState, currentUser]);
@@ -40,22 +39,30 @@ const UserDashboard = () => {
       </div>
     );
   }
+
+  // Safe extraction of company ID - only after we've confirmed currentUser exists
+  const companyId = currentUser?.companyId;
+  const safeCompanyId = typeof companyId === 'string' && 
+                        companyId !== 'undefined' && 
+                        companyId !== 'null' ? 
+                        companyId : undefined;
   
-  // Process safe company ID - do this after ready check to ensure currentUser exists
-  const safeCompanyId = (() => {
-    const companyId = currentUser?.companyId;
-    if (!companyId) return undefined;
-    if (typeof companyId !== 'string') return undefined;
-    if (companyId === "undefined" || companyId === "null") return undefined;
-    return companyId;
-  })();
-  
-  // Fetch data - these will be skipped if not ready
+  // Fetch data with the safe company ID
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
   const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
   
-  // Filter user cases - do this after all other hooks
-  const userCases = (() => {
+  // Handle settings error
+  useEffect(() => {
+    if (settingsError) {
+      console.error("Dashboard settings error:", settingsError);
+      setHasSettingsError(true);
+    } else {
+      setHasSettingsError(false);
+    }
+  }, [settingsError]);
+  
+  // Filter user cases - simple function call, not a hook
+  const getUserCases = () => {
     if (!currentUser?.id || !cases) return [];
     
     return cases
@@ -69,21 +76,9 @@ const UserDashboard = () => {
         status: c.status,
         updatedAt: c.updatedAt.toISOString()
       }));
-  })();
+  };
   
-  // Handle settings error - use useEffect to avoid direct function calls during render
-  useEffect(() => {
-    if (settingsError && !errorHandledRef.current) {
-      console.error("Dashboard settings error:", settingsError);
-      setHasSettingsError(true);
-      errorHandledRef.current = true;
-    } else if (!settingsError) {
-      setHasSettingsError(false);
-      errorHandledRef.current = false;
-    }
-  }, [settingsError]);
-  
-  // Get first name for welcome message
+  const userCases = getUserCases();
   const firstName = currentUser?.name?.split(' ')?.[0] || 'User';
   
   // Show loading state for settings and announcements
