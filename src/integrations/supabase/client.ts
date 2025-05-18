@@ -67,7 +67,8 @@ export const supabase = createClient<Database>(
     global: {
       headers: {
         'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+        'Content-Type': 'application/json'
       },
       // Add additional fetch parameters for CORS
       fetch: (url, options = {}) => {
@@ -81,6 +82,7 @@ export const supabase = createClient<Database>(
             ...headers,
             'apikey': SUPABASE_PUBLISHABLE_KEY,
             'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+            'Content-Type': 'application/json',
             'Cache-Control': 'no-cache'
           }
         });

@@ -215,6 +215,8 @@ const CompanyDashboardBuilderPage = () => {
         
         if (error) {
           console.error("Supabase insert error details:", error);
+          console.error("Error code:", error.code);
+          console.error("Error message:", error.message);
           throw error;
         }
         
@@ -232,6 +234,7 @@ const CompanyDashboardBuilderPage = () => {
       if (error.message) console.error('Error message:', error.message);
       if (error.details) console.error('Error details:', error.details);
       if (error.hint) console.error('Error hint:', error.hint);
+      if (error.code) console.error('Error code:', error.code);
       
       toast.error("Failed to save dashboard block", {
         description: (error.message || error.hint || "Please try again")
