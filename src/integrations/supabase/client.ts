@@ -16,43 +16,25 @@ export const supabase = createClient<Database>(
       // Use localStorage for session persistence
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       autoRefreshToken: true,
-      detectSessionInUrl: false // Disable auto URL detection to prevent redirects
+      detectSessionInUrl: false, // Disable auto URL detection to prevent redirects
     }
   }
 );
 
-// Global session state checker to prevent duplicate checks
-const SESSION_STATE = {
-  LAST_CHECK: 0,
-  COOLDOWN_MS: 2000,
-  RESULT: null
-};
-
-// Helper to check if we have a valid session with debounce
+// Only cache the session state if needed by another utility
 export const hasValidSession = async () => {
   try {
-    const now = Date.now();
-    
-    // Use cached result if within cooldown period
-    if (now - SESSION_STATE.LAST_CHECK < SESSION_STATE.COOLDOWN_MS && SESSION_STATE.RESULT !== null) {
-      return SESSION_STATE.RESULT;
-    }
-    
-    SESSION_STATE.LAST_CHECK = now;
     const { data, error } = await supabase.auth.getSession();
     
     if (error) {
       console.error("Error checking session:", error.message);
-      SESSION_STATE.RESULT = false;
       return false;
     }
     
     const isValid = !!data?.session;
-    SESSION_STATE.RESULT = isValid;
     return isValid;
   } catch (err) {
     console.error("Failed to check session:", err);
-    SESSION_STATE.RESULT = false;
     return false;
   }
 };

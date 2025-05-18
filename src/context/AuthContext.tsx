@@ -16,12 +16,12 @@ interface AuthContextType {
 // Create the context with undefined as default
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Global auth state tracker
+// Static auth state tracker - kept outside of component to prevent re-renders
 const AUTH_STATE = {
-  IS_INITIALIZING: false,
-  IS_INITIALIZED: false,
-  LAST_AUTH_ACTION: 0,
-  DEBOUNCE_TIME: 2000, // Increased debounce time to prevent rapid actions
+  initialized: false,
+  initializing: false,
+  lastAuthAction: 0,
+  debounceTime: 5000, // Much longer debounce to prevent any rapid auth state changes
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -34,29 +34,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Refs for cleanup and state tracking
   const isMounted = useRef(true);
   const authListenerUnsubscribe = useRef<(() => void) | null>(null);
-  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
-  const profileFetchAttempted = useRef<Record<string, boolean>>({});
+  const profileFetchAttempt = useRef<Record<string, boolean>>({});
   
-  // Clean up function to prevent memory leaks and cancel pending operations
-  const cleanupResources = () => {
-    // Clear all timeouts
-    timeoutRefs.current.forEach(timeoutId => clearTimeout(timeoutId));
-    timeoutRefs.current = [];
-    
-    // Unsubscribe from auth listener
-    if (authListenerUnsubscribe.current) {
-      console.log("Cleaning up auth subscription");
-      authListenerUnsubscribe.current();
-      authListenerUnsubscribe.current = null;
-    }
-  };
-  
-  // Fetch user profile with improved tracking to prevent duplicate requests
-  const fetchUserProfile = async (userId: string): Promise<void> => {
-    if (!isMounted.current || profileFetchAttempted.current[userId]) return;
-    
-    // Mark this user ID as having a fetch attempt
-    profileFetchAttempted.current[userId] = true;
+  // Fetch user profile - now simplified
+  const fetchUserProfile = async (userId: string) => {
+    if (profileFetchAttempt.current[userId]) return;
+    profileFetchAttempt.current[userId] = true;
     
     try {
       console.log("Fetching profile for user:", userId);
@@ -81,87 +64,83 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
   
-  // Set user info with debouncing to prevent rapid state changes
-  const setUserInfo = (newSession: Session | null) => {
+  // Set user info with proper debouncing
+  const updateAuthState = (newSession: Session | null) => {
+    if (!isMounted.current) return;
+    
     const now = Date.now();
-    if (now - AUTH_STATE.LAST_AUTH_ACTION < AUTH_STATE.DEBOUNCE_TIME) {
-      // Skip if too soon after last update
-      return;
+    if (now - AUTH_STATE.lastAuthAction < AUTH_STATE.debounceTime) {
+      return; // Skip if too soon after last update
     }
     
-    AUTH_STATE.LAST_AUTH_ACTION = now;
+    AUTH_STATE.lastAuthAction = now;
     
     if (newSession?.user) {
-      console.log("Setting new user:", newSession.user.id);
+      console.log("Setting authenticated user state:", newSession.user.id);
       setSession(newSession);
       setUser(newSession.user);
       
       // Fetch profile with a slight delay to avoid auth deadlocks
-      const timeoutId = setTimeout(() => {
-        if (isMounted.current) {
+      setTimeout(() => {
+        if (isMounted.current && newSession.user) {
           fetchUserProfile(newSession.user.id);
         }
       }, 100);
-      
-      timeoutRefs.current.push(timeoutId);
     } else {
-      // Clear user data if no session
+      console.log("Clearing user state - no session");
       setSession(null);
       setUser(null);
       setProfile(null);
     }
   };
   
-  // Initialize authentication one time only
+  // Initialize authentication once only
   useEffect(() => {
-    // Set mounted flag for cleanup
+    // Set mounted flag
     isMounted.current = true;
     
     const initAuth = async () => {
       // Prevent multiple initializations
-      if (AUTH_STATE.IS_INITIALIZING || AUTH_STATE.IS_INITIALIZED) {
+      if (AUTH_STATE.initializing || AUTH_STATE.initialized) {
         return;
       }
       
-      AUTH_STATE.IS_INITIALIZING = true;
+      AUTH_STATE.initializing = true;
       console.log("Initializing auth state");
       
       try {
-        // First set up the auth change listener to catch future changes
+        // First set up the auth change listener
         const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
           if (!isMounted.current) return;
           
           console.log(`Auth state changed: ${event} for user ${newSession?.user?.id || 'null'}`);
           
           if (event === 'SIGNED_OUT') {
-            // Handle sign out - clear state immediately
+            // Handle sign out
             setSession(null);
             setUser(null);
             setProfile(null);
-            profileFetchAttempted.current = {};
+            profileFetchAttempt.current = {};
             return;
           }
           
-          // For all other events, update session state
-          setUserInfo(newSession);
+          // For other events, update session state with debouncing
+          updateAuthState(newSession);
         });
         
-        // Store unsubscribe function for cleanup
+        // Store unsubscribe function
         authListenerUnsubscribe.current = authListener.subscription.unsubscribe;
         
-        // After setting up the listener, check for an existing session
+        // Check for existing session
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error("Error getting initial session:", error.message);
-          console.log("No valid session found during initial check");
           setSession(null);
           setUser(null);
-          
         } else if (data?.session) {
           console.log("Found existing session for user:", data.session.user.id);
-          setUserInfo(data.session);
-          
+          updateAuthState(data.session);
         } else {
           console.log("No existing session found");
           setSession(null);
@@ -174,40 +153,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } finally {
         if (isMounted.current) {
           setLoading(false);
-          AUTH_STATE.IS_INITIALIZING = false;
-          AUTH_STATE.IS_INITIALIZED = true;
+          AUTH_STATE.initializing = false;
+          AUTH_STATE.initialized = true;
         }
       }
     };
     
-    // Run initialization if not already done
-    if (!AUTH_STATE.IS_INITIALIZED) {
-      initAuth();
-    } else {
-      setLoading(false);
-    }
+    initAuth();
     
     // Cleanup on unmount
     return () => {
       isMounted.current = false;
-      cleanupResources();
+      
+      if (authListenerUnsubscribe.current) {
+        console.log("Cleaning up auth subscription");
+        authListenerUnsubscribe.current();
+        authListenerUnsubscribe.current = null;
+      }
     };
   }, []);
   
-  // Improved sign out function with proper error handling
+  // Improved sign out function
   const signOut = async () => {
     try {
       console.log("Attempting to sign out user");
       
       // Prevent rapid signout requests
       const now = Date.now();
-      if (now - AUTH_STATE.LAST_AUTH_ACTION < AUTH_STATE.DEBOUNCE_TIME) {
+      if (now - AUTH_STATE.lastAuthAction < AUTH_STATE.debounceTime) {
         return;
       }
-      AUTH_STATE.LAST_AUTH_ACTION = now;
+      AUTH_STATE.lastAuthAction = now;
       
       // Clear profile fetch tracking
-      profileFetchAttempted.current = {};
+      profileFetchAttempt.current = {};
       
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
@@ -218,8 +197,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
       
-      // Clear local state after successful signout
-      // (The onAuthStateChange will also trigger this but we do it here for immediate effect)
+      // Clear local state
       setSession(null);
       setUser(null);
       setProfile(null);

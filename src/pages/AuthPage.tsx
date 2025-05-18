@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,11 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-// Auth page state manager
+// Simple state tracker
 const AUTH_PAGE = {
-  REDIRECT_ATTEMPTED: false,
-  LAST_REDIRECT: 0,
-  COOLDOWN_MS: 2000, // Increased to prevent rapid redirects
-  REDIRECT_IN_PROGRESS: false
+  redirecting: false,
+  lastRedirectTime: 0,
+  redirectCooldown: 5000 // Long cooldown to prevent loops
 };
 
 const AuthPage = () => {
@@ -26,7 +25,6 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const location = useLocation();
-  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Get return URL from query params
   const getReturnUrl = () => {
@@ -34,41 +32,26 @@ const AuthPage = () => {
     return params.get('returnUrl') || '/';
   };
   
-  // Clean up timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (redirectTimeoutRef.current) {
-        clearTimeout(redirectTimeoutRef.current);
-        redirectTimeoutRef.current = null;
-      }
-    };
-  }, []);
-  
   // Redirect authenticated users away from login page
   useEffect(() => {
-    // Skip if redirect is in progress
-    if (AUTH_PAGE.REDIRECT_IN_PROGRESS) return;
+    if (AUTH_PAGE.redirecting) return;
     
     if (user) {
-      // Apply cooldown to prevent redirect loops
+      // Apply cooldown
       const now = Date.now();
-      if (now - AUTH_PAGE.LAST_REDIRECT < AUTH_PAGE.COOLDOWN_MS) return;
+      if (now - AUTH_PAGE.lastRedirectTime < AUTH_PAGE.redirectCooldown) return;
       
       console.log("User already authenticated, redirecting away from auth page");
-      AUTH_PAGE.LAST_REDIRECT = now;
-      AUTH_PAGE.REDIRECT_IN_PROGRESS = true;
+      AUTH_PAGE.lastRedirectTime = now;
+      AUTH_PAGE.redirecting = true;
       
-      // Short delay to allow state to stabilize
-      redirectTimeoutRef.current = setTimeout(() => {
-        const returnUrl = getReturnUrl();
-        navigate(returnUrl, { replace: true });
-        
-        // Reset redirect in progress after a delay
-        setTimeout(() => {
-          AUTH_PAGE.REDIRECT_IN_PROGRESS = false;
-        }, 500);
-        
-      }, 100);
+      const returnUrl = getReturnUrl();
+      navigate(returnUrl, { replace: true });
+      
+      // Reset redirect flag after a delay
+      setTimeout(() => {
+        AUTH_PAGE.redirecting = false;
+      }, 1000);
     }
   }, [user, navigate, location]);
   
