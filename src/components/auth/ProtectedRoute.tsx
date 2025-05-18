@@ -6,17 +6,12 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ProtectedRoute = () => {
-  const { status, loading } = useAuth();
+  const { status } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
   // Simple effect to handle redirects based on auth status
   React.useEffect(() => {
-    // Wait for initial loading to complete
-    if (loading || status === 'LOADING') {
-      return;
-    }
-    
     // If not authenticated and not already at auth page, redirect to auth
     if (status === 'UNAUTHENTICATED' && location.pathname !== '/auth') {
       console.log("No authenticated user, redirecting to auth");
@@ -30,10 +25,10 @@ const ProtectedRoute = () => {
         toast.error("Please sign in to continue");
       }
     }
-  }, [status, loading, navigate, location.pathname, location.search]);
+  }, [status, navigate, location.pathname, location.search]);
   
   // Show loading state
-  if (loading || status === 'LOADING') {
+  if (status === 'LOADING') {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

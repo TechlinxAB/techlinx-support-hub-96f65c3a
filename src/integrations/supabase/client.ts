@@ -6,7 +6,7 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
-// Simple storage provider that uses localStorage with basic fallback
+// Improved storage provider with better error handling
 const getStorageProvider = () => {
   if (typeof window === 'undefined') {
     return undefined; // No storage in SSR context
@@ -18,9 +18,28 @@ const getStorageProvider = () => {
     window.localStorage.removeItem(testKey);
     
     return {
-      getItem: (key) => window.localStorage.getItem(key),
-      setItem: (key, value) => window.localStorage.setItem(key, value),
-      removeItem: (key) => window.localStorage.removeItem(key)
+      getItem: (key) => {
+        try {
+          return window.localStorage.getItem(key);
+        } catch (e) {
+          console.warn('Error reading from localStorage:', e);
+          return null;
+        }
+      },
+      setItem: (key, value) => {
+        try {
+          window.localStorage.setItem(key, value);
+        } catch (e) {
+          console.warn('Error writing to localStorage:', e);
+        }
+      },
+      removeItem: (key) => {
+        try {
+          window.localStorage.removeItem(key);
+        } catch (e) {
+          console.warn('Error removing from localStorage:', e);
+        }
+      }
     };
   } catch (e) {
     console.warn('localStorage not available, using memory storage');
@@ -33,7 +52,7 @@ const getStorageProvider = () => {
   }
 };
 
-// Create and export the supabase client with simplified configuration
+// Create and export the supabase client with improved configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
@@ -41,7 +60,9 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       storage: getStorageProvider(),
-      autoRefreshToken: true
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'implicit'
     }
   }
 );
@@ -57,14 +78,24 @@ export const hasValidSession = async (): Promise<boolean> => {
   }
 };
 
-// Simple function to clear auth data
+// Enhanced function to clear auth data
 export const clearAuthData = (): void => {
   try {
     if (typeof window !== 'undefined') {
+      // First try to use the supabase method
+      supabase.auth.signOut({ scope: 'local' })
+        .catch(err => console.warn('Error in supabase signOut local:', err));
+      
+      // Backup: also clear localStorage manually
       Object.keys(localStorage).forEach(key => {
         if (key.startsWith('supabase.auth.')) {
           localStorage.removeItem(key);
         }
+      });
+      
+      // Clear any potential session cookies
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
       });
     }
   } catch (error) {

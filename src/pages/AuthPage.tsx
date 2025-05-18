@@ -32,7 +32,7 @@ const AuthPage = () => {
       const returnUrl = getReturnUrl();
       navigate(returnUrl, { replace: true });
     }
-  }, [status, navigate]);
+  }, [status, navigate, searchParams]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,8 +128,12 @@ const AuthPage = () => {
           </CardContent>
           
           <CardFooter className="flex flex-col space-y-3">
-            <Button type="submit" className="w-full" disabled={loading || status === 'LOADING'}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || status === 'LOADING'}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Sign In
             </Button>
           </CardFooter>
@@ -138,9 +142,6 @@ const AuthPage = () => {
         <CardFooter className="flex flex-col space-y-2 border-t border-border pt-4">
           <p className="text-sm text-muted-foreground text-center">
             New users must be created by an administrator through the User Management page.
-          </p>
-          <p className="text-xs text-muted-foreground text-center">
-            Auth Status: {status}
           </p>
         </CardFooter>
       </Card>

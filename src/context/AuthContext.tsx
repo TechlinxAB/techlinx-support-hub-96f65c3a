@@ -1,7 +1,7 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, clearAuthData } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 // Simple auth states
@@ -58,39 +58,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Initialize auth state
   useEffect(() => {
+    console.log("Initializing auth state");
     isMounted.current = true;
     
-    // First set up the auth change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (!isMounted.current) return;
-      
-      console.log(`Auth state changed: ${event} for user ${newSession?.user?.id || 'null'}`);
-      
-      // Handle sign out event
-      if (event === 'SIGNED_OUT') {
-        setStatus('UNAUTHENTICATED');
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        return;
-      }
-      
-      // Handle sign in events
-      if (newSession?.user) {
-        setStatus('AUTHENTICATED');
-        setSession(newSession);
-        setUser(newSession.user);
-        
-        // Fetch profile with slight delay to avoid race conditions
-        setTimeout(() => {
-          if (isMounted.current && newSession.user) {
-            fetchUserProfile(newSession.user.id);
-          }
-        }, 100);
-      }
-    });
-    
-    // Check for existing session AFTER setting up the listener
+    // First check for existing session
     const checkSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -122,6 +93,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
     
+    // Set up auth change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!isMounted.current) return;
+      
+      console.log(`Auth state changed: ${event} for user ${newSession?.user?.id || 'null'}`);
+      
+      // Handle auth events
+      switch (event) {
+        case 'SIGNED_IN':
+          if (newSession) {
+            setStatus('AUTHENTICATED');
+            setSession(newSession);
+            setUser(newSession.user);
+            
+            // Fetch profile after a slight delay to avoid race conditions
+            setTimeout(() => {
+              if (isMounted.current && newSession.user) {
+                fetchUserProfile(newSession.user.id);
+              }
+            }, 100);
+          }
+          break;
+          
+        case 'SIGNED_OUT':
+          setStatus('UNAUTHENTICATED');
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          break;
+        
+        case 'TOKEN_REFRESHED':
+          if (newSession) {
+            setSession(newSession);
+          }
+          break;
+        
+        case 'USER_UPDATED':
+          if (newSession) {
+            setSession(newSession);
+            setUser(newSession.user);
+          }
+          break;
+      }
+    });
+    
+    // Call checkSession after setting up listener
     checkSession();
     
     // Cleanup
@@ -131,7 +148,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
   
-  // Sign out function
+  // Sign out function - improved to handle errors better
   const signOut = async () => {
     try {
       console.log("Attempting to sign out user");
@@ -139,23 +156,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Clear local state first for faster UI feedback
       setStatus('LOADING');
       
-      // Clear localStorage cache
+      // Clean up local storage before signing out
       clearAuthData();
       
-      // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error("Sign out error:", error.message);
-        toast.error("Error signing out: " + error.message);
-        return;
+      // Try global signout - this might fail on the backend with 403
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (error) {
+        console.warn("Global signout failed, falling back to local:", error);
+        // This is expected in many cases, we'll continue with local cleanup
       }
       
-      // The auth listener will handle updating the state
+      // Force local state update even if backend signout failed
+      setStatus('UNAUTHENTICATED');
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      
       toast.success("Signed out successfully");
+      return;
+      
     } catch (error: any) {
       console.error('Error signing out:', error.message);
       toast.error("Error signing out");
+      
+      // Force auth state reset even on error
+      setStatus('UNAUTHENTICATED');
+      setSession(null);
+      setUser(null);
+      setProfile(null);
     }
   };
   
@@ -183,19 +212,4 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
-
-// Helper function to import from client.ts
-const clearAuthData = (): void => {
-  try {
-    if (typeof window !== 'undefined') {
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('supabase.auth.')) {
-          localStorage.removeItem(key);
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error clearing auth data:', error);
-  }
 };

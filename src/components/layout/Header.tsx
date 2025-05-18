@@ -22,7 +22,7 @@ interface HeaderProps {
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
   const { language, setLanguage } = useAppContext();
-  const { signOut, user, profile } = useAuth();
+  const { signOut, user, profile, status } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isSigningOut, setIsSigningOut] = useState(false);
   const navigate = useNavigate();
@@ -39,14 +39,16 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   // Handle sign out with proper feedback and redirection
   const handleSignOut = async () => {
     try {
+      if (isSigningOut) return; // Prevent multiple clicks
+      
       setIsSigningOut(true);
       await signOut();
-      toast.success("Signed out successfully");
       
-      // Redirect to home/auth page after successful logout
+      // Redirect to auth page after successful logout
+      // Using a timeout to ensure the auth state has time to update
       setTimeout(() => {
         navigate('/auth', { replace: true });
-      }, 500);
+      }, 300);
     } catch (error) {
       console.error("Error during sign out:", error);
       toast.error("Error signing out. Please try again.");
@@ -113,7 +115,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={handleSignOut} 
-              disabled={isSigningOut}
+              disabled={isSigningOut || status === 'LOADING'}
               className={isSigningOut ? 'opacity-50 cursor-not-allowed' : ''}
             >
               {isSigningOut ? (
