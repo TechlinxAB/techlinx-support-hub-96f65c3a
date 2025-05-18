@@ -1,5 +1,5 @@
 
-export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image';
+export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image' | 'table';
 
 export interface DashboardBlock {
   id: string;
@@ -65,4 +65,16 @@ export interface ImageBlockContent {
   height?: string | number; // Optional, can maintain aspect ratio if not specified
   objectFit?: 'cover' | 'contain' | 'fill' | 'none'; // CSS object-fit property
   objectPosition?: string; // CSS object-position property (e.g., "center", "top left")
+}
+
+export interface TableBlockContent {
+  headers: string[];
+  rows: {
+    id: string;
+    cells: string[];
+    link?: string;
+  }[];
+  isInteractive?: boolean;
+  sortable?: boolean;
+  variant?: 'default' | 'compact' | 'striped';
 }

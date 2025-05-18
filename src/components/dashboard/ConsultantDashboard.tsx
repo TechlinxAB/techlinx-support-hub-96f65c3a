@@ -136,6 +136,12 @@ const ConsultantDashboard = () => {
   const viewCase = (caseId: string) => {
     navigate(`/cases/${caseId}`);
   };
+
+  // Handle star toggle with stopPropagation to prevent row click
+  const handleStarToggle = (e: React.MouseEvent, caseId: string) => {
+    e.stopPropagation();
+    toggleStar(caseId);
+  };
   
   return (
     <div className="space-y-6">
@@ -156,36 +162,40 @@ const ConsultantDashboard = () => {
           </CardHeader>
           <CardContent className="pb-3">
             {newCases.length > 0 ? (
-              <div className="space-y-3">
-                {newCases.map(caseItem => (
-                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
-                    <div className="space-y-1">
-                      <p className="font-medium">{caseItem.title}</p>
-                      <p className="text-sm text-muted-foreground">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Case</TableHead>
+                    <TableHead>User/Company</TableHead>
+                    <TableHead className="w-[50px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {newCases.map(caseItem => (
+                    <TableRow 
+                      key={caseItem.id} 
+                      onClick={() => viewCase(caseItem.id)}
+                      className="cursor-pointer hover:bg-muted"
+                    >
+                      <TableCell className="font-medium">{caseItem.title}</TableCell>
+                      <TableCell>
                         {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => toggleStar(caseItem.id)}
-                      >
-                        {starredCases.includes(caseItem.id) ? 
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
-                          <Star className="h-4 w-4" />}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => viewCase(caseItem.id)}
-                      >
-                        View Case
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => handleStarToggle(e, caseItem.id)}
+                        >
+                          {starredCases.includes(caseItem.id) ? 
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                            <Star className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
               <p className="text-muted-foreground text-center py-6">No new cases</p>
             )}
@@ -202,36 +212,40 @@ const ConsultantDashboard = () => {
           </CardHeader>
           <CardContent className="pb-3">
             {ongoingCases.length > 0 ? (
-              <div className="space-y-3">
-                {ongoingCases.map(caseItem => (
-                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
-                    <div className="space-y-1">
-                      <p className="font-medium">{caseItem.title}</p>
-                      <p className="text-sm text-muted-foreground">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Case</TableHead>
+                    <TableHead>User/Company</TableHead>
+                    <TableHead className="w-[50px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ongoingCases.map(caseItem => (
+                    <TableRow 
+                      key={caseItem.id} 
+                      onClick={() => viewCase(caseItem.id)}
+                      className="cursor-pointer hover:bg-muted"
+                    >
+                      <TableCell className="font-medium">{caseItem.title}</TableCell>
+                      <TableCell>
                         {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => toggleStar(caseItem.id)}
-                      >
-                        {starredCases.includes(caseItem.id) ? 
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
-                          <Star className="h-4 w-4" />}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => viewCase(caseItem.id)}
-                      >
-                        View Case
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => handleStarToggle(e, caseItem.id)}
+                        >
+                          {starredCases.includes(caseItem.id) ? 
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                            <Star className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
               <p className="text-muted-foreground text-center py-6">No ongoing cases</p>
             )}
@@ -248,36 +262,40 @@ const ConsultantDashboard = () => {
           </CardHeader>
           <CardContent className="pb-3">
             {awaitingConfirmationCases.length > 0 ? (
-              <div className="space-y-3">
-                {awaitingConfirmationCases.map(caseItem => (
-                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
-                    <div className="space-y-1">
-                      <p className="font-medium">{caseItem.title}</p>
-                      <p className="text-sm text-muted-foreground">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Case</TableHead>
+                    <TableHead>User/Company</TableHead>
+                    <TableHead className="w-[50px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {awaitingConfirmationCases.map(caseItem => (
+                    <TableRow 
+                      key={caseItem.id} 
+                      onClick={() => viewCase(caseItem.id)}
+                      className="cursor-pointer hover:bg-muted"
+                    >
+                      <TableCell className="font-medium">{caseItem.title}</TableCell>
+                      <TableCell>
                         {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => toggleStar(caseItem.id)}
-                      >
-                        {starredCases.includes(caseItem.id) ? 
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
-                          <Star className="h-4 w-4" />}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => viewCase(caseItem.id)}
-                      >
-                        View Case
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => handleStarToggle(e, caseItem.id)}
+                        >
+                          {starredCases.includes(caseItem.id) ? 
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                            <Star className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
               <p className="text-muted-foreground text-center py-6">No cases awaiting confirmation</p>
             )}
@@ -294,39 +312,47 @@ const ConsultantDashboard = () => {
           </CardHeader>
           <CardContent className="pb-3">
             {overdueCases.length > 0 ? (
-              <div className="space-y-3">
-                {overdueCases.map(caseItem => (
-                  <div key={caseItem.id} className="flex items-center justify-between border-b pb-2">
-                    <div className="space-y-1">
-                      <p className="font-medium">{caseItem.title}</p>
-                      <p className="text-sm text-muted-foreground">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Case</TableHead>
+                    <TableHead>User/Company</TableHead>
+                    <TableHead className="w-[50px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {overdueCases.map(caseItem => (
+                    <TableRow 
+                      key={caseItem.id} 
+                      onClick={() => viewCase(caseItem.id)}
+                      className="cursor-pointer hover:bg-muted"
+                    >
+                      <TableCell className="font-medium">
+                        <div>
+                          {caseItem.title}
+                          <div className="text-xs text-red-500 mt-1">
+                            {`${getDaysSinceUpdate(caseItem.updatedAt)} days since last update`}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
-                      </p>
-                      <p className="text-xs text-red-500">
-                        {`${getDaysSinceUpdate(caseItem.updatedAt)} days since last update`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => toggleStar(caseItem.id)}
-                      >
-                        {starredCases.includes(caseItem.id) ? 
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
-                          <Star className="h-4 w-4" />}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => viewCase(caseItem.id)}
-                      >
-                        View Case
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => handleStarToggle(e, caseItem.id)}
+                        >
+                          {starredCases.includes(caseItem.id) ? 
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                            <Star className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
               <p className="text-muted-foreground text-center py-6">No overdue cases</p>
             )}
@@ -352,20 +378,18 @@ const ConsultantDashboard = () => {
               </TableHeader>
               <TableBody>
                 {recentActivities.map((activity, index) => (
-                  <TableRow key={index}>
+                  <TableRow 
+                    key={index}
+                    onClick={() => viewCase(activity.caseId)}
+                    className="cursor-pointer hover:bg-muted"
+                  >
                     <TableCell className="font-medium">
                       {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
                     </TableCell>
                     <TableCell>{activity.description}</TableCell>
                     <TableCell>{getCompanyById(activity.companyId)}</TableCell>
                     <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => viewCase(activity.caseId)}
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
+                      <ArrowRight className="h-4 w-4 ml-auto" />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -388,34 +412,34 @@ const ConsultantDashboard = () => {
             </CardHeader>
             <CardContent>
               {watchlistCases.length > 0 ? (
-                <div className="space-y-4">
-                  {watchlistCases.map(caseItem => (
-                    <div key={caseItem.id} className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="font-medium">{caseItem.title}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => toggleStar(caseItem.id)}
-                        >
-                          <StarOff className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => viewCase(caseItem.id)}
-                        >
-                          View
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <Table>
+                  <TableBody>
+                    {watchlistCases.map(caseItem => (
+                      <TableRow 
+                        key={caseItem.id} 
+                        onClick={() => viewCase(caseItem.id)}
+                        className="cursor-pointer hover:bg-muted"
+                      >
+                        <TableCell>
+                          <div className="font-medium">{caseItem.title}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {getUserById(caseItem.userId)} • {getCompanyById(caseItem.companyId)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[50px] text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => handleStarToggle(e, caseItem.id)}
+                            title="Remove from watchlist"
+                          >
+                            <StarOff className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               ) : (
                 <div className="text-center py-6 space-y-2">
                   <p className="text-muted-foreground">No cases in your watchlist</p>
