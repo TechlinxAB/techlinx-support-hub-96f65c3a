@@ -43,12 +43,15 @@ const UserDashboard = () => {
     );
   }
   
+  // Safely extract user ID once to prevent multiple object creation
+  const userId = currentUser?.id;
+
   // Memoize user's cases to prevent recreation on each render
   const userCases = useMemo(() => {
-    if (!currentUser || !cases) return [];
+    if (!userId || !cases) return [];
     
     return cases
-      .filter(c => c.userId === currentUser.id)
+      .filter(c => c.userId === userId)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .filter(c => c.status !== 'completed')
       .slice(0, 3)
@@ -58,7 +61,7 @@ const UserDashboard = () => {
         status: c.status,
         updatedAt: c.updatedAt.toISOString() // Convert Date to string
       }));
-  }, [currentUser, cases]);
+  }, [userId, cases]);
   
   // Safely derive companyId without creating new objects
   const safeCompanyId = useMemo(() => {
@@ -68,7 +71,7 @@ const UserDashboard = () => {
     if (currentUser.companyId === "undefined" || currentUser.companyId === "null") return undefined;
     
     return currentUser.companyId;
-  }, [currentUser]);
+  }, [currentUser?.companyId]); // Only depend on the companyId property
   
   // Fetch company settings and announcements
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
@@ -104,6 +107,11 @@ const UserDashboard = () => {
     );
   }
   
+  // Get user's first name for welcome message
+  const firstName = useMemo(() => {
+    return currentUser?.name?.split(' ')[0] || 'User';
+  }, [currentUser?.name]);
+  
   // Use the dashboard with default settings if needed
   return (
     <div className="space-y-6">
@@ -122,7 +130,7 @@ const UserDashboard = () => {
       )}
       
       <DashboardWelcome 
-        userName={currentUser?.name?.split(' ')[0] || 'User'} 
+        userName={firstName}
         settings={settings} 
       />
       
