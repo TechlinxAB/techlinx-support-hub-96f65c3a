@@ -49,7 +49,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setProfile(null);
       }
       
-    }, 50); // Small delay to batch updates
+    }, 100); // Increase delay for better batching
   };
   
   const fetchUserProfile = async (userId: string) => {
@@ -72,11 +72,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Initialize auth state once on component mount
   useEffect(() => {
+    // Prevent multiple initializations
     if (isInitialized.current) return;
     
     console.log("Initializing authentication");
-    let mounted = true;
     isInitialized.current = true;
+    let mounted = true;
+    
+    // Clear any existing listeners first
+    if (authListenerRef.current) {
+      authListenerRef.current.unsubscribe();
+      authListenerRef.current = null;
+    }
     
     const setupAuthListener = () => {
       if (authListenerRef.current) {
@@ -88,7 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         console.log(`Auth event: ${event}`);
         
-        // Handle different auth events
+        // Prevent unnecessary state updates with same status
         if (event === 'SIGNED_IN' && session?.user) {
           updateAuthStatus('AUTHENTICATED', session.user);
         } else if (event === 'SIGNED_OUT') {
@@ -110,7 +117,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
     
     // Set up auth listener
-    setupAuthListener();
+    const subscription = setupAuthListener();
     
     // Check for existing session if not already checked
     if (!sessionCheckedRef.current) {
@@ -141,8 +148,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (authTimeoutRef.current) {
         clearTimeout(authTimeoutRef.current);
       }
-      if (authListenerRef.current) {
-        authListenerRef.current.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
       }
     };
   }, []);

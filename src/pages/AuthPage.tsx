@@ -19,20 +19,30 @@ const AuthPage = () => {
   const [searchParams] = useSearchParams();
   const { status } = useAuth();
   
-  // Get return URL from query params or default to home
+  // Get return URL from query params or default to dashboard
   const getReturnUrl = () => {
     const returnUrl = searchParams.get('returnUrl');
-    return returnUrl ? decodeURIComponent(returnUrl) : '/';
+    return returnUrl ? decodeURIComponent(returnUrl) : '/dashboard';
   };
   
-  // Redirect authenticated users away from login page
+  // Redirect authenticated users away from login page - with debounce
   useEffect(() => {
+    let redirectTimeout: NodeJS.Timeout | null = null;
+    
     // Only redirect if we're definitely authenticated
     if (status === 'AUTHENTICATED') {
-      const returnUrl = getReturnUrl();
-      console.log(`User authenticated, redirecting to ${returnUrl}`);
-      navigate(returnUrl, { replace: true });
+      redirectTimeout = setTimeout(() => {
+        const returnUrl = getReturnUrl();
+        console.log(`User authenticated, redirecting to ${returnUrl}`);
+        navigate(returnUrl, { replace: true });
+      }, 100);
     }
+    
+    return () => {
+      if (redirectTimeout) {
+        clearTimeout(redirectTimeout);
+      }
+    };
   }, [status, navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {

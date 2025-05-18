@@ -29,6 +29,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
+import Index from "./pages/Index";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,9 +58,10 @@ const App = () => (
               <ModalReset />
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
+                <Route path="/" element={<Index />} />
                 
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/" element={<Layout />}>
+                  <Route path="/dashboard" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="cases" element={<CasesPage />} />
                     <Route path="cases/new" element={<NewCasePage />} />

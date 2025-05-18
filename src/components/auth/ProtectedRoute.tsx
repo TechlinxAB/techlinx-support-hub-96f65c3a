@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
@@ -9,13 +9,25 @@ const ProtectedRoute = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Handle unauthenticated state
-  React.useEffect(() => {
+  // Handle unauthenticated state with debounce to prevent redirect loops
+  useEffect(() => {
+    let redirectTimeout: NodeJS.Timeout | null = null;
+    
     if (status === 'UNAUTHENTICATED' && location.pathname !== '/auth') {
-      // Include current location as return URL
-      const returnUrl = encodeURIComponent(location.pathname + location.search);
-      navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
+      // Use timeout to prevent rapid redirects in case of auth state flapping
+      redirectTimeout = setTimeout(() => {
+        console.log("Not authenticated, redirecting to login");
+        // Include current location as return URL
+        const returnUrl = encodeURIComponent(location.pathname + location.search);
+        navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
+      }, 100);
     }
+    
+    return () => {
+      if (redirectTimeout) {
+        clearTimeout(redirectTimeout);
+      }
+    };
   }, [status, navigate, location.pathname, location.search]);
   
   // Show loading state

@@ -8,9 +8,29 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 
 // Ensure localStorage is available and working
 const getLocalStorageProvider = () => {
-  // Check for localStorage availability
-  if (typeof window === 'undefined' || !window.localStorage) {
-    console.warn("localStorage is not available - using memory storage");
+  try {
+    // Check for localStorage availability
+    if (typeof window === 'undefined' || !window.localStorage) {
+      console.warn("localStorage is not available - using memory storage");
+      // Create in-memory storage fallback
+      let memoryStorage: Record<string, string> = {};
+      
+      return {
+        getItem: (key: string) => memoryStorage[key] || null,
+        setItem: (key: string, value: string) => { memoryStorage[key] = value },
+        removeItem: (key: string) => { delete memoryStorage[key] },
+        clear: () => { memoryStorage = {} }
+      };
+    }
+    
+    // Test localStorage functionality
+    const testKey = "__supabase_test_key__";
+    window.localStorage.setItem(testKey, "test");
+    window.localStorage.removeItem(testKey);
+    
+    return window.localStorage;
+  } catch (error) {
+    console.warn("localStorage access error - using memory storage", error);
     // Create in-memory storage fallback
     let memoryStorage: Record<string, string> = {};
     
@@ -21,8 +41,6 @@ const getLocalStorageProvider = () => {
       clear: () => { memoryStorage = {} }
     };
   }
-  
-  return window.localStorage;
 };
 
 // Create Supabase client with robust configuration
