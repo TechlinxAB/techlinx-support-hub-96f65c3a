@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { supabase, resetAuthState, forceSignOut, STORAGE_KEY } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -86,6 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const authErrorCount = useRef<number>(0);
   const maxErrorsBeforeUnauthenticated = 5;
   const authInitCompleted = useRef(false);
+  const stableAuthStatus = useRef<AuthState>('INITIALIZING');
   
   // Calculate loading state from auth state
   const loading = authState === 'INITIALIZING';
@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Sign in with email and password
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     try {
       // Prevent race conditions by setting state first
       setAuthState('INITIALIZING');
@@ -149,6 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         setError(error);
         setAuthState('UNAUTHENTICATED');
+        stableAuthStatus.current = 'UNAUTHENTICATED';
         return { error };
       }
       
@@ -157,12 +158,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       setError(err);
       setAuthState('UNAUTHENTICATED');
+      stableAuthStatus.current = 'UNAUTHENTICATED';
       return { error: err as AuthError };
     }
-  };
+  }, []);
 
   // Sign up with email and password
-  const signUp = async (email: string, password: string, data?: object) => {
+  const signUp = useCallback(async (email: string, password: string, data?: object) => {
     try {
       setAuthState('INITIALIZING');
       
@@ -175,18 +177,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         setError(error);
         setAuthState('UNAUTHENTICATED');
+        stableAuthStatus.current = 'UNAUTHENTICATED';
       }
       
       return { error };
     } catch (err: any) {
       setError(err);
       setAuthState('UNAUTHENTICATED');
+      stableAuthStatus.current = 'UNAUTHENTICATED';
       return { error: err as AuthError };
     }
-  };
+  }, []);
 
   // Sign out - Enhanced with fallbacks
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       // First set state to avoid UI flicker
       setAuthState('INITIALIZING');
@@ -211,20 +215,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Then try the normal sign out API
       await supabase.auth.signOut();
       setAuthState('UNAUTHENTICATED');
+      stableAuthStatus.current = 'UNAUTHENTICATED';
     } catch (err) {
       try {
         // Last resort: force sign out
         await forceSignOut();
         setAuthState('UNAUTHENTICATED');
+        stableAuthStatus.current = 'UNAUTHENTICATED';
       } catch (forceErr) {
         setAuthState('ERROR');
+        stableAuthStatus.current = 'ERROR';
         throw forceErr;
       }
     }
-  };
+  }, []);
 
   // Start impersonation
-  const startImpersonation = async (userId: string) => {
+  const startImpersonation = useCallback(async (userId: string) => {
     try {
       setAuthState('INITIALIZING');
       
@@ -255,10 +262,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       throw error;
     }
-  };
+  }, []);
 
   // End impersonation
-  const endImpersonation = async () => {
+  const endImpersonation = useCallback(async () => {
     try {
       if (!originalProfile) throw new Error('No original profile found');
       
@@ -275,7 +282,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       throw error;
     }
-  };
+  }, []);
 
   // Debounced fetch user profile to prevent API hammering
   const debounceFetchProfile = useCallback((userId: string) => {
@@ -317,10 +324,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (authErrorCount.current >= maxErrorsBeforeUnauthenticated) {
           console.error(`Too many profile fetch errors (${authErrorCount.current}), setting unauthenticated`);
           setAuthState('UNAUTHENTICATED');
-        } else {
-          // For fewer errors, just throw without changing auth state
-          throw error;
-        }
+          stableAuthStatus.current = 'UNAUTHENTICATED';
+        } 
         return;
       }
       
@@ -328,13 +333,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       authErrorCount.current = 0;
       
       if (data) {
-        setProfile(mapDbProfileToUserProfile(data));
-        // Set auth state to authenticated since we have a valid profile
-        setAuthState('AUTHENTICATED');
-        console.log('Profile fetch successful, user authenticated');
+        const mappedProfile = mapDbProfileToUserProfile(data);
+        setProfile(mappedProfile);
         
         // Mark authentication as completed to prevent timeout from changing state
         authInitCompleted.current = true;
+        
+        // Set auth state to authenticated since we have a valid profile
+        setAuthState('AUTHENTICATED');
+        stableAuthStatus.current = 'AUTHENTICATED';
+        
+        console.log('Profile fetch successful, user authenticated');
         
         // Clear the initialization timeout as we're now authenticated
         if (initializationTimeout.current !== null) {
@@ -343,9 +352,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         // Profile not found for this user ID
-        setProfile(null);
         console.warn(`No profile found for user: ${userId}`);
-        setAuthState('UNAUTHENTICATED');
+        
+        // Don't change to UNAUTHENTICATED if we already have authentication state
+        if (authState !== 'AUTHENTICATED' && authState !== 'IMPERSONATING') {
+          setAuthState('UNAUTHENTICATED');
+          stableAuthStatus.current = 'UNAUTHENTICATED';
+        }
       }
     } catch (err) {
       console.error('Exception fetching profile:', err);
@@ -353,11 +366,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Only set ERROR state after multiple failures
       if (authErrorCount.current >= maxErrorsBeforeUnauthenticated) {
         setAuthState('ERROR');
+        stableAuthStatus.current = 'ERROR';
       }
     } finally {
       profileFetchInProgress.current[userId] = false;
     }
-  }, []);
+  }, [authState]);
 
   // Clear all timers and subscriptions to prevent memory leaks
   const clearAllTimers = useCallback(() => {
@@ -388,11 +402,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log('Initializing AuthContext');
     
     // Safety timeout to prevent infinite loading
+    // IMPROVED: Only change state if we're still initializing and haven't completed auth
     initializationTimeout.current = window.setTimeout(() => {
-      // Only change state if we're still initializing and haven't completed auth
       if (authState === 'INITIALIZING' && !authInitCompleted.current) {
         console.log('Auth initialization timeout, forcing completion');
         setAuthState('UNAUTHENTICATED');
+        stableAuthStatus.current = 'UNAUTHENTICATED';
       }
     }, 6000); // 6 seconds timeout
     
@@ -428,6 +443,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setTimeout(() => {
               setProfile(null);
               setAuthState('UNAUTHENTICATED');
+              stableAuthStatus.current = 'UNAUTHENTICATED';
             }, 0);
           }
         });
@@ -436,6 +452,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (error) {
         console.error('Error setting up auth listener:', error);
         setAuthState('ERROR');
+        stableAuthStatus.current = 'ERROR';
       }
     };
     
@@ -464,6 +481,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           // No session, set state to unauthenticated
           setAuthState('UNAUTHENTICATED');
+          stableAuthStatus.current = 'UNAUTHENTICATED';
           
           // Clear the timeout since we've determined auth state
           if (initializationTimeout.current !== null) {
@@ -474,6 +492,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (err) {
         console.error('Error checking session:', err);
         setAuthState('UNAUTHENTICATED');
+        stableAuthStatus.current = 'UNAUTHENTICATED';
         
         // Clear the timeout in error case too
         if (initializationTimeout.current !== null) {
@@ -500,8 +519,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return clearAllTimers;
   }, [clearAllTimers]);
 
-  // Create the context value
-  const value: AuthContextType = {
+  // Create the context value - ensure consistency of the object reference
+  // Wrap props in useMemo to prevent unneeded re-renders
+  const value = useMemo<AuthContextType>(() => ({
     user,
     session,
     profile,
@@ -518,7 +538,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     startImpersonation,
     endImpersonation,
     resetAuth
-  };
+  }), [
+    user, 
+    session, 
+    profile, 
+    originalProfile, 
+    loading, 
+    error, 
+    isImpersonating, 
+    impersonatedProfile, 
+    authState, 
+    signIn, 
+    signUp, 
+    signOut, 
+    setProfile, 
+    startImpersonation, 
+    endImpersonation,
+    resetAuth
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

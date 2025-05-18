@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
@@ -17,7 +17,7 @@ const ProtectedRoute = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
-  const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const navigationAttemptedRef = useRef(false);
   const navigationTimerRef = useRef<number | null>(null);
   const isAuthPage = location.pathname === '/auth';
   const stableAuthRef = useRef(authState);
@@ -31,7 +31,7 @@ const ProtectedRoute = () => {
     
     // Reset navigation tracking when route changes
     return () => {
-      setNavigationAttempted(false);
+      navigationAttemptedRef.current = false;
       
       // Clear any pending navigation timers
       if (navigationTimerRef.current !== null) {
@@ -80,10 +80,19 @@ const ProtectedRoute = () => {
     };
   }, [authState]);
   
+  // Create memoized auth states to prevent frequent rerenders and inconsistent navigation
+  const isAuthenticated = useMemo(() => {
+    return authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
+  }, [authState]);
+  
+  const isStableAuthenticated = useMemo(() => {
+    return stableAuthRef.current === 'AUTHENTICATED' || stableAuthRef.current === 'IMPERSONATING';
+  }, []);
+  
   // Handle navigation based on auth state
   useEffect(() => {
     // Skip everything if already on auth page and not authenticated
-    if (isAuthPage && authState !== 'AUTHENTICATED' && authState !== 'IMPERSONATING') {
+    if (isAuthPage && !isAuthenticated) {
       return;
     }
     
@@ -93,13 +102,13 @@ const ProtectedRoute = () => {
     }
     
     // Only attempt navigation once per route change to prevent loops
-    if (navigationAttempted) {
+    if (navigationAttemptedRef.current) {
       return;
     }
 
     // If authenticated and on auth page, redirect to home
-    if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && isAuthPage) {
-      setNavigationAttempted(true);
+    if (isAuthenticated && isAuthPage) {
+      navigationAttemptedRef.current = true;
       console.log('ProtectedRoute: User is authenticated, redirecting to home from auth page');
       
       // Use a short delay to prevent immediate navigation
@@ -121,7 +130,7 @@ const ProtectedRoute = () => {
       }
       
       console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
-      setNavigationAttempted(true);
+      navigationAttemptedRef.current = true;
       
       // Use a longer timeout to debounce the navigation
       // This prevents navigation jumps if auth state is still settling
@@ -140,7 +149,7 @@ const ProtectedRoute = () => {
         }
       }, 800);
     }
-  }, [authState, loading, isAuthPage, location.pathname, navigationAttempted, location.state]);
+  }, [authState, loading, isAuthPage, location.pathname, isAuthenticated, location.state]);
   
   // Function to handle auth reset if user is stuck
   const handleResetAuth = async () => {
@@ -196,7 +205,12 @@ const ProtectedRoute = () => {
   
   // Allow access to auth page without authentication
   // For all other routes, only render when authenticated or impersonating
-  return isAuthPage || (authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') ? <Outlet /> : null;
+  // Use stableAuthRef for more reliable checks
+  if (isAuthPage || isAuthenticated || isStableAuthenticated) {
+    return <Outlet />;
+  }
+  
+  return null;
 };
 
 export default ProtectedRoute;

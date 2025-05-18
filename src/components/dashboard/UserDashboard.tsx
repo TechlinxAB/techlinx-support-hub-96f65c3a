@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import DashboardWelcome from './DashboardWelcome';
 import QuickActionButtons from './QuickActionButtons';
@@ -16,6 +16,7 @@ const UserDashboard = () => {
   const { authState } = useAuth();
   const [hasSettingsError, setHasSettingsError] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const errorHandledRef = useRef(false);
   
   // Only proceed if auth is stable and user is authenticated
   const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
@@ -44,7 +45,8 @@ const UserDashboard = () => {
   
   // Memoize user's cases to prevent recreation on each render
   const userCases = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser || !cases) return [];
+    
     return cases
       .filter(c => c.userId === currentUser.id)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -58,28 +60,36 @@ const UserDashboard = () => {
       }));
   }, [currentUser, cases]);
   
-  // IMPROVED: Better validation of companyId
+  // Safely derive companyId without creating new objects
   const safeCompanyId = useMemo(() => {
-    return currentUser?.companyId && 
-      typeof currentUser.companyId === 'string' &&
-      currentUser.companyId !== "undefined" && 
-      currentUser.companyId !== "null" ? 
-      currentUser.companyId : undefined;
-  }, [currentUser?.companyId]);
+    if (!currentUser) return undefined;
+    if (!currentUser.companyId) return undefined;
+    if (typeof currentUser.companyId !== 'string') return undefined;
+    if (currentUser.companyId === "undefined" || currentUser.companyId === "null") return undefined;
+    
+    return currentUser.companyId;
+  }, [currentUser]);
   
   // Fetch company settings and announcements
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
   const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
   
-  // Track settings errors
-  useEffect(() => {
-    if (settingsError) {
+  // Track settings errors - with useCallback to ensure stable function reference
+  const handleSettingsError = useCallback(() => {
+    if (settingsError && !errorHandledRef.current) {
       console.error("Dashboard settings error:", settingsError);
       setHasSettingsError(true);
-    } else {
+      errorHandledRef.current = true;
+    } else if (!settingsError) {
       setHasSettingsError(false);
+      errorHandledRef.current = false;
     }
   }, [settingsError]);
+  
+  // Handle errors with useEffect to avoid direct function calls during render
+  useEffect(() => {
+    handleSettingsError();
+  }, [handleSettingsError]);
   
   const loading = settingsLoading || announcementsLoading;
   
@@ -94,7 +104,7 @@ const UserDashboard = () => {
     );
   }
   
-  // Even if settings failed, show the dashboard with default settings
+  // Use the dashboard with default settings if needed
   return (
     <div className="space-y-6">
       {hasSettingsError && (
