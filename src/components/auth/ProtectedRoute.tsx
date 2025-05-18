@@ -1,168 +1,14 @@
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import React from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import navigationService from '@/services/navigationService';
 
 const ProtectedRoute = () => {
-  const { 
-    authState,
-    loading, 
-    resetAuth 
-  } = useAuth();
-  
-  const navigate = useNavigate();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
-  const [authResetAttempted, setAuthResetAttempted] = useState(false);
-  const navigationAttemptedRef = useRef(false);
-  const navigationTimerRef = useRef<number | null>(null);
-  const isAuthPage = location.pathname === '/auth';
-  const stableAuthRef = useRef(authState);
-  const delayRef = useRef<number | null>(null);
-  const stabilityTimerRef = useRef<number | null>(null);
-
-  // Register the navigate function with the navigation service on mount
-  useEffect(() => {
-    console.log('ProtectedRoute: Registering navigation service');
-    navigationService.setNavigateFunction(navigate);
-    
-    // Reset navigation tracking when route changes
-    return () => {
-      navigationAttemptedRef.current = false;
-      
-      // Clear any pending navigation timers
-      if (navigationTimerRef.current !== null) {
-        clearTimeout(navigationTimerRef.current);
-        navigationTimerRef.current = null;
-      }
-      
-      if (delayRef.current !== null) {
-        clearTimeout(delayRef.current);
-        delayRef.current = null;
-      }
-      
-      if (stabilityTimerRef.current !== null) {
-        clearTimeout(stabilityTimerRef.current);
-        stabilityTimerRef.current = null;
-      }
-    };
-  }, [navigate, location.pathname]);
   
-  // Track auth state changes with a cooldown to prevent rapid changes
-  useEffect(() => {
-    // Clear any existing stability timer
-    if (stabilityTimerRef.current !== null) {
-      clearTimeout(stabilityTimerRef.current);
-    }
-    
-    // Only update our stable auth ref if the state has persisted
-    // This prevents flickering between auth states
-    stabilityTimerRef.current = window.setTimeout(() => {
-      console.log(`ProtectedRoute: Updating stable auth state from ${stableAuthRef.current} to ${authState}`);
-      stableAuthRef.current = authState;
-    }, 800); // Less than 1 second stability required
-    
-    return () => {
-      if (stabilityTimerRef.current !== null) {
-        clearTimeout(stabilityTimerRef.current);
-        stabilityTimerRef.current = null;
-      }
-    };
-  }, [authState]);
-  
-  // Create memoized auth states to prevent frequent rerenders and inconsistent navigation
-  const isAuthenticated = useMemo(() => {
-    return authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
-  }, [authState]);
-  
-  const isStableAuthenticated = useMemo(() => {
-    return stableAuthRef.current === 'AUTHENTICATED' || stableAuthRef.current === 'IMPERSONATING';
-  }, []);
-  
-  // Handle navigation based on auth state
-  useEffect(() => {
-    // Skip navigation if already on correct page
-    if ((isAuthPage && !isAuthenticated) || (!isAuthPage && isAuthenticated)) {
-      return;
-    }
-    
-    // Wait until auth state is fully loaded
-    if (loading) {
-      return;
-    }
-    
-    // Only attempt navigation once per route change to prevent loops
-    if (navigationAttemptedRef.current) {
-      return;
-    }
-
-    // If authenticated and on auth page, redirect to home
-    if (isAuthenticated && isAuthPage) {
-      navigationAttemptedRef.current = true;
-      console.log('ProtectedRoute: User is authenticated, redirecting to home from auth page');
-      
-      // Use a short delay to prevent immediate navigation
-      delayRef.current = window.setTimeout(() => {
-        // Get the redirectTo from state or default to '/'
-        const redirectTo = location.state?.from || '/';
-        navigationService.navigate(redirectTo, { replace: true });
-      }, 300);
-      
-      return;
-    }
-
-    // If not authenticated and we're not on the auth page, redirect
-    if (authState === 'UNAUTHENTICATED' && !isAuthPage) {
-      // Store current path for redirect after login
-      let currentPath = location.pathname;
-      if (currentPath === '/') {
-        currentPath = '';
-      }
-      
-      console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
-      navigationAttemptedRef.current = true;
-      
-      // Use a timeout to debounce the navigation
-      if (navigationTimerRef.current !== null) {
-        clearTimeout(navigationTimerRef.current);
-      }
-      
-      navigationTimerRef.current = window.setTimeout(() => {
-        // Use navigation service to prevent loops
-        if (navigationService.isReady()) {
-          // Always include clean=true to ensure fresh auth state
-          navigationService.navigate('/auth?clean=true', { 
-            replace: true, 
-            state: { from: currentPath || '/' } 
-          });
-          navigationTimerRef.current = null;
-        }
-      }, 300);
-    }
-  }, [authState, loading, isAuthPage, location.pathname, isAuthenticated, location.state]);
-  
-  // Function to handle auth reset if user is stuck
-  const handleResetAuth = async () => {
-    setAuthResetAttempted(true);
-    
-    try {
-      await resetAuth();
-      
-      // Redirect to auth page via hard redirect
-      navigationService.hardRedirect('/auth?reset=complete');
-    } catch (error) {
-      console.error("Critical error during auth reset:", error);
-      toast.error("Failed to reset auth state. Please try refreshing your browser.");
-      
-      // Last resort: direct refresh
-      window.location.href = '/auth';
-    }
-  };
-  
-  // Enhanced loading state with a more informative message
+  // Show loading spinner while checking authentication
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -172,37 +18,13 @@ const ProtectedRoute = () => {
     );
   }
   
-  // Show recovery option if auth is in error state
-  if (authState === 'ERROR' && !authResetAttempted) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="max-w-md p-6 space-y-4 bg-white shadow-md rounded-md">
-          <h2 className="text-xl font-semibold text-red-600">Authentication Issue</h2>
-          <p className="text-gray-600">
-            We encountered an issue with your authentication state. This might be due to an expired session or data inconsistency.
-          </p>
-          <Button 
-            onClick={handleResetAuth} 
-            variant="destructive"
-            className="w-full"
-          >
-            Reset Authentication State
-          </Button>
-          <p className="text-xs text-gray-500">
-            This will log you out and reset your authentication state. You'll need to log in again.
-          </p>
-        </div>
-      </div>
-    );
+  // If not authenticated, redirect to login
+  if (!isAuthenticated) {
+    return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
   
-  // Allow access to auth page without authentication
-  // For all other routes, only render when authenticated or impersonating
-  if (isAuthPage || isAuthenticated || isStableAuthenticated) {
-    return <Outlet />;
-  }
-  
-  return null;
+  // If authenticated, render the child routes
+  return <Outlet />;
 };
 
 export default ProtectedRoute;

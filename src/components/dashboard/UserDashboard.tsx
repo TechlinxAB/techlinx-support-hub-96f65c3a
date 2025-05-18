@@ -11,34 +11,16 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
-  // All hooks must be called unconditionally at the top level
   const { currentUser, cases } = useAppContext();
   const { profile } = useAuth();
-  const [isReady, setIsReady] = useState(false);
   const [hasSettingsError, setHasSettingsError] = useState(false);
   
-  // Process companyId safely
-  const safeCompanyId = 
-    currentUser?.companyId && 
-    typeof currentUser.companyId === 'string' &&
-    currentUser.companyId !== 'undefined' && 
-    currentUser.companyId !== 'null'
-      ? currentUser.companyId 
-      : undefined;
+  // Process companyId
+  const companyId = currentUser?.companyId || undefined;
   
-  // Call hooks - these must be called on every render in the same order
-  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
-  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
-  
-  // Set readiness state based on needed data
-  useEffect(() => {
-    // Simple check that both sources of data are present
-    if (profile && currentUser) {
-      setIsReady(true);
-    } else {
-      setIsReady(false);
-    }
-  }, [profile, currentUser]);
+  // Fetch data
+  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(companyId);
+  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(companyId);
   
   // Handle settings errors
   useEffect(() => {
@@ -50,8 +32,8 @@ const UserDashboard = () => {
     }
   }, [settingsError]);
   
-  // Loading state component
-  if (!isReady || settingsLoading || announcementsLoading) {
+  // Loading state
+  if (!profile || settingsLoading || announcementsLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -62,7 +44,7 @@ const UserDashboard = () => {
     );
   }
   
-  // Process user cases - do this AFTER all hook calls
+  // Process user cases
   const userCases = !currentUser?.id || !cases 
     ? [] 
     : cases
@@ -78,9 +60,8 @@ const UserDashboard = () => {
         }));
   
   // Extract first name
-  const firstName = currentUser?.name?.split(' ')?.[0] || 'User';
+  const firstName = profile?.name?.split(' ')?.[0] || 'User';
   
-  // Render the dashboard
   return (
     <div className="space-y-6">
       {hasSettingsError && (

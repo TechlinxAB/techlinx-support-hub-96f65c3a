@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import navigationService from '@/services/navigationService';
+import { useNavigate } from 'react-router-dom';
 
 interface LogoutButtonProps {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
@@ -18,6 +18,7 @@ const LogoutButton = ({
   className = ''
 }: LogoutButtonProps) => {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const handleLogout = async () => {
@@ -27,16 +28,16 @@ const LogoutButton = ({
       setIsLoggingOut(true);
       const toastId = toast.loading('Logging out...');
       
-      // Call auth signOut - this will internally clear storage and handle state
       await signOut();
       
       toast.success('Successfully logged out', { id: toastId });
       
-      // Skip the timeout and redirect immediately to ensure clean state
-      navigationService.hardRedirect('/auth?clean=true');
+      // Navigate to auth page
+      navigate('/auth');
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');
+    } finally {
       setIsLoggingOut(false);
     }
   };

@@ -30,7 +30,7 @@ import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
 
-// Initialize the query client outside of the component to prevent re-creation on renders
+// Initialize the query client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -41,16 +41,14 @@ const queryClient = new QueryClient({
   }
 });
 
-// Modal Manager Component to initialize the modal manager hook
+// Modal Manager Component
 const ModalManager = ({ children }: { children: React.ReactNode }) => {
-  // Initialize the modal manager to enable global cleanup functionality
   useModalManager();
   return <>{children}</>;
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    {/* AuthProvider must come before AppProvider to resolve the circular dependency */}
     <AuthProvider>
       <AppProvider>
         <TooltipProvider>
@@ -59,8 +57,10 @@ const App = () => (
             <ModalReset />
             <BrowserRouter>
               <Routes>
+                {/* Public route - accessible without authentication */}
                 <Route path="/auth" element={<AuthPage />} />
                 
+                {/* Protected routes - require authentication */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/" element={<Layout />}>
                     <Route index element={<Dashboard />} />

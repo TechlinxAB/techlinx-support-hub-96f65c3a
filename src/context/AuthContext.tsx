@@ -1,17 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
-import { supabase, resetAuthState, forceSignOut, STORAGE_KEY } from '@/integrations/supabase/client';
-import { User, Session, AuthError } from '@supabase/supabase-js';
-import { toast } from 'sonner';
-import navigationService from '@/services/navigationService';
 
-// Authentication state machine states
-type AuthState = 
-  | 'INITIALIZING' 
-  | 'AUTHENTICATED' 
-  | 'UNAUTHENTICATED' 
-  | 'ERROR'
-  | 'IMPERSONATING';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { User, Session } from '@supabase/supabase-js';
 
+// Define user profile type
 export type UserProfile = {
   id: string;
   email: string;
@@ -19,34 +11,23 @@ export type UserProfile = {
   role: 'consultant' | 'user';
   companyId: string | null;
   preferredLanguage: string;
-  phone?: string | null;
-  createdAt?: string;
   avatar?: string | null;
 };
 
-export type AuthContextType = {
+// Define auth context type with only essential properties
+type AuthContextType = {
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
-  originalProfile: UserProfile | null;
   loading: boolean;
-  error: AuthError | null;
-  isImpersonating: boolean;
-  impersonatedProfile: UserProfile | null;
-  authState: AuthState;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, data?: object) => Promise<{ error: AuthError | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: any | null }>;
   signOut: () => Promise<void>;
-  setProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
-  startImpersonation: (userId: string) => Promise<void>;
-  endImpersonation: () => Promise<void>;
-  resetAuth: () => Promise<void>;
+  isAuthenticated: boolean;
 };
 
-// Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Helper function to map database fields to UserProfile type
+// Map database profile to our UserProfile type
 const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
   if (!dbProfile) return null as unknown as UserProfile;
   
@@ -57,510 +38,141 @@ const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
     role: dbProfile.role,
     companyId: dbProfile.company_id,
     preferredLanguage: dbProfile.preferred_language,
-    phone: dbProfile.phone,
-    createdAt: dbProfile.created_at,
     avatar: dbProfile.avatar,
   };
 };
 
-// Provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Basic auth state
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [authState, setAuthState] = useState<AuthState>('INITIALIZING');
-  const [error, setError] = useState<AuthError | null>(null);
+  const [loading, setLoading] = useState(true);
   
-  // Impersonation state
-  const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
-  const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
-  
-  // Internal refs to prevent race conditions
-  const isInitialized = useRef(false);
-  const authSubscription = useRef<{ unsubscribe: () => void } | null>(null);
-  const profileFetchInProgress = useRef<Record<string, boolean>>({});
-  const initializationTimeout = useRef<number | null>(null);
-  const profileFetchDebounceTimer = useRef<number | null>(null);
-  const authErrorCount = useRef<number>(0);
-  const maxErrorsBeforeUnauthenticated = 5;
-  const authInitCompleted = useRef(false);
-  const stableAuthStatus = useRef<AuthState>('INITIALIZING');
-  
-  // Calculate loading state from auth state
-  const loading = authState === 'INITIALIZING';
-  const isImpersonating = authState === 'IMPERSONATING';
+  // Simple derived state
+  const isAuthenticated = !!session && !!user;
 
-  // Reset auth state (for troubleshooting auth issues)
-  const resetAuth = useCallback(async () => {
+  // Function to fetch user profile
+  const fetchProfile = async (userId: string) => {
     try {
-      // Clean up any existing listeners
-      if (authSubscription.current) {
-        authSubscription.current.unsubscribe();
-        authSubscription.current = null;
-      }
-      
-      // Reset all state
-      setAuthState('INITIALIZING');
-      
-      await resetAuthState();
-      
-      // Reset all state values
-      setUser(null);
-      setSession(null);
-      setProfile(null);
-      setOriginalProfile(null);
-      setImpersonatedProfile(null);
-      setError(null);
-      
-      // Reset error counts
-      authErrorCount.current = 0;
-      
-      // Finally set unauthenticated state
-      setAuthState('UNAUTHENTICATED');
-      
-      // Reset navigation tracking
-      navigationService.resetTracking();
-      
-      toast.success('Authentication state has been reset');
-      
-      // Redirect to auth page
-      navigationService.hardRedirect('/auth?reset=complete');
-    } catch (err) {
-      console.error('Failed to reset auth state:', err);
-      setAuthState('ERROR');
-      toast.error('Failed to reset authentication state');
-      
-      // Last resort - direct redirect
-      setTimeout(() => {
-        window.location.href = '/auth';
-      }, 1000);
-    }
-  }, []);
-
-  // Sign in with email and password
-  const signIn = useCallback(async (email: string, password: string) => {
-    try {
-      // Prevent race conditions by setting state first
-      setAuthState('INITIALIZING');
-      
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        setError(error);
-        setAuthState('UNAUTHENTICATED');
-        stableAuthStatus.current = 'UNAUTHENTICATED';
-        return { error };
-      }
-      
-      // Session will be picked up by the auth state listener
-      return { error: null };
-    } catch (err: any) {
-      setError(err);
-      setAuthState('UNAUTHENTICATED');
-      stableAuthStatus.current = 'UNAUTHENTICATED';
-      return { error: err as AuthError };
-    }
-  }, []);
-
-  // Sign up with email and password
-  const signUp = useCallback(async (email: string, password: string, data?: object) => {
-    try {
-      setAuthState('INITIALIZING');
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data }
-      });
-      
-      if (error) {
-        setError(error);
-        setAuthState('UNAUTHENTICATED');
-        stableAuthStatus.current = 'UNAUTHENTICATED';
-      }
-      
-      return { error };
-    } catch (err: any) {
-      setError(err);
-      setAuthState('UNAUTHENTICATED');
-      stableAuthStatus.current = 'UNAUTHENTICATED';
-      return { error: err as AuthError };
-    }
-  }, []);
-
-  // Sign out - Enhanced with fallbacks
-  const signOut = useCallback(async () => {
-    try {
-      // First set state to avoid UI flicker
-      setAuthState('INITIALIZING');
-      
-      // Reset internal state
-      setUser(null);
-      setSession(null);
-      setProfile(null);
-      setOriginalProfile(null);
-      setImpersonatedProfile(null);
-      
-      // Reset error counts
-      authErrorCount.current = 0;
-      
-      // Clean storage with direct access - most reliable
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch (e) {
-        // Silent fail
-      }
-      
-      // Then try the normal sign out API
-      await supabase.auth.signOut();
-      setAuthState('UNAUTHENTICATED');
-      stableAuthStatus.current = 'UNAUTHENTICATED';
-    } catch (err) {
-      try {
-        // Last resort: force sign out
-        await forceSignOut();
-        setAuthState('UNAUTHENTICATED');
-        stableAuthStatus.current = 'UNAUTHENTICATED';
-      } catch (forceErr) {
-        setAuthState('ERROR');
-        stableAuthStatus.current = 'ERROR';
-        throw forceErr;
-      }
-    }
-  }, []);
-
-  // Start impersonation
-  const startImpersonation = useCallback(async (userId: string) => {
-    try {
-      setAuthState('INITIALIZING');
-      
-      // Store the original profile
-      setOriginalProfile(profile);
-      
-      // Get the impersonated user's profile
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) throw error;
-      if (!data) throw new Error('User not found');
-      
-      // Set impersonation state
-      const mappedProfile = mapDbProfileToUserProfile(data);
-      setImpersonatedProfile(mappedProfile);
-      setProfile(mappedProfile);
-      setAuthState('IMPERSONATING');
-      
-      toast.success(`Now viewing as ${data.name || data.email}`);
-    } catch (error: any) {
-      setAuthState(user ? 'AUTHENTICATED' : 'UNAUTHENTICATED');
-      toast.error('Failed to impersonate user', {
-        description: error.message
-      });
-      throw error;
-    }
-  }, []);
-
-  // End impersonation
-  const endImpersonation = useCallback(async () => {
-    try {
-      if (!originalProfile) throw new Error('No original profile found');
-      
-      // Restore original profile
-      setProfile(originalProfile);
-      setImpersonatedProfile(null);
-      setAuthState('AUTHENTICATED');
-      
-      toast.success('Returned to your account');
-    } catch (error: any) {
-      setAuthState(user ? 'AUTHENTICATED' : 'UNAUTHENTICATED');
-      toast.error('Failed to end impersonation', {
-        description: error.message
-      });
-      throw error;
-    }
-  }, []);
-
-  // Debounced fetch user profile to prevent API hammering
-  const debounceFetchProfile = useCallback((userId: string) => {
-    // Clear any existing timer
-    if (profileFetchDebounceTimer.current !== null) {
-      window.clearTimeout(profileFetchDebounceTimer.current);
-    }
-    
-    // Set new timer
-    profileFetchDebounceTimer.current = window.setTimeout(() => {
-      fetchProfile(userId);
-    }, 300); // 300ms debounce
-  }, []);
-
-  // Fetch user profile with improved tracking to prevent race conditions
-  const fetchProfile = useCallback(async (userId: string) => {
-    // Skip if we're already fetching this profile
-    if (profileFetchInProgress.current[userId]) {
-      console.log('Profile fetch already in progress for', userId);
-      return;
-    }
-    
-    try {
-      profileFetchInProgress.current[userId] = true;
-      console.log('Fetching profile for user:', userId);
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
-      
+        
       if (error) {
         console.error('Error fetching profile:', error);
-        
-        // Increment error count to handle persistent errors
-        authErrorCount.current += 1;
-        
-        if (authErrorCount.current >= maxErrorsBeforeUnauthenticated) {
-          console.error(`Too many profile fetch errors (${authErrorCount.current}), setting unauthenticated`);
-          setAuthState('UNAUTHENTICATED');
-          stableAuthStatus.current = 'UNAUTHENTICATED';
-        } 
         return;
       }
-      
-      // Reset error count on successful fetch
-      authErrorCount.current = 0;
       
       if (data) {
         const mappedProfile = mapDbProfileToUserProfile(data);
         setProfile(mappedProfile);
-        
-        // Mark authentication as completed to prevent timeout from changing state
-        authInitCompleted.current = true;
-        
-        // Set auth state to authenticated since we have a valid profile
-        setAuthState('AUTHENTICATED');
-        stableAuthStatus.current = 'AUTHENTICATED';
-        
-        console.log('Profile fetch successful, user authenticated');
-        
-        // Clear the initialization timeout as we're now authenticated
-        if (initializationTimeout.current !== null) {
-          clearTimeout(initializationTimeout.current);
-          initializationTimeout.current = null;
-        }
-      } else {
-        // Profile not found for this user ID
-        console.warn(`No profile found for user: ${userId}`);
-        
-        // Don't change to UNAUTHENTICATED if we already have authentication state
-        if (authState !== 'AUTHENTICATED' && authState !== 'IMPERSONATING') {
-          setAuthState('UNAUTHENTICATED');
-          stableAuthStatus.current = 'UNAUTHENTICATED';
-        }
       }
     } catch (err) {
       console.error('Exception fetching profile:', err);
-      
-      // Only set ERROR state after multiple failures
-      if (authErrorCount.current >= maxErrorsBeforeUnauthenticated) {
-        setAuthState('ERROR');
-        stableAuthStatus.current = 'ERROR';
-      }
-    } finally {
-      profileFetchInProgress.current[userId] = false;
     }
-  }, [authState]);
+  };
 
-  // Clear all timers and subscriptions to prevent memory leaks
-  const clearAllTimers = useCallback(() => {
-    if (authSubscription.current) {
-      authSubscription.current.unsubscribe();
-      authSubscription.current = null;
-    }
+  // Initialize auth state
+  useEffect(() => {
+    console.log('Setting up auth subscription');
+    setLoading(true);
     
-    if (initializationTimeout.current !== null) {
-      clearTimeout(initializationTimeout.current);
-      initializationTimeout.current = null;
-    }
+    // Set up auth listener
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      console.log('Auth state changed:', event, currentSession ? 'Has session' : 'No session');
+      setSession(currentSession);
+      setUser(currentSession?.user || null);
+      
+      if (currentSession?.user) {
+        // Use setTimeout to avoid potential deadlocks with Supabase client
+        setTimeout(() => {
+          fetchProfile(currentSession.user.id);
+        }, 0);
+      } else {
+        setProfile(null);
+      }
+    });
     
-    if (profileFetchDebounceTimer.current !== null) {
-      clearTimeout(profileFetchDebounceTimer.current);
-      profileFetchDebounceTimer.current = null;
-    }
+    // Check for existing session
+    const checkSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session);
+        setUser(data.session?.user || null);
+        
+        if (data.session?.user) {
+          await fetchProfile(data.session.user.id);
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkSession();
+    
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
-  // Main auth initialization and listener setup
-  useEffect(() => {
-    // Skip if already initialized
-    if (isInitialized.current) {
-      return;
+  // Sign in with email and password
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
+      
+      if (error) {
+        return { error };
+      }
+      
+      return { error: null };
+    } catch (err) {
+      return { error: err };
     }
-    
-    isInitialized.current = true;
-    console.log('Initializing AuthContext');
-    
-    // Safety timeout to prevent infinite loading
-    // IMPROVED: Only change state if we're still initializing and haven't completed auth
-    initializationTimeout.current = window.setTimeout(() => {
-      if (authState === 'INITIALIZING' && !authInitCompleted.current) {
-        console.log('Auth initialization timeout, forcing completion');
-        setAuthState('UNAUTHENTICATED');
-        stableAuthStatus.current = 'UNAUTHENTICATED';
-      }
-    }, 6000); // 6 seconds timeout
-    
-    // Set up auth state listener
-    const setupAuthListener = () => {
-      try {
-        // IMPORTANT: Set up the auth listener first
-        const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
-          // Handle auth state changes
-          console.log('Auth state changed:', event, newSession ? 'Session exists' : 'No session');
-          
-          // Simple state updates only - no API calls inside the callback
-          setSession(newSession);
-          setUser(newSession?.user ?? null);
-          
-          // Mark as authenticated if we have a session
-          if (newSession?.user) {
-            // This marks that we have a successful auth state
-            authInitCompleted.current = true;
-            
-            // Clear the timeout since auth is confirmed
-            if (initializationTimeout.current !== null) {
-              clearTimeout(initializationTimeout.current);
-              initializationTimeout.current = null;
-            }
-            
-            // Defer any API calls or complex state updates
-            setTimeout(() => {
-              debounceFetchProfile(newSession.user.id);
-            }, 0);
-          } else if (event === 'SIGNED_OUT') {
-            // If explicitly signed out, update state immediately
-            setTimeout(() => {
-              setProfile(null);
-              setAuthState('UNAUTHENTICATED');
-              stableAuthStatus.current = 'UNAUTHENTICATED';
-            }, 0);
-          }
-        });
-        
-        authSubscription.current = data.subscription;
-      } catch (error) {
-        console.error('Error setting up auth listener:', error);
-        setAuthState('ERROR');
-        stableAuthStatus.current = 'ERROR';
-      }
-    };
-    
-    // Check for existing session after listener is set up
-    const checkExistingSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          setSession(session);
-          setUser(session.user);
-          
-          // Mark that we have auth data to prevent timeout from changing state
-          authInitCompleted.current = true;
-          
-          // Clear the timeout since we have a session
-          if (initializationTimeout.current !== null) {
-            clearTimeout(initializationTimeout.current);
-            initializationTimeout.current = null;
-          }
-          
-          // Defer profile fetch to avoid potential deadlock
-          setTimeout(() => {
-            debounceFetchProfile(session.user.id);
-          }, 0);
-        } else {
-          // No session, set state to unauthenticated
-          setAuthState('UNAUTHENTICATED');
-          stableAuthStatus.current = 'UNAUTHENTICATED';
-          
-          // Clear the timeout since we've determined auth state
-          if (initializationTimeout.current !== null) {
-            clearTimeout(initializationTimeout.current);
-            initializationTimeout.current = null;
-          }
-        }
-      } catch (err) {
-        console.error('Error checking session:', err);
-        setAuthState('UNAUTHENTICATED');
-        stableAuthStatus.current = 'UNAUTHENTICATED';
-        
-        // Clear the timeout in error case too
-        if (initializationTimeout.current !== null) {
-          clearTimeout(initializationTimeout.current);
-          initializationTimeout.current = null;
-        }
-      }
-    };
-    
-    // Run setup in specific order with small delays to prevent race conditions
-    setupAuthListener();
-    
-    // Small delay before checking session
-    setTimeout(() => {
-      checkExistingSession();
-    }, 100);
-    
-    // Clean up on unmount
-    return clearAllTimers;
-  }, [debounceFetchProfile, clearAllTimers, authState]);
+  };
 
-  // Additional effect to ensure cleanup happens when component unmounts
-  useEffect(() => {
-    return clearAllTimers;
-  }, [clearAllTimers]);
+  // Sign out
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      // State will be updated by the auth listener
+    } catch (err) {
+      console.error('Error signing out:', err);
+      
+      // Force clean local storage
+      try {
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      } catch (e) {
+        // Silent fail
+      }
+      
+      // Reset state
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+    }
+  };
 
-  // Create the context value - ensure consistency of the object reference
-  // Wrap props in useMemo to prevent unneeded re-renders
-  const value = useMemo<AuthContextType>(() => ({
+  // Create auth context value
+  const value: AuthContextType = {
     user,
     session,
     profile,
-    originalProfile,
     loading,
-    error,
-    isImpersonating,
-    impersonatedProfile,
-    authState,
     signIn,
-    signUp,
     signOut,
-    setProfile,
-    startImpersonation,
-    endImpersonation,
-    resetAuth
-  }), [
-    user, 
-    session, 
-    profile, 
-    originalProfile, 
-    loading, 
-    error, 
-    isImpersonating, 
-    impersonatedProfile, 
-    authState, 
-    signIn, 
-    signUp, 
-    signOut, 
-    setProfile, 
-    startImpersonation, 
-    endImpersonation,
-    resetAuth
-  ]);
+    isAuthenticated
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Hook
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

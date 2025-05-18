@@ -1,10 +1,9 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import ImpersonationBanner from '@/components/auth/ImpersonationBanner';
 import { Loader } from 'lucide-react';
 
 const Layout = () => {
@@ -50,8 +49,6 @@ const Layout = () => {
           <Outlet />
         </main>
       </div>
-      
-      <ImpersonationBanner />
     </div>
   );
 };
