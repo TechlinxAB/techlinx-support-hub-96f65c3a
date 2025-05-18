@@ -21,7 +21,7 @@ export const useOptimizedNewsBlockSave = () => {
   const pendingSaves = useRef(new Map<string, NodeJS.Timeout>());
   
   // Throttle settings
-  const MIN_SAVE_INTERVAL = 1000; // Minimum time between save operations
+  const MIN_SAVE_INTERVAL = 1500; // Minimum time between save operations
   const lastSaveTimestamp = useRef<number>(0);
   
   // Track active toast IDs to prevent duplicates
@@ -31,12 +31,33 @@ export const useOptimizedNewsBlockSave = () => {
     if (pendingSaves.current.has(blockId)) {
       clearTimeout(pendingSaves.current.get(blockId));
       pendingSaves.current.delete(blockId);
+      console.log(`Cancelled pending save for block ${blockId}`);
     }
     
     // Also cancel any in-flight requests for this block
     if (abortControllers.current.has(blockId)) {
-      abortControllers.current.get(blockId)?.abort();
-      abortControllers.current.delete(blockId);
+      try {
+        abortControllers.current.get(blockId)?.abort();
+        abortControllers.current.delete(blockId);
+        console.log(`Aborted in-flight save for block ${blockId}`);
+      } catch (error) {
+        console.error("Error aborting save:", error);
+      }
+    }
+    
+    // Remove from queue if present
+    if (saveQueue.current.has(blockId)) {
+      saveQueue.current.delete(blockId);
+      console.log(`Removed block ${blockId} from save queue`);
+    }
+
+    // Clear any active toast for this block
+    if (activeToastIds.current.has(blockId)) {
+      const toastId = activeToastIds.current.get(blockId);
+      if (toastId) {
+        toast.dismiss(toastId);
+        activeToastIds.current.delete(blockId);
+      }
     }
   };
 
@@ -51,7 +72,7 @@ export const useOptimizedNewsBlockSave = () => {
       // Schedule next attempt after the throttle period
       setTimeout(() => {
         processQueue();
-      }, MIN_SAVE_INTERVAL - timeSinceLastSave);
+      }, MIN_SAVE_INTERVAL - timeSinceLastSave + 100); // Add small buffer
       return;
     }
     
@@ -77,10 +98,15 @@ export const useOptimizedNewsBlockSave = () => {
         // If we already have a toast for this block, use that ID
         if (activeToastIds.current.has(blockId)) {
           toastId = activeToastIds.current.get(blockId);
+          console.log(`Using existing toast ID for saving: ${toastId}`);
         } else {
-          // Using toast.loading which returns string or number
-          toastId = toast.loading("Saving changes...");
-          if (toastId !== -1) {
+          // Using toast which returns string or number
+          toastId = toast({
+            title: "Saving changes...",
+            variant: "default"
+          });
+          
+          if (toastId && toastId !== -1) { // Skip if toast is a duplicate (-1)
             activeToastIds.current.set(blockId, toastId);
           }
         }
@@ -89,26 +115,20 @@ export const useOptimizedNewsBlockSave = () => {
       // Log save operation details for debugging
       console.log(`Starting save for block ${blockId} at ${new Date().toISOString()}`);
       
-      // Perform the update with timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Save operation timed out after 15 seconds')), 15000);
-      });
+      const timestamp = new Date().toISOString();
+
+      // Add a small delay to ensure UI updates show the loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Send the actual request with the abort signal
-      const updatePromise = supabase
+      // Send the actual request with the abort signal and proper error handling
+      const { error } = await supabase
         .from('company_news_blocks')
         .update({
           ...data,
-          updated_at: new Date().toISOString() // Force server to use new timestamp
+          updated_at: timestamp // Force server to use new timestamp
         })
         .eq('id', blockId)
         .abortSignal(abortController.signal);
-      
-      // Race between the timeout and the update
-      const { error } = await Promise.race([
-        updatePromise,
-        timeoutPromise
-      ]) as any;
       
       if (error) throw error;
       
@@ -119,10 +139,13 @@ export const useOptimizedNewsBlockSave = () => {
       
       // Update toast status if it was shown
       if (toastId && toastId !== -1 && options?.showToast !== false) {
+        // Clear previous toast first to avoid stacking
+        toast.dismiss(toastId);
+        
+        // Show success toast
         toast({
           title: "News Block Updated",
           description: "The news block has been successfully updated",
-          id: toastId,
           variant: "success"
         });
         
@@ -132,13 +155,23 @@ export const useOptimizedNewsBlockSave = () => {
         }, 2000);
       }
       
-      options?.onSuccess?.();
-    } catch (error: any) { // Properly typed error parameter
+      if (options?.onSuccess) {
+        options.onSuccess();
+      }
+    } catch (error: any) {
       // Check if this was an abort error, which we can ignore
-      if (error.name === 'AbortError') {
+      if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
         console.log('Save operation was cancelled');
         if (options?.showToast !== false) {
-          toast("Save cancelled");
+          // Clear any existing toast
+          if (activeToastIds.current.has(blockId)) {
+            toast.dismiss(activeToastIds.current.get(blockId));
+          }
+          
+          toast({
+            title: "Save cancelled",
+            variant: "default"
+          });
         }
         return;
       }
@@ -146,9 +179,19 @@ export const useOptimizedNewsBlockSave = () => {
       // Properly log the error for debugging
       console.error('Error saving news block:', error);
       
+      // Clear any existing toast for this block
+      if (activeToastIds.current.has(blockId)) {
+        const existingToastId = activeToastIds.current.get(blockId);
+        if (existingToastId) {
+          toast.dismiss(existingToastId);
+        }
+      }
+      
       if (options?.showToast !== false) {
-        toast("Failed to save changes", {
-          description: error.message || "Please try again"
+        toast({
+          title: "Failed to save changes",
+          description: error.message || "Please try again",
+          variant: "destructive"
         });
       }
       
@@ -170,7 +213,7 @@ export const useOptimizedNewsBlockSave = () => {
       // Small delay before processing next item to prevent overwhelming the browser
       setTimeout(() => {
         processQueue();
-      }, 300);
+      }, 500);
     }
   }, []);
 
@@ -190,6 +233,7 @@ export const useOptimizedNewsBlockSave = () => {
       options.onStart();
     }
     
+    // Process the queue
     processQueue();
   }, [processQueue]);
 
@@ -197,7 +241,7 @@ export const useOptimizedNewsBlockSave = () => {
   const debouncedSave = useCallback((
     blockId: string, 
     data: Partial<any>, 
-    delay: number = 1500, // Increased default debounce time
+    delay: number = 2500, // Reasonable default debounce time
     options?: SaveOptions
   ) => {
     // Cancel any pending saves for this block

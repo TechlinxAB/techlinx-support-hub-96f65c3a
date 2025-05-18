@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,7 +30,14 @@ import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import CompanySettingsPage from "./pages/CompanySettingsPage";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    }
+  }
+});
 
 // Modal Manager Component to initialize the modal manager hook
 const ModalManager = ({ children }: { children: React.ReactNode }) => {
