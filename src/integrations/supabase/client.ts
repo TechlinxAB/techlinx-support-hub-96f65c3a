@@ -22,62 +22,7 @@ const getLocalStorageProvider = () => {
     };
   }
   
-  // Use localStorage with error handling and memory fallbacks
-  const memoryFallback: Record<string, string> = {};
-  
-  return {
-    getItem: (key: string) => {
-      try {
-        return window.localStorage.getItem(key) || memoryFallback[key] || null;
-      } catch (e) {
-        console.error("localStorage.getItem failed:", e);
-        return memoryFallback[key] || null;
-      }
-    },
-    setItem: (key: string, value: string) => {
-      try {
-        window.localStorage.setItem(key, value);
-        memoryFallback[key] = value; // Also store in memory
-      } catch (e) {
-        console.error("localStorage.setItem failed:", e);
-        memoryFallback[key] = value; // Store in memory fallback
-      }
-    },
-    removeItem: (key: string) => {
-      try {
-        window.localStorage.removeItem(key);
-        delete memoryFallback[key];
-      } catch (e) {
-        console.error("localStorage.removeItem failed:", e);
-        delete memoryFallback[key];
-      }
-    },
-    clear: () => {
-      try {
-        // Only clear Supabase-related items
-        Object.keys(window.localStorage).forEach(key => {
-          if (key.startsWith('supabase.auth.')) {
-            window.localStorage.removeItem(key);
-          }
-        });
-        
-        // Clear memory fallback
-        Object.keys(memoryFallback).forEach(key => {
-          if (key.startsWith('supabase.auth.')) {
-            delete memoryFallback[key];
-          }
-        });
-      } catch (e) {
-        console.error("localStorage.clear failed:", e);
-        // Still clear memory fallback
-        Object.keys(memoryFallback).forEach(key => {
-          if (key.startsWith('supabase.auth.')) {
-            delete memoryFallback[key];
-          }
-        });
-      }
-    }
-  };
+  return window.localStorage;
 };
 
 // Create Supabase client with robust configuration

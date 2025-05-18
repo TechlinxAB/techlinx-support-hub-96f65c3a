@@ -24,10 +24,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Use refs to prevent race conditions
   const isInitialized = useRef(false);
-  const isAuthChanging = useRef(false);
+  const authListenerRef = useRef<{ unsubscribe: () => void } | null>(null);
   const authTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const authListenerInitialized = useRef(false);
-  const sessionChecked = useRef(false);
+  const sessionCheckedRef = useRef(false);
   
   // Debounced status updates to prevent rapid state changes
   const updateAuthStatus = (newStatus: AuthStatus, newUser: User | null) => {
@@ -36,27 +35,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       clearTimeout(authTimeoutRef.current);
     }
     
-    // Set a flag to indicate auth is changing
-    isAuthChanging.current = true;
-    
     // Add a small delay to batch potential rapid changes
     authTimeoutRef.current = setTimeout(() => {
-      if (newStatus !== status || (newStatus === 'AUTHENTICATED' && !user)) {
-        console.log(`Auth status update: ${newStatus}`);
-        
-        setStatus(newStatus);
-        setUser(newUser);
-        
-        // Only fetch profile if authenticated and we have a user
-        if (newStatus === 'AUTHENTICATED' && newUser) {
-          fetchUserProfile(newUser.id);
-        } else if (newStatus === 'UNAUTHENTICATED') {
-          setProfile(null);
-        }
+      console.log(`Auth status update: ${newStatus}`);
+      
+      setStatus(newStatus);
+      setUser(newUser);
+      
+      // Only fetch profile if authenticated and we have a user
+      if (newStatus === 'AUTHENTICATED' && newUser) {
+        fetchUserProfile(newUser.id);
+      } else if (newStatus === 'UNAUTHENTICATED') {
+        setProfile(null);
       }
       
-      // Clear the changing flag
-      isAuthChanging.current = false;
     }, 50); // Small delay to batch updates
   };
   
@@ -80,45 +72,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Initialize auth state once on component mount
   useEffect(() => {
-    if (authListenerInitialized.current) return;
+    if (isInitialized.current) return;
     
     console.log("Initializing authentication");
     let mounted = true;
-    let authSubscription: { unsubscribe: () => void } | null = null;
+    isInitialized.current = true;
     
-    // Set up auth state listener first, before checking session
     const setupAuthListener = () => {
+      if (authListenerRef.current) {
+        authListenerRef.current.unsubscribe();
+      }
+      
       const { data } = supabase.auth.onAuthStateChange((event, session) => {
         if (!mounted) return;
         
         console.log(`Auth event: ${event}`);
         
         // Handle different auth events
-        if (session && session.user) {
+        if (event === 'SIGNED_IN' && session?.user) {
           updateAuthStatus('AUTHENTICATED', session.user);
-        } else if (event === 'SIGNED_OUT') {
+        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
           updateAuthStatus('UNAUTHENTICATED', null);
-        } else if (event === 'USER_UPDATED' && !session) {
-          updateAuthStatus('UNAUTHENTICATED', null);
+        } else if (event === 'INITIAL_SESSION') {
+          if (session?.user) {
+            console.log("Valid session found");
+            updateAuthStatus('AUTHENTICATED', session.user);
+          } else {
+            console.log("No active session found");
+            updateAuthStatus('UNAUTHENTICATED', null);
+          }
+          sessionCheckedRef.current = true;
         }
       });
       
+      authListenerRef.current = data.subscription;
       return data.subscription;
     };
     
-    // Check for existing session
-    const checkSession = async () => {
-      if (sessionChecked.current) return;
-      
-      try {
-        // Set up auth listener before checking session
-        authSubscription = setupAuthListener();
-        authListenerInitialized.current = true;
-        
-        // Now check for session
-        const { data, error } = await supabase.auth.getSession();
-        sessionChecked.current = true;
-        
+    // Set up auth listener
+    setupAuthListener();
+    
+    // Check for existing session if not already checked
+    if (!sessionCheckedRef.current) {
+      supabase.auth.getSession().then(({ data, error }) => {
         if (!mounted) return;
         
         if (error) {
@@ -135,20 +131,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           updateAuthStatus('UNAUTHENTICATED', null);
         }
         
-      } catch (error) {
-        console.error("Session check exception:", error);
-        if (mounted) {
-          updateAuthStatus('UNAUTHENTICATED', null);
-        }
-      } finally {
-        if (mounted) {
-          isInitialized.current = true;
-        }
-      }
-    };
-    
-    // Start the authentication process
-    checkSession();
+        sessionCheckedRef.current = true;
+      });
+    }
     
     // Cleanup function
     return () => {
@@ -156,8 +141,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (authTimeoutRef.current) {
         clearTimeout(authTimeoutRef.current);
       }
-      if (authSubscription) {
-        authSubscription.unsubscribe();
+      if (authListenerRef.current) {
+        authListenerRef.current.unsubscribe();
       }
     };
   }, []);
