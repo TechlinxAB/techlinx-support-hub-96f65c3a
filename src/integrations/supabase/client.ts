@@ -87,6 +87,7 @@ export const supabase = createClient<Database>(
 let lastAuthEvent = '';
 let lastAuthEventTime = 0;
 
+// Create a more efficient auth event handler
 supabase.auth.onAuthStateChange((event, session) => {
   const now = Date.now();
   // Only log if different event or same event but after 1 second
@@ -140,7 +141,9 @@ export const forceSignOut = async () => {
     // First try removing the token directly from storage
     // Do this in multiple ways to ensure it's fully removed
     try {
+      // Clear using both methods to be thorough
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(`${STORAGE_KEY}`); // Try with string concatenation
       console.log('Force sign out: Removed token from localStorage');
     } catch (storageError) {
       console.error('Error accessing localStorage:', storageError);
@@ -161,15 +164,22 @@ export const forceSignOut = async () => {
     
     // Clear URL-based auth params if present
     if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname);
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, '', cleanUrl);
     }
     
-    // Ensure session state is cleared from memory
+    // Try to directly clear the internal state of the client
     try {
-      // @ts-ignore - Access internal session state (this is a hack but necessary)
+      // @ts-ignore - Access internal state (this is a hack but necessary)
       if (supabase.auth.session) {
         // @ts-ignore
         supabase.auth.session = null;
+      }
+      
+      // @ts-ignore - Direct approach to clear session
+      if (supabase.auth.currentSession) {
+        // @ts-ignore
+        supabase.auth.currentSession = null;
       }
     } catch (memoryError) {
       console.log('Force sign out: Memory cleanup failed');
@@ -185,6 +195,9 @@ export const forceSignOut = async () => {
     } catch (listenersError) {
       console.log('Force sign out: Listener cleanup failed');
     }
+    
+    // Add a slight delay to ensure cleanup completes
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     return { success: true, wasForced: true };
   } catch (cleanupError) {

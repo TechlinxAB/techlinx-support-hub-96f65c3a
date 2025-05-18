@@ -28,19 +28,29 @@ const LogoutButton = ({
       const toastId = toast.loading('Logging out...');
       
       // First clear the Supabase token directly from localStorage
-      localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      try {
+        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+        console.log('Removed auth token from localStorage');
+      } catch (storageError) {
+        console.warn('Error clearing localStorage:', storageError);
+      }
       
       // Use a Promise.allSettled to ensure we try all logout methods
       // even if some fail - this is more reliable than sequential try/catch
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         signOut(),  // AuthContext method
         forceSignOut() // Direct client method
       ]);
       
+      console.log('Logout methods results:', results);
+      
       toast.success('Successfully logged out', { id: toastId });
       
-      // Hard redirect to auth page with a clean slate
-      window.location.href = '/auth?clean=true';
+      // Add a slight delay before the redirect
+      setTimeout(() => {
+        // Hard redirect to auth page with a clean slate, no React Router
+        window.location.href = '/auth?clean=true';
+      }, 100);
       
     } catch (error) {
       console.error('Error during logout:', error);

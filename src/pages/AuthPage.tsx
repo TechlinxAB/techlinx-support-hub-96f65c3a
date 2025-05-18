@@ -22,6 +22,7 @@ const AuthPage = () => {
   const searchParams = new URLSearchParams(location.search);
   const cleanSession = searchParams.get('clean') === 'true';
   const forcedLogout = searchParams.get('forced') === 'true';
+  const redirectTriggered = React.useRef(false);
   
   // Reset any stale auth state that might cause issues
   useEffect(() => {
@@ -68,54 +69,68 @@ const AuthPage = () => {
     
     clearBrokenState();
     
-    const checkSession = async () => {
-      try {
-        console.log('Checking for existing session...');
-        const { data, error } = await supabase.auth.getSession();
+    // Add a small delay to avoid race conditions with multiple auth checks
+    const timeoutId = setTimeout(() => {
+      const checkSession = async () => {
+        if (redirectTriggered.current) {
+          console.log('Redirect already triggered, skipping session check');
+          return;
+        }
         
-        if (error) {
-          console.error('Session check error:', error);
-          if (isMounted) {
-            setAuthError(error.message);
-            toast.error("Authentication error", {
-              description: error.message
-            });
-          }
-          setCheckingSession(false);
-        } else if (data.session && isMounted) {
-          console.log('Active session found, redirecting to:', from);
-          // Use a small timeout to prevent immediate redirect that can cause loops
-          redirectTimeout = window.setTimeout(() => {
+        try {
+          console.log('Checking for existing session...');
+          const { data, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error('Session check error:', error);
             if (isMounted) {
-              try {
-                // First try React Router navigation
-                navigate(from);
-                
-                // If we're still on the auth page after navigation attempt,
-                // use a hard redirect as fallback
-                setTimeout(() => {
-                  if (window.location.pathname === '/auth' && isMounted) {
-                    window.location.href = from === '/' ? '/' : from;
-                  }
-                }, 100);
-              } catch (navError) {
-                // Fallback to direct navigation
-                window.location.href = from === '/' ? '/' : from;
-              }
+              setAuthError(error.message);
+              toast.error("Authentication error", {
+                description: error.message
+              });
             }
-          }, 500);
-        } else {
-          console.log('No active session found, showing login form');
+            setCheckingSession(false);
+          } else if (data.session && isMounted) {
+            console.log('Active session found, redirecting to:', from);
+            
+            // Prevent multiple redirects
+            if (!redirectTriggered.current) {
+              redirectTriggered.current = true;
+              
+              // Use a small timeout to prevent immediate redirect that can cause loops
+              redirectTimeout = window.setTimeout(() => {
+                if (isMounted) {
+                  try {
+                    console.log('Navigating to:', from);
+                    navigate(from);
+                    
+                    // If still on auth page after navigation attempt,
+                    // we'll fall back but add a longer delay to avoid loops
+                    setTimeout(() => {
+                      if (window.location.pathname === '/auth' && isMounted && redirectTriggered.current) {
+                        console.log('Still on auth page after navigate, falling back to direct redirect');
+                        redirectTriggered.current = false; // Reset to allow one more try
+                        window.location.href = from;
+                      }
+                    }, 1000);
+                  } catch (navError) {
+                    console.error('Navigation error:', navError);
+                    // Fallback to direct navigation
+                    window.location.href = from;
+                  }
+                }
+              }, 500);
+            }
+          } else {
+            console.log('No active session found, showing login form');
+            setCheckingSession(false);
+          }
+        } catch (error) {
+          console.error('Exception during session check:', error);
           setCheckingSession(false);
         }
-      } catch (error) {
-        console.error('Exception during session check:', error);
-        setCheckingSession(false);
-      }
-    };
-    
-    // Run check with a short delay to allow for storage operations to complete
-    const timeoutId = setTimeout(() => {
+      };
+      
       checkSession();
     }, 200);
     
@@ -153,18 +168,11 @@ const AuthPage = () => {
       // Allow the toast to show before redirect
       setTimeout(() => {
         try {
-          // First try React Router navigation
-          navigate(from);
-          
-          // Fallback to direct navigation if React Router fails
-          setTimeout(() => {
-            if (window.location.pathname === '/auth') {
-              window.location.href = from === '/' ? '/' : from;
-            }
-          }, 100);
-        } catch (navError) {
-          // Direct navigation fallback
+          // Use window.location for more reliable redirect after login
           window.location.href = from === '/' ? '/' : from;
+        } catch (navError) {
+          console.error('Navigation error after login:', navError);
+          window.location.href = '/';
         }
       }, 300);
       

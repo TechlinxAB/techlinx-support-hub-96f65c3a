@@ -15,6 +15,7 @@ const ProtectedRoute = () => {
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [navigationCount, setNavigationCount] = useState(0);
+  const [navigationTimestamps, setNavigationTimestamps] = useState<number[]>([]);
   const [lastNavigationTime, setLastNavigationTime] = useState(0);
   const [profileNotFound, setProfileNotFound] = useState(false);
   const [isJustLoggedIn, setIsJustLoggedIn] = useState(false);
@@ -32,14 +33,15 @@ const ProtectedRoute = () => {
     return undefined;
   }, [loading]);
 
-  // Handle navigation loops - detect if we're looping too much
+  // Handle navigation loops - with better tracking of time between redirects
   useEffect(() => {
-    // Reset the counter if we stay on the same route for a bit
+    // Reset the counter after a longer period without redirects
     const resetCountTimer = setTimeout(() => {
       if (navigationCount > 0) {
         setNavigationCount(0);
+        setNavigationTimestamps([]);
       }
-    }, 5000);
+    }, 10000); // 10 seconds with no redirects resets the counter
 
     return () => clearTimeout(resetCountTimer);
   }, [navigationCount]);
@@ -53,7 +55,7 @@ const ProtectedRoute = () => {
     if (user && !profile && !loading && !profileNotFound) {
       const profileTimer = setTimeout(() => {
         setProfileNotFound(true);
-      }, 3000); // 3 seconds timeout
+      }, 5000); // 5 seconds timeout - increased from 3 seconds
       
       return () => clearTimeout(profileTimer);
     }
@@ -73,7 +75,7 @@ const ProtectedRoute = () => {
       // Reset after a bit
       const timer = setTimeout(() => {
         setIsJustLoggedIn(false);
-      }, 2000);
+      }, 3000); // Increased from 2 seconds
       
       return () => clearTimeout(timer);
     }
@@ -98,33 +100,47 @@ const ProtectedRoute = () => {
     const now = Date.now();
     const timeSinceLastNav = now - lastNavigationTime;
     
-    // If navigating too frequently, we might be in a loop
-    if (timeSinceLastNav < 500 && navigationCount > 3) {
-      console.error("Too many navigation attempts detected. Possible redirect loop.");
-      toast.error("Navigation loop detected", {
-        description: "Breaking the loop and redirecting to auth page"
-      });
-      
-      // Force sign out and reset auth state when a loop is detected
-      forceSignOut().then(() => {
-        // Clear navigation count
-        setNavigationCount(0);
-        setRedirectAttempted(false);
+    // Add more sophisticated redirect loop detection
+    // We'll use a rolling window of timestamps to detect rapid redirects
+    if (navigationTimestamps.length >= 3) {
+      // Check if we have 3 redirects within 1.5 seconds (potential loop)
+      const timeWindow = now - navigationTimestamps[navigationTimestamps.length - 3];
+      if (timeWindow < 1500) {
+        console.error("Potential redirect loop detected: 3 redirects in", timeWindow, "ms");
         
-        // Hard redirect to break any React Router loops
-        window.location.href = '/auth?reset=true';
-      });
-      
-      return;
+        // Only break the loop if it's happening very rapidly
+        if (timeWindow < 800) {
+          console.error("Critical redirect loop detected! Breaking the cycle.");
+          toast.error("Navigation issue detected", {
+            description: "Resolving authentication state issues..."
+          });
+          
+          // Force sign out and reset auth state when a loop is detected
+          forceSignOut().then(() => {
+            // Clear navigation count
+            setNavigationCount(0);
+            setNavigationTimestamps([]);
+            setRedirectAttempted(false);
+            
+            // Hard redirect to break any React Router loops
+            // We'll use a slight delay to ensure state is reset
+            setTimeout(() => {
+              window.location.href = '/auth?reset=true';
+            }, 200);
+          });
+          
+          return;
+        }
+      }
     }
     
     // Update last navigation time
     setLastNavigationTime(now);
     
     // If we've redirected too many times, something is wrong
-    if (navigationCount > 5) {
+    if (navigationCount > 10) { // Increased from 5
       console.error("Too many navigation attempts detected. Possible redirect loop.");
-      toast.error("Navigation loop detected", {
+      toast.error("Navigation issue detected", {
         description: "Attempting to recover by resetting authentication state"
       });
       
@@ -156,8 +172,11 @@ const ProtectedRoute = () => {
       console.log("No authenticated user, redirecting to auth");
       setRedirectAttempted(true);
       
-      // Increment navigation count to detect potential loops
+      // Increment navigation count
       setNavigationCount(prev => prev + 1);
+      
+      // Track timestamp of this redirect
+      setNavigationTimestamps(prev => [...prev, now]);
       
       // Store current path for redirect after login
       let currentPath = location.pathname;
@@ -190,7 +209,8 @@ const ProtectedRoute = () => {
     navigate, 
     location.pathname, 
     redirectAttempted, 
-    navigationCount, 
+    navigationCount,
+    navigationTimestamps,
     lastNavigationTime, 
     isAuthPage, 
     profileNotFound, 
