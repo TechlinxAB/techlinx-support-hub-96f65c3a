@@ -9,10 +9,8 @@ type AuthStatus = 'LOADING' | 'AUTHENTICATED' | 'UNAUTHENTICATED';
 
 interface AuthContextType {
   status: AuthStatus;
-  session: Session | null;
   user: User | null;
   profile: any | null;
-  loading: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -21,186 +19,132 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Core auth state
   const [status, setStatus] = useState<AuthStatus>('LOADING');
-  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   
-  // Track component mounting to prevent state updates after unmount
-  const isMounted = React.useRef<boolean>(true);
-
-  // Fetch user profile when we have a user ID
-  const fetchUserProfile = async (userId: string) => {
-    if (!isMounted.current) return;
-
-    try {
-      console.log("Fetching profile for user:", userId);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      if (error) {
-        console.error("Error fetching profile:", error.message);
-        return;
-      }
-      
-      if (data && isMounted.current) {
-        console.log("Profile data retrieved successfully");
-        setProfile(data);
-      }
-    } catch (error: any) {
-      console.error('Error fetching user profile:', error.message);
-    }
-  };
-  
-  // Function to safely clear auth state in the context
-  const clearAuthState = () => {
-    if (!isMounted.current) return;
-    
-    setStatus('UNAUTHENTICATED');
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-  };
-  
-  // Initialize auth state
+  // Initialize auth state once on component mount
   useEffect(() => {
-    console.log("Initializing auth state");
-    isMounted.current = true;
+    console.log("Initializing authentication");
+    let mounted = true;
     
-    // Set up auth change listener FIRST to catch all events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (!isMounted.current) return;
-      
-      console.log(`Auth state changed: ${event} for user ${newSession?.user?.id || 'null'}`);
-      
-      // Handle auth events
-      switch (event) {
-        case 'SIGNED_IN':
-          if (newSession) {
-            setStatus('AUTHENTICATED');
-            setSession(newSession);
-            setUser(newSession.user);
-            
-            // Fetch profile after a slight delay to avoid race conditions
-            setTimeout(() => {
-              if (isMounted.current && newSession.user) {
-                fetchUserProfile(newSession.user.id);
-              }
-            }, 100);
-          }
-          break;
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+        console.log(`Auth event: ${event}`);
+        
+        if (session && session.user) {
+          // We have a session, user is authenticated
+          setUser(session.user);
+          setStatus('AUTHENTICATED');
           
-        case 'SIGNED_OUT':
-          clearAuthState();
-          break;
-        
-        case 'TOKEN_REFRESHED':
-          if (newSession) {
-            setSession(newSession);
+          // Fetch user profile data
+          try {
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+              
+            if (!error && data && mounted) {
+              setProfile(data);
+            }
+          } catch (error) {
+            console.error('Error fetching profile:', error);
           }
-          break;
-        
-        case 'USER_UPDATED':
-          if (newSession) {
-            setSession(newSession);
-            setUser(newSession.user);
-          }
-          break;
+        } else if (event === 'SIGNED_OUT') {
+          // Clear auth state on sign out
+          setUser(null);
+          setProfile(null);
+          setStatus('UNAUTHENTICATED');
+        }
       }
-    });
+    );
     
-    // THEN check for existing session
+    // Check for existing session
     const checkSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error("Error getting session:", error.message);
-          clearAuthState();
-          setLoading(false);
+        if (error || !data.session) {
+          // No valid session
+          if (mounted) {
+            setStatus('UNAUTHENTICATED');
+          }
           return;
         }
         
-        if (data.session) {
-          console.log("Found existing session for user:", data.session.user.id);
-          setStatus('AUTHENTICATED');
-          setSession(data.session);
+        // We have a valid session
+        if (mounted) {
           setUser(data.session.user);
-          fetchUserProfile(data.session.user.id);
-        } else {
-          console.log("No existing session");
-          clearAuthState();
+          setStatus('AUTHENTICATED');
+          
+          // Fetch user profile
+          try {
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', data.session.user.id)
+              .maybeSingle();
+              
+            if (!profileError && profileData && mounted) {
+              setProfile(profileData);
+            }
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+          }
         }
       } catch (error) {
         console.error("Session check error:", error);
-        clearAuthState();
-      } finally {
-        if (isMounted.current) {
-          setLoading(false);
+        if (mounted) {
+          setStatus('UNAUTHENTICATED');
         }
       }
     };
     
-    // Call checkSession after setting up listener
+    // Start session check
     checkSession();
     
-    // Cleanup
+    // Cleanup function
     return () => {
-      isMounted.current = false;
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
   
-  // Enhanced sign out function with multiple fallbacks
+  // Simple sign out function
   const signOut = async () => {
     try {
-      console.log("Attempting to sign out user");
+      setStatus('LOADING'); // Update UI state immediately
       
-      // Update local state immediately for UI feedback
-      setStatus('LOADING');
+      // First clear local storage to prevent auto-relogin 
+      clearAuthData();
       
-      // First clear local storage to prevent auto-relogin after redirect
-      await clearAuthData();
+      // Then try server-side signout
+      await supabase.auth.signOut();
       
-      // Try local signout first (safer than global)
-      try {
-        const { error: localError } = await supabase.auth.signOut({ scope: 'local' });
-        if (localError) {
-          console.warn("Local signout error:", localError);
-          // Continue with fallbacks even if this fails
-        }
-      } catch (localErr) {
-        console.warn("Local signout exception:", localErr);
-        // Continue with fallbacks
-      }
+      // Force UI state update regardless of server response
+      setUser(null);
+      setProfile(null);
+      setStatus('UNAUTHENTICATED');
       
-      // Force clear auth state
-      clearAuthState();
-      
-      // If we reach here, consider it successful from the user's perspective
       toast.success("Signed out successfully");
-      return;
+    } catch (error) {
+      console.error("Sign out error:", error);
       
-    } catch (error: any) {
-      console.error('Error signing out:', error.message);
-      toast.error("Error signing out");
+      // Still update UI state even if server request fails
+      setUser(null);
+      setProfile(null);
+      setStatus('UNAUTHENTICATED');
       
-      // Force auth state reset even on error
-      clearAuthState();
+      toast.error("Error during sign out, but you've been signed out locally");
     }
   };
   
-  // Context value
   const value: AuthContextType = {
     status,
-    session,
     user,
     profile,
-    loading,
     signOut,
   };
   

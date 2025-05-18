@@ -13,13 +13,13 @@ const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [error, setError] = useState<string>('');
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { status } = useAuth();
   
-  // Get return URL from query params
+  // Get return URL from query params or default to home
   const getReturnUrl = () => {
     const returnUrl = searchParams.get('returnUrl');
     return returnUrl ? decodeURIComponent(returnUrl) : '/';
@@ -28,54 +28,44 @@ const AuthPage = () => {
   // Redirect authenticated users away from login page
   useEffect(() => {
     if (status === 'AUTHENTICATED') {
-      console.log("User authenticated, redirecting away from auth page");
       const returnUrl = getReturnUrl();
+      console.log(`User authenticated, redirecting to ${returnUrl}`);
       navigate(returnUrl, { replace: true });
     }
-  }, [status, navigate, searchParams]);
+  }, [status, navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
-      setErrorMessage("Please fill in all fields");
+      setError("Please fill in all fields");
       toast.error("Please fill in all fields");
       return;
     }
     
     setLoading(true);
-    setErrorMessage('');
+    setError('');
     
     try {
-      console.log(`Attempting to sign in with email: ${email}`);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
       if (error) throw error;
       
-      console.log("Sign in successful");
-      toast.success("You have been logged in");
+      toast.success("Login successful");
       
-      // Clear the form
-      setEmail('');
-      setPassword('');
-      
-      // Redirect will be handled by the effect
+      // Auth state change will trigger the redirect in the useEffect
     } catch (error: any) {
-      console.error("Sign in error:", error);
+      console.error("Login error:", error);
       
-      if (error.message?.includes('Email not confirmed')) {
-        setErrorMessage("Please confirm your email address before signing in.");
-        toast.error("Please confirm your email before signing in");
-      } else if (error.message?.includes('Invalid login credentials')) {
-        setErrorMessage("Invalid email or password");
+      if (error.message?.includes('Invalid login credentials')) {
+        setError("Invalid email or password");
         toast.error("Invalid email or password");
       } else {
-        setErrorMessage(error.message || "Failed to sign in");
-        toast.error(error.message || "Failed to sign in");
+        setError(error.message || "Login failed");
+        toast.error(error.message || "Login failed");
       }
     } finally {
       setLoading(false);
@@ -92,9 +82,9 @@ const AuthPage = () => {
         
         <form onSubmit={handleSignIn}>
           <CardContent className="space-y-4">
-            {errorMessage && (
+            {error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {errorMessage}
+                {error}
               </div>
             )}
             
@@ -106,7 +96,6 @@ const AuthPage = () => {
                 placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
                 disabled={loading}
               />
             </div>
@@ -121,7 +110,6 @@ const AuthPage = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
                 disabled={loading}
               />
             </div>
@@ -131,7 +119,7 @@ const AuthPage = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading || status === 'LOADING'}
+              disabled={loading}
             >
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Sign In
@@ -143,6 +131,10 @@ const AuthPage = () => {
           <p className="text-sm text-muted-foreground text-center">
             New users must be created by an administrator through the User Management page.
           </p>
+          
+          <div className="text-xs text-muted-foreground text-center">
+            Auth Status: {status}
+          </div>
         </CardFooter>
       </Card>
     </div>

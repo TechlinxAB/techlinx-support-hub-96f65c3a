@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { Bell, Menu, LogOut, User, Settings } from 'lucide-react';
@@ -36,30 +36,27 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     return () => clearInterval(timer);
   }, []);
   
-  // Enhanced sign out with better UI feedback and error handling
+  // Handle sign out with proper state management
   const handleSignOut = async () => {
+    if (isSigningOut) return; // Prevent multiple clicks
+    
     try {
-      if (isSigningOut) return; // Prevent multiple clicks
-      
       setIsSigningOut(true);
-      
-      // Update UI state to show signout in progress
       toast.loading("Signing out...");
       
-      // Execute sign out process from auth context
+      // Use the Auth context's signOut function
       await signOut();
       
-      // Force a redirect to auth page - this happens regardless of signout success
+      // Navigate to auth page after a short delay
       setTimeout(() => {
         navigate('/auth', { replace: true });
+        toast.dismiss();
       }, 300);
-      
     } catch (error) {
       console.error("Error during sign out:", error);
       toast.error("Error signing out. Please try again.");
-    } finally {
       setIsSigningOut(false);
-      toast.dismiss(); // Clear any loading toasts
+      toast.dismiss();
     }
   };
   
@@ -101,13 +98,17 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full w-8 h-8 bg-muted">
-              <span className="font-medium text-xs">{profile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}</span>
+              <span className="font-medium text-xs">
+                {profile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+              </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>
               My Account
-              <div className="text-xs text-muted-foreground">{profile?.email || user?.email}</div>
+              <div className="text-xs text-muted-foreground">
+                {profile?.email || user?.email}
+              </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/settings')}>

@@ -6,91 +6,28 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
-// Enhanced storage provider with better error handling and debugging
+// Simple storage provider with fallbacks
 const getStorageProvider = () => {
-  if (typeof window === 'undefined') {
+  if (typeof localStorage === "undefined") {
     return undefined; // No storage in SSR context
   }
   
-  // We'll create a memory fallback storage that's used when localStorage is unavailable
-  const memoryStorage: Record<string, string> = {};
-  
-  try {
-    const testKey = '__supabase_test__';
-    window.localStorage.setItem(testKey, 'test');
-    window.localStorage.removeItem(testKey);
-    
-    return {
-      getItem: (key: string): string | null => {
-        try {
-          return window.localStorage.getItem(key);
-        } catch (e) {
-          console.warn('Error reading from localStorage:', e);
-          return memoryStorage[key] || null;
+  return {
+    getItem: (key) => localStorage.getItem(key),
+    setItem: (key, value) => localStorage.setItem(key, value),
+    removeItem: (key) => localStorage.removeItem(key),
+    clear: () => {
+      // Only clear Supabase-related items
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('supabase.auth.')) {
+          localStorage.removeItem(key);
         }
-      },
-      setItem: (key: string, value: string): void => {
-        try {
-          window.localStorage.setItem(key, value);
-          memoryStorage[key] = value; // Also store in memory as backup
-        } catch (e) {
-          console.warn('Error writing to localStorage:', e);
-          memoryStorage[key] = value;
-        }
-      },
-      removeItem: (key: string): void => {
-        try {
-          window.localStorage.removeItem(key);
-          delete memoryStorage[key];
-        } catch (e) {
-          console.warn('Error removing from localStorage:', e);
-          delete memoryStorage[key];
-        }
-      },
-      clear: (): void => {
-        try {
-          // Only clear Supabase-related items
-          Object.keys(window.localStorage).forEach(key => {
-            if (key.startsWith('supabase.auth.')) {
-              window.localStorage.removeItem(key);
-            }
-          });
-          
-          // Clear memory storage
-          Object.keys(memoryStorage).forEach(key => {
-            if (key.startsWith('supabase.auth.')) {
-              delete memoryStorage[key];
-            }
-          });
-        } catch (e) {
-          console.warn('Error clearing localStorage:', e);
-          // Clear memory storage as fallback
-          Object.keys(memoryStorage).forEach(key => {
-            if (key.startsWith('supabase.auth.')) {
-              delete memoryStorage[key];
-            }
-          });
-        }
-      }
-    };
-  } catch (e) {
-    console.warn('localStorage not available, using memory storage exclusively');
-    return {
-      getItem: (key: string): string | null => memoryStorage[key] || null,
-      setItem: (key: string, value: string): void => { memoryStorage[key] = value; },
-      removeItem: (key: string): void => { delete memoryStorage[key]; },
-      clear: (): void => {
-        Object.keys(memoryStorage).forEach(key => {
-          if (key.startsWith('supabase.auth.')) {
-            delete memoryStorage[key];
-          }
-        });
-      }
-    };
-  }
+      });
+    }
+  };
 };
 
-// Create and export the supabase client with improved configuration
+// Create Supabase client with simplified configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
@@ -99,68 +36,36 @@ export const supabase = createClient<Database>(
       persistSession: true,
       storage: getStorageProvider(),
       autoRefreshToken: true,
-      detectSessionInUrl: true,
-      flowType: 'pkce', // Using PKCE flow which is more reliable than implicit
-      debug: true // Enable debugging to help troubleshoot auth issues
+      detectSessionInUrl: true
     }
   }
 );
 
-// Simple function to check for a valid session
-export const hasValidSession = async (): Promise<boolean> => {
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      console.error("Session check failed:", error);
-      return false;
-    }
-    
-    // Additional validation: Check if token is still valid (not expired)
-    if (data.session) {
-      const expiresAt = data.session.expires_at;
-      if (expiresAt) {
-        const now = Math.floor(Date.now() / 1000);
-        if (expiresAt < now) {
-          console.log("Session token has expired");
-          return false;
-        }
-      }
-      return true;
-    }
-    return false;
-  } catch (err) {
-    console.error("Session check failed with exception:", err);
-    return false;
-  }
-};
-
-// Enhanced function to clear auth data with proper ordering and fallbacks
-export const clearAuthData = async (): Promise<void> => {
-  if (typeof window === 'undefined') return;
+// Function to clear auth data from local storage
+export const clearAuthData = () => {
+  if (typeof localStorage === "undefined") return;
   
-  console.log("Clearing all authentication data");
+  console.log("Clearing auth data from local storage");
   
   try {
-    // Try to use the storage directly first
-    const storage = getStorageProvider();
-    if (storage) {
-      storage.clear();
-    }
-    
-    // Remove any potential session cookies (belt and suspenders approach)
-    document.cookie.split(';').forEach(c => {
-      const cookie = c.trim();
-      if (cookie.startsWith('supabase-auth-token=')) {
-        document.cookie = cookie.split('=')[0] + '=;expires=' + new Date(0).toUTCString() + ';path=/';
+    // Clear all Supabase auth related items from localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('supabase.auth.')) {
+        localStorage.removeItem(key);
       }
     });
-    
-    // Force clear URL of any auth parameters
-    if (window.history && window.location.href.includes('#access_token=')) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
   } catch (error) {
     console.error('Error clearing auth data:', error);
   }
 };
 
+// Simple function to check for a valid session
+export const hasValidSession = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    return !!data.session && !error;
+  } catch (err) {
+    console.error("Session check failed:", err);
+    return false;
+  }
+};
