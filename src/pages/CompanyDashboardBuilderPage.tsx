@@ -157,7 +157,7 @@ const CompanyDashboardBuilderPage = () => {
     }
   };
   
-  // Modified function to directly use Supabase to save block
+  // Modified function to directly use Supabase to save block with proper headers
   const handleSaveBlock = async () => {
     try {
       const toastId = toast.loading("Saving dashboard block...");
@@ -168,6 +168,12 @@ const CompanyDashboardBuilderPage = () => {
       
       // Remove blockTitle and showTitle from the content data
       const { blockTitle: _, showTitle: __, ...contentData } = formData;
+
+      // Include showTitle in the content object
+      const finalContentData = {
+        ...contentData,
+        showTitle: showTitle
+      };
       
       if (editingBlock) {
         // Update existing block
@@ -175,13 +181,16 @@ const CompanyDashboardBuilderPage = () => {
           .from('dashboard_blocks')
           .update({
             title: blockTitle,
-            content: contentData,
+            content: finalContentData,
             type: selectedBlockType,
             updated_at: new Date().toISOString()
           })
           .eq('id', editingBlock.id);
         
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase update error details:", error);
+          throw error;
+        }
         
         console.log('Updated block with showTitle:', showTitle);
       } else {
@@ -192,23 +201,24 @@ const CompanyDashboardBuilderPage = () => {
           : 0;
         
         // Make sure we're sending the correct data structure to match the table schema
-        const { error } = await supabase
+        const { error, data } = await supabase
           .from('dashboard_blocks')
           .insert({
             company_id: companyId!,
             title: blockTitle,
-            content: contentData,
+            content: finalContentData,
             type: selectedBlockType,
             position: maxPosition,
             created_by: currentUser?.id || profile?.id || 'unknown'
-          });
+          })
+          .select();
         
         if (error) {
-          console.error("Supabase insert error:", error);
+          console.error("Supabase insert error details:", error);
           throw error;
         }
         
-        console.log('Created new block with showTitle:', showTitle);
+        console.log('Created new block with data:', data);
       }
       
       // After successful save, refresh the dashboard blocks
@@ -218,8 +228,13 @@ const CompanyDashboardBuilderPage = () => {
       setDialogOpen(false);
     } catch (error: any) {
       console.error('Error saving block:', error);
+      // More detailed error logging
+      if (error.message) console.error('Error message:', error.message);
+      if (error.details) console.error('Error details:', error.details);
+      if (error.hint) console.error('Error hint:', error.hint);
+      
       toast.error("Failed to save dashboard block", {
-        description: error.message || "Please try again"
+        description: (error.message || error.hint || "Please try again")
       });
     }
   };
