@@ -199,7 +199,7 @@ const CompanyDashboardBuilderPage = () => {
           .eq('id', editingBlock.id);
         
         if (error) {
-          console.error("Supabase update error details:", error);
+          console.error("Error updating block:", error);
           console.error("Error code:", error.code);
           console.error("Error message:", error.message);
           throw error;
@@ -233,9 +233,10 @@ const CompanyDashboardBuilderPage = () => {
           .select();
         
         if (error) {
-          console.error("Supabase insert error details:", error);
+          console.error("Error creating block:", error);
           console.error("Error code:", error.code);
           console.error("Error message:", error.message);
+          console.error("Error details:", error.details);
           throw error;
         }
         
