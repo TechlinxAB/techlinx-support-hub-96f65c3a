@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
-  const { profile } = useAuth();
+  const { profile, isImpersonating } = useAuth();
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
@@ -51,9 +51,13 @@ const Dashboard = () => {
     }
   }, [location, navigate, navigationAttempted, profile]);
   
+  // Determine which dashboard to show based on role
+  // When impersonating, use the impersonated user's role
+  const showConsultantDashboard = profile?.role === 'consultant' && !isImpersonating;
+  
   return (
     <div className="w-full">
-      {currentUser?.role === 'consultant' ? (
+      {showConsultantDashboard ? (
         <ConsultantDashboard />
       ) : (
         <UserDashboard />

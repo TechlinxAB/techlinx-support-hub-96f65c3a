@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Star } from 'lucide-react';
@@ -9,9 +10,11 @@ import { Input } from '@/components/ui/input';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useAuth } from '@/context/AuthContext';
 
 const CasesPage = () => {
   const { loadingCases, cases } = useAppContext();
+  const { profile, isImpersonating } = useAuth();
   const [activeTab, setActiveTab] = useState<CaseStatus | 'all' | 'watchlist'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { starredCases, toggleStar } = useStarredCases();
@@ -47,8 +50,16 @@ const CasesPage = () => {
     watchlistFilter?: boolean,
     searchQuery: string 
   }) => {
-    // Filter cases based on the provided filters
-    const filteredCases = cases.filter(c => {
+    // Filter cases based on user role and impersonation state
+    let filteredCases = cases;
+    
+    // If user role is not consultant OR if impersonating a user (not a consultant), only show user's cases
+    if (profile?.role !== 'consultant' || isImpersonating && profile?.role !== 'consultant') {
+      filteredCases = cases.filter(c => c.userId === profile?.id);
+    }
+    
+    // Apply additional filters
+    filteredCases = filteredCases.filter(c => {
       // Text search filter
       const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase());
       
