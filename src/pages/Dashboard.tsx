@@ -17,7 +17,7 @@ const Dashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const navigationAttemptedRef = useRef(false);
-  const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   
   // Load starred cases with error handling
@@ -30,19 +30,32 @@ const Dashboard = () => {
     }
   }, [loadStarredCases]);
   
-  // Wait for profile to be ready
+  // Effect to handle loading state
   useEffect(() => {
-    // Only set ready state when profile is valid
-    if (profile && profile.id && profile.role) {
-      setIsReady(true);
-      safelyLoadStarredCases();
-    } else if (profile) {
-      // Profile exists but is invalid
-      console.error("Dashboard: Invalid profile data", profile);
-      setHasError(true);
+    // Use a safer way to determine readiness
+    if (profile && currentUser) {
+      // Add a small delay to ensure components are ready
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+        safelyLoadStarredCases();
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
-    // Don't include authState here to prevent unnecessary re-runs
-  }, [profile, safelyLoadStarredCases]);
+    
+    // Set timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (isLoading && !profile) {
+        console.warn("Dashboard: Loading timeout reached");
+        setIsLoading(false);
+        if (!profile) {
+          setHasError(true);
+        }
+      }
+    }, 5000);
+    
+    return () => clearTimeout(timeout);
+  }, [profile, currentUser, safelyLoadStarredCases, isLoading]);
   
   // Handle query param redirects
   useEffect(() => {
@@ -99,17 +112,17 @@ const Dashboard = () => {
     );
   }
   
-  // Show loading state until profile is loaded
-  if (!isReady) {
+  // Show loading state
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center w-full h-[80vh]">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+        <p className="text-sm text-muted-foreground">Loading dashboard content...</p>
       </div>
     );
   }
   
-  // Determine dashboard type based on role and impersonation status
+  // Safer determination of dashboard type
   const showConsultantDashboard = profile?.role === 'consultant' && !isImpersonating;
   
   return (

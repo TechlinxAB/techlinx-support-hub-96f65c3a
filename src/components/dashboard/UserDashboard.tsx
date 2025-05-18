@@ -11,9 +11,9 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
-  // Important: All hooks must be called unconditionally at the top level
+  // All hooks must be called unconditionally at the top level
   const { currentUser, cases } = useAppContext();
-  const { authState } = useAuth();
+  const { profile } = useAuth();
   const [isReady, setIsReady] = useState(false);
   const [hasSettingsError, setHasSettingsError] = useState(false);
   
@@ -30,14 +30,14 @@ const UserDashboard = () => {
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
   const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
   
-  // Set readiness state based on auth status
+  // Set readiness state based on profile and current user
   useEffect(() => {
-    if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && currentUser) {
+    if (profile && currentUser) {
       setIsReady(true);
-    } else if (authState === 'UNAUTHENTICATED') {
+    } else {
       setIsReady(false);
     }
-  }, [authState, currentUser]);
+  }, [profile, currentUser]);
   
   // Handle settings errors
   useEffect(() => {
@@ -50,18 +50,15 @@ const UserDashboard = () => {
   }, [settingsError]);
   
   // Loading state component
-  const loadingContent = (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Loading your dashboard...</p>
-      </div>
-    </div>
-  );
-
-  // Early return for loading states
   if (!isReady || settingsLoading || announcementsLoading) {
-    return loadingContent;
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
   }
   
   // Process user cases - do this AFTER all hook calls
