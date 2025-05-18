@@ -51,12 +51,10 @@ const AuthPage = () => {
   // Redirect if user is authenticated
   useEffect(() => {
     if (user && authState === 'AUTHENTICATED') {
-      // Use a small timeout to allow the UI to update first
-      const redirectTimeout = setTimeout(() => {
+      // Redirect once NavigationService is ready
+      if (navigationService.isReady()) {
         navigationService.navigate(from);
-      }, 300);
-      
-      return () => clearTimeout(redirectTimeout);
+      }
     }
   }, [user, authState, from]);
   

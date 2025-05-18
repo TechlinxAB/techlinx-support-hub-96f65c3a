@@ -11,6 +11,7 @@ class NavigationService {
   private maxNavigationsPerPath = 3;
   private minNavigationInterval = 500; // ms
   private resetTimeout = 10000; // 10 seconds
+  private isInitialized = false;
   
   private constructor() {
     // Private constructor to enforce singleton
@@ -25,6 +26,11 @@ class NavigationService {
   
   public setNavigateFunction(navigate: NavigateFunction): void {
     this.navigateFunction = navigate;
+    this.isInitialized = true;
+  }
+  
+  public isReady(): boolean {
+    return this.isInitialized && this.navigateFunction !== null;
   }
   
   // Returns true if navigation was successful, false if blocked
@@ -83,11 +89,6 @@ class NavigationService {
       return true;
     } catch (error) {
       console.error('Navigation error:', error);
-      
-      // Last resort: direct navigation
-      if (options?.replace) {
-        window.location.href = to;
-      }
       return false;
     }
   }

@@ -5,7 +5,6 @@ import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { forceSignOut } from '@/integrations/supabase/client';
 import navigationService from '@/services/navigationService';
 
 const ProtectedRoute = () => {
@@ -51,45 +50,23 @@ const ProtectedRoute = () => {
       }
       
       // Use navigation service to prevent loops
-      navigationService.navigate('/auth', { 
-        replace: true, 
-        state: { from: currentPath || '/' } 
-      });
-    }
-  }, [authState, loading, navigate, location.pathname, isAuthPage]);
-  
-  // Check if the path requires a consultant role
-  useEffect(() => {
-    // Only check role requirements if we have both user and profile data
-    if (loading || !user || !profile || authState !== 'AUTHENTICATED') {
-      return;
-    }
-    
-    const requiresConsultantRole = location.pathname.includes('company-dashboard-builder');
-    
-    if (requiresConsultantRole) {
-      // For impersonation, check the original role for protected routes
-      const effectiveRole = isImpersonating && originalProfile ? originalProfile.role : profile.role;
-      
-      if (effectiveRole !== 'consultant') {
-        toast.error("You don't have permission to access this page");
-        navigationService.navigate('/', { replace: true });
+      if (navigationService.isReady()) {
+        navigationService.navigate('/auth', { 
+          replace: true, 
+          state: { from: currentPath || '/' } 
+        });
       }
     }
-  }, [user, profile, originalProfile, isImpersonating, loading, location.pathname, authState]);
+  }, [authState, loading, navigate, location.pathname, isAuthPage]);
   
   // Function to handle auth reset if user is stuck
   const handleResetAuth = async () => {
     setAuthResetAttempted(true);
     
     try {
-      // Try the forced signout first
-      await forceSignOut();
-      
-      // Then do the full reset
       await resetAuth();
       
-      // Redirect to auth page via navigation service
+      // Redirect to auth page via hard redirect
       navigationService.hardRedirect('/auth');
     } catch (error) {
       console.error("Critical error during auth reset:", error);

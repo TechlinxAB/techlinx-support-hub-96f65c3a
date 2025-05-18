@@ -11,26 +11,21 @@ import { Loader } from 'lucide-react';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
-  const { profile, isImpersonating, loading } = useAuth();
+  const { profile, isImpersonating } = useAuth();
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
   const [navigationAttempted, setNavigationAttempted] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
-  // Wait for auth to be fully ready before showing dashboard
-  useEffect(() => {
-    if (!loading && profile) {
-      setIsReady(true);
-    }
-  }, [loading, profile]);
-  
-  // Load starred cases on component mount
+  // Wait for profile to be ready
   useEffect(() => {
     if (profile) {
+      setIsReady(true);
+      // Load starred cases once profile is available
       loadStarredCases();
     }
-  }, [loadStarredCases, profile]);
+  }, [profile, loadStarredCases]);
   
   // Enhanced navigation handling with improved direct access for dashboard builder
   useEffect(() => {
@@ -47,13 +42,7 @@ const Dashboard = () => {
       if (redirectTarget.includes('company-dashboard-builder')) {
         if (profile?.role === 'consultant') {
           toast.info("Loading dashboard builder...");
-          try {
-            navigate(redirectTarget);
-          } catch (error) {
-            console.error('Navigation error:', error);
-            // Fallback to direct URL change
-            window.location.href = redirectTarget;
-          }
+          navigate(redirectTarget);
           return;
         } else {
           console.log("Cannot redirect: User is not a consultant");
@@ -63,14 +52,8 @@ const Dashboard = () => {
       }
       
       // For other pages, use React Router navigation
-      try {
-        navigate(redirectTarget, { replace: true });
-        toast.info("Redirecting you to the requested page...");
-      } catch (error) {
-        console.error('Navigation error:', error);
-        // Fallback to direct URL change
-        window.location.href = redirectTarget;
-      }
+      navigate(redirectTarget, { replace: true });
+      toast.info("Redirecting you to the requested page...");
     }
   }, [location, navigate, navigationAttempted, profile]);
   

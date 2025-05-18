@@ -4,7 +4,6 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import navigationService from '@/services/navigationService';
 
 interface LogoutButtonProps {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
@@ -30,12 +29,10 @@ const LogoutButton = ({
       await signOut();
       
       toast.success('Successfully logged out', { id: toastId });
-      
-      // Hard redirect to ensure clean slate
-      navigationService.hardRedirect('/auth?clean=true');
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');
+    } finally {
       setIsLoggingOut(false);
     }
   };
