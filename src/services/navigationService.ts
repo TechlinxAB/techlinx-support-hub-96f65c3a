@@ -15,6 +15,7 @@ class NavigationService {
   
   private constructor() {
     // Private constructor to enforce singleton
+    console.log('NavigationService singleton created');
   }
   
   public static getInstance(): NavigationService {
@@ -27,6 +28,7 @@ class NavigationService {
   public setNavigateFunction(navigate: NavigateFunction): void {
     this.navigateFunction = navigate;
     this.isInitialized = true;
+    console.log('NavigationService: Navigate function set');
   }
   
   public isReady(): boolean {
@@ -85,6 +87,7 @@ class NavigationService {
     
     // Perform navigation
     try {
+      console.log(`NavigationService: Navigating to ${to}`);
       this.navigateFunction(to, options);
       return true;
     } catch (error) {
@@ -95,6 +98,7 @@ class NavigationService {
   
   // Special method for hard redirects when needed
   public hardRedirect(to: string): void {
+    console.log(`NavigationService: Hard redirect to ${to}`);
     window.location.href = to;
   }
   
@@ -103,6 +107,7 @@ class NavigationService {
     this.navigationCount = {};
     this.lastNavigationTime = 0;
     this.lastNavigationPath = '';
+    console.log('NavigationService: Navigation tracking reset');
   }
 }
 

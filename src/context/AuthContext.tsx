@@ -80,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const authSubscription = useRef<{ unsubscribe: () => void } | null>(null);
   const profileFetchInProgress = useRef<Record<string, boolean>>({});
   const initializationTimeout = useRef<number | null>(null);
+  const profileFetchDebounceTimer = useRef<number | null>(null);
   
   // Calculate loading state from auth state
   const loading = authState === 'INITIALIZING';
@@ -265,15 +266,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Debounced fetch user profile to prevent API hammering
+  const debounceFetchProfile = useCallback((userId: string) => {
+    // Clear any existing timer
+    if (profileFetchDebounceTimer.current !== null) {
+      window.clearTimeout(profileFetchDebounceTimer.current);
+    }
+    
+    // Set new timer
+    profileFetchDebounceTimer.current = window.setTimeout(() => {
+      fetchProfile(userId);
+    }, 300); // 300ms debounce
+  }, []);
+
   // Fetch user profile with improved tracking to prevent race conditions
   const fetchProfile = useCallback(async (userId: string) => {
     // Skip if we're already fetching this profile
     if (profileFetchInProgress.current[userId]) {
+      console.log('Profile fetch already in progress for', userId);
       return;
     }
     
     try {
       profileFetchInProgress.current[userId] = true;
+      console.log('Fetching profile for user:', userId);
       
       const { data, error } = await supabase
         .from('profiles')
@@ -290,10 +306,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setProfile(mapDbProfileToUserProfile(data));
         // Set auth state to authenticated since we have a valid profile
         setAuthState('AUTHENTICATED');
+        console.log('Profile fetch successful, user authenticated');
       } else {
         // Profile not found for this user ID
         setProfile(null);
         console.warn(`No profile found for user: ${userId}`);
+        setAuthState('UNAUTHENTICATED');
       }
     } catch (err) {
       console.error('Exception fetching profile:', err);
@@ -311,6 +329,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     isInitialized.current = true;
+    console.log('Initializing AuthContext');
     
     // Safety timeout to prevent infinite loading
     initializationTimeout.current = window.setTimeout(() => {
@@ -323,6 +342,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Set up auth state listener
     const setupAuthListener = () => {
       try {
+        // IMPORTANT: Set up the auth listener first
         const { data } = supabase.auth.onAuthStateChange((event, session) => {
           // Handle auth state changes
           console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
@@ -331,10 +351,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(session);
           setUser(session?.user ?? null);
           
-          // Defer any API calls or complex state updates with setTimeout
+          // Defer any API calls or complex state updates
           if (session?.user) {
+            // Using setTimeout with 0ms delay moves this to the next tick
+            // This is crucial to prevent deadlocks in the auth state
             setTimeout(() => {
-              fetchProfile(session.user.id);
+              debounceFetchProfile(session.user.id);
             }, 0);
           } else {
             setTimeout(() => {
@@ -351,7 +373,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     
-    // Check for existing session
+    // Check for existing session after listener is set up
     const checkExistingSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -362,7 +384,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           // Defer profile fetch to avoid potential deadlock
           setTimeout(() => {
-            fetchProfile(session.user.id);
+            debounceFetchProfile(session.user.id);
           }, 0);
         } else {
           // No session, set state to unauthenticated
@@ -391,8 +413,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (initializationTimeout.current !== null) {
         clearTimeout(initializationTimeout.current);
       }
+      
+      if (profileFetchDebounceTimer.current !== null) {
+        clearTimeout(profileFetchDebounceTimer.current);
+      }
     };
-  }, [fetchProfile]);
+  }, [debounceFetchProfile]);
 
   // Create the context value
   const value: AuthContextType = {

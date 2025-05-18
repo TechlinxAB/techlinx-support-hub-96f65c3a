@@ -8,6 +8,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
+import navigationService from '@/services/navigationService';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
@@ -36,7 +37,7 @@ const Dashboard = () => {
       // Mark that we've attempted navigation to prevent loops
       setNavigationAttempted(true);
       
-      console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
+      console.log(`Dashboard: Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
       
       // For dashboard builder pages, verify role before redirecting
       if (redirectTarget.includes('company-dashboard-builder')) {
@@ -45,7 +46,7 @@ const Dashboard = () => {
           navigate(redirectTarget);
           return;
         } else {
-          console.log("Cannot redirect: User is not a consultant");
+          console.log("Dashboard: Cannot redirect: User is not a consultant");
           toast.error("You don't have permission to access the dashboard builder");
           return;
         }

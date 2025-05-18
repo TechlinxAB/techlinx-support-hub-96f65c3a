@@ -9,12 +9,8 @@ import navigationService from '@/services/navigationService';
 
 const ProtectedRoute = () => {
   const { 
-    user, 
-    profile, 
-    loading, 
     authState,
-    isImpersonating, 
-    originalProfile, 
+    loading, 
     resetAuth 
   } = useAuth();
   const navigate = useNavigate();
@@ -22,7 +18,9 @@ const ProtectedRoute = () => {
   const [authResetAttempted, setAuthResetAttempted] = React.useState(false);
 
   // Register the navigate function with the navigation service on mount
+  // This is crucial for proper navigation throughout the app
   useEffect(() => {
+    console.log('ProtectedRoute: Registering navigation service');
     navigationService.setNavigateFunction(navigate);
   }, [navigate]);
   
@@ -49,6 +47,8 @@ const ProtectedRoute = () => {
         currentPath = '';
       }
       
+      console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
+      
       // Use navigation service to prevent loops
       if (navigationService.isReady()) {
         navigationService.navigate('/auth', { 
@@ -57,7 +57,7 @@ const ProtectedRoute = () => {
         });
       }
     }
-  }, [authState, loading, navigate, location.pathname, isAuthPage]);
+  }, [authState, loading, isAuthPage, location.pathname]);
   
   // Function to handle auth reset if user is stuck
   const handleResetAuth = async () => {

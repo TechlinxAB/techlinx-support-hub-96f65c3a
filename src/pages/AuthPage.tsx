@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase, resetAuthState } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,7 +16,16 @@ const AuthPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, authState, signIn } = useAuth();
+  
+  // Make sure navigation service is initialized
+  useEffect(() => {
+    if (!navigationService.isReady()) {
+      console.log('AuthPage: Ensuring navigation service is initialized');
+      navigationService.setNavigateFunction(navigate);
+    }
+  }, [navigate]);
   
   // Get the redirect path from location state
   const from = location.state?.from || '/';
@@ -51,12 +60,17 @@ const AuthPage = () => {
   // Redirect if user is authenticated
   useEffect(() => {
     if (user && authState === 'AUTHENTICATED') {
+      console.log('AuthPage: User is authenticated, redirecting to:', from);
+      
       // Redirect once NavigationService is ready
       if (navigationService.isReady()) {
         navigationService.navigate(from);
+      } else {
+        // Fallback if NavigationService is not ready
+        navigate(from);
       }
     }
-  }, [user, authState, from]);
+  }, [user, authState, from, navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
