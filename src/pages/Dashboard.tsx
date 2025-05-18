@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
@@ -19,6 +18,7 @@ const Dashboard = () => {
   const navigationAttemptedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const initAttemptedRef = useRef(false);
   
   // Load starred cases with error handling
   const safelyLoadStarredCases = useCallback(() => {
@@ -32,30 +32,55 @@ const Dashboard = () => {
   
   // Effect to handle loading state
   useEffect(() => {
-    // Use a safer way to determine readiness
-    if (profile && currentUser) {
-      // Add a small delay to ensure components are ready
-      const timer = setTimeout(() => {
-        setIsLoading(false);
-        safelyLoadStarredCases();
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    }
+    // Prevent multiple initialization attempts
+    if (initAttemptedRef.current) return;
+    initAttemptedRef.current = true;
     
-    // Set timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      if (isLoading && !profile) {
-        console.warn("Dashboard: Loading timeout reached");
+    // Set a max loading time for safety
+    const maxLoadingTimeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn("Dashboard: Max loading timeout reached");
         setIsLoading(false);
-        if (!profile) {
+        
+        if (!profile && authState !== 'INITIALIZING') {
           setHasError(true);
         }
       }
-    }, 5000);
+    }, 6000); // 6 seconds max loading time
     
-    return () => clearTimeout(timeout);
-  }, [profile, currentUser, safelyLoadStarredCases, isLoading]);
+    // Check for profile and currentUser readiness
+    const checkProfileReady = () => {
+      if (profile && currentUser) {
+        // Found valid data, proceed with short delay
+        setTimeout(() => {
+          setIsLoading(false);
+          safelyLoadStarredCases();
+        }, 400);
+        return true;
+      }
+      return false;
+    };
+    
+    // If profile is already ready, init now
+    if (checkProfileReady()) {
+      clearTimeout(maxLoadingTimeout);
+      return;
+    }
+    
+    // Otherwise set interval to check periodically
+    const profileCheckInterval = setInterval(() => {
+      if (checkProfileReady()) {
+        clearInterval(profileCheckInterval);
+        clearTimeout(maxLoadingTimeout);
+      }
+    }, 500);
+    
+    // Clean up
+    return () => {
+      clearTimeout(maxLoadingTimeout);
+      clearInterval(profileCheckInterval);
+    };
+  }, [profile, currentUser, safelyLoadStarredCases, isLoading, authState]);
   
   // Handle query param redirects
   useEffect(() => {
@@ -113,7 +138,7 @@ const Dashboard = () => {
   }
   
   // Show loading state
-  if (isLoading) {
+  if (isLoading || !profile) {
     return (
       <div className="flex flex-col items-center justify-center w-full h-[80vh]">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />

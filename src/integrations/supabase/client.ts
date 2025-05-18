@@ -101,12 +101,28 @@ export const supabase = getSupabaseClient();
 // Export a helper function to clear auth state in case of corruption
 export const resetAuthState = async () => {
   try {
-    // First try storage direct removal for cleaner state
+    // First try direct storage cleanup for more comprehensive reset
     try {
+      // Clear ALL auth-related items from localStorage
       localStorage.removeItem(STORAGE_KEY);
+      
+      // Also clear any legacy or malformed tokens
+      const allKeys = Object.keys(localStorage);
+      for (const key of allKeys) {
+        if (key.includes('supabase') || key.includes('auth')) {
+          localStorage.removeItem(key);
+        }
+      }
     } catch (e) {
       console.log('Error accessing localStorage during resetAuthState');
     }
+    
+    // Also clear any session cookies that might be present
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+    });
     
     // Then try official API signout
     try {

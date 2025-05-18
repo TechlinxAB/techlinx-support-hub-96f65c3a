@@ -30,8 +30,9 @@ const UserDashboard = () => {
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
   const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
   
-  // Set readiness state based on profile and current user
+  // Set readiness state based on needed data
   useEffect(() => {
+    // Simple check that both sources of data are present
     if (profile && currentUser) {
       setIsReady(true);
     } else {

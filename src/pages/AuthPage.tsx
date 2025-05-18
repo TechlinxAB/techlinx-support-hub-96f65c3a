@@ -38,16 +38,19 @@ const AuthPage = () => {
   
   // Reset any stale auth state if requested
   useEffect(() => {
-    if (cleanSession || resetComplete) {
-      console.log('Clean session requested, resetting auth state');
-      resetAuthState().then(() => {
+    const performCleanup = async () => {
+      if (cleanSession || resetComplete) {
+        console.log('Clean session requested, resetting auth state');
+        await resetAuthState();
         // Remove params to prevent infinite loops on page refresh
         if (window.history.replaceState) {
           const newUrl = window.location.pathname;
           window.history.replaceState(null, '', newUrl);
         }
-      });
-    }
+      }
+    };
+    
+    performCleanup();
     
     if (forcedLogout) {
       toast.info('You were logged out due to an authentication issue');
@@ -67,7 +70,7 @@ const AuthPage = () => {
     };
   }, [cleanSession, forcedLogout, resetComplete]);
   
-  // IMPROVED: Better redirect handling with longer debounce to prevent loops
+  // Improved redirect handling with debounce to prevent loops
   useEffect(() => {
     // Only redirect if we have a fully authenticated user
     if (!user || authState !== 'AUTHENTICATED' || redirectAttempted) {
@@ -84,7 +87,7 @@ const AuthPage = () => {
       clearTimeout(redirectTimerRef.current);
     }
     
-    // Set longer debounce for the redirect to ensure auth is stable
+    // Add longer delay for auth stabilization
     redirectTimerRef.current = window.setTimeout(() => {
       // Redirect once NavigationService is ready
       if (navigationService.isReady()) {
@@ -94,7 +97,7 @@ const AuthPage = () => {
         navigate(from);
       }
       redirectTimerRef.current = null;
-    }, 800);
+    }, 1000);
   }, [user, authState, from, navigate, redirectAttempted]);
   
   const handleSignIn = async (e: React.FormEvent) => {

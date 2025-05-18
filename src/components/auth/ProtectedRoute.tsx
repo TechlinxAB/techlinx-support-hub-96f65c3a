@@ -61,16 +61,9 @@ const ProtectedRoute = () => {
     // Only update our stable auth ref if the state has persisted
     // This prevents flickering between auth states
     stabilityTimerRef.current = window.setTimeout(() => {
-      // Don't allow transitions from AUTHENTICATED to UNAUTHENTICATED unless explicitly signed out
-      // This prevents the initialization timeout from causing users to be logged out
-      if (stableAuthRef.current === 'AUTHENTICATED' && authState === 'UNAUTHENTICATED') {
-        console.log('ProtectedRoute: Ignoring transition from AUTHENTICATED to UNAUTHENTICATED');
-        return;
-      }
-      
       console.log(`ProtectedRoute: Updating stable auth state from ${stableAuthRef.current} to ${authState}`);
       stableAuthRef.current = authState;
-    }, 1000); // 1 second stability required
+    }, 800); // Less than 1 second stability required
     
     return () => {
       if (stabilityTimerRef.current !== null) {
@@ -91,12 +84,12 @@ const ProtectedRoute = () => {
   
   // Handle navigation based on auth state
   useEffect(() => {
-    // Skip everything if already on auth page and not authenticated
-    if (isAuthPage && !isAuthenticated) {
+    // Skip navigation if already on correct page
+    if ((isAuthPage && !isAuthenticated) || (!isAuthPage && isAuthenticated)) {
       return;
     }
     
-    // Wait until auth state is fully loaded and stable
+    // Wait until auth state is fully loaded
     if (loading) {
       return;
     }
@@ -116,13 +109,13 @@ const ProtectedRoute = () => {
         // Get the redirectTo from state or default to '/'
         const redirectTo = location.state?.from || '/';
         navigationService.navigate(redirectTo, { replace: true });
-      }, 100);
+      }, 300);
       
       return;
     }
 
-    // If there's no user and we're not on the auth page, redirect with debounce
-    if (authState === 'UNAUTHENTICATED' && stableAuthRef.current === 'UNAUTHENTICATED' && !isAuthPage) {
+    // If not authenticated and we're not on the auth page, redirect
+    if (authState === 'UNAUTHENTICATED' && !isAuthPage) {
       // Store current path for redirect after login
       let currentPath = location.pathname;
       if (currentPath === '/') {
@@ -132,8 +125,7 @@ const ProtectedRoute = () => {
       console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
       navigationAttemptedRef.current = true;
       
-      // Use a longer timeout to debounce the navigation
-      // This prevents navigation jumps if auth state is still settling
+      // Use a timeout to debounce the navigation
       if (navigationTimerRef.current !== null) {
         clearTimeout(navigationTimerRef.current);
       }
@@ -141,13 +133,14 @@ const ProtectedRoute = () => {
       navigationTimerRef.current = window.setTimeout(() => {
         // Use navigation service to prevent loops
         if (navigationService.isReady()) {
-          navigationService.navigate('/auth', { 
+          // Always include clean=true to ensure fresh auth state
+          navigationService.navigate('/auth?clean=true', { 
             replace: true, 
             state: { from: currentPath || '/' } 
           });
           navigationTimerRef.current = null;
         }
-      }, 800);
+      }, 300);
     }
   }, [authState, loading, isAuthPage, location.pathname, isAuthenticated, location.state]);
   
@@ -169,12 +162,12 @@ const ProtectedRoute = () => {
     }
   };
   
-  // Enhanced loading state
+  // Enhanced loading state with a more informative message
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-sm text-muted-foreground">Loading authentication state...</p>
+        <p className="text-sm text-muted-foreground">Checking authentication status...</p>
       </div>
     );
   }
@@ -205,7 +198,6 @@ const ProtectedRoute = () => {
   
   // Allow access to auth page without authentication
   // For all other routes, only render when authenticated or impersonating
-  // Use stableAuthRef for more reliable checks
   if (isAuthPage || isAuthenticated || isStableAuthenticated) {
     return <Outlet />;
   }
