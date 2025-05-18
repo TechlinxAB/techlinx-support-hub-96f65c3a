@@ -470,6 +470,397 @@ const CompanyDashboardBuilderPage = () => {
     }
   };
   
+  const renderBlockForm = () => {
+    const commonFields = (
+      <>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Block Title</label>
+          <Input 
+            value={formData.blockTitle || ''} 
+            onChange={(e) => setFormData({ ...formData, blockTitle: e.target.value })}
+            placeholder="Enter block title"
+          />
+        </div>
+        
+        <div className="mb-4 flex items-center space-x-2">
+          <Switch 
+            id="show-title"
+            checked={formData.showTitle !== false} 
+            onCheckedChange={(checked) => setFormData({ ...formData, showTitle: checked })}
+          />
+          <label htmlFor="show-title" className="text-sm font-medium">
+            Show block title
+          </label>
+        </div>
+      </>
+    );
+    
+    switch (selectedBlockType) {
+      case 'heading':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Heading Text</label>
+              <Input 
+                value={formData.text || ''} 
+                onChange={(e) => setFormData({ ...formData, text: e.target.value })}
+                placeholder="Enter heading text"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Heading Level</label>
+              <Select
+                value={formData.level?.toString() || '2'}
+                onValueChange={(value) => setFormData({ ...formData, level: parseInt(value) })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select heading level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">H1 - Large</SelectItem>
+                  <SelectItem value="2">H2 - Medium</SelectItem>
+                  <SelectItem value="3">H3 - Small</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+        
+      case 'text':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Text Content</label>
+              <Textarea 
+                value={formData.text || ''} 
+                onChange={(e) => setFormData({ ...formData, text: e.target.value })}
+                placeholder="Enter text content"
+                rows={5}
+              />
+            </div>
+          </div>
+        );
+        
+      case 'card':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Card Title</label>
+              <Input 
+                value={formData.title || ''} 
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Enter card title"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Card Content</label>
+              <Textarea 
+                value={formData.content || ''} 
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                placeholder="Enter card content"
+                rows={4}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Action Button (optional)</label>
+              <Input 
+                value={(formData.action?.label) || ''} 
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  action: { 
+                    ...(formData.action || {}), 
+                    label: e.target.value 
+                  } 
+                })}
+                placeholder="Button label (leave empty to hide button)"
+              />
+            </div>
+          </div>
+        );
+        
+      case 'image':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Image URL</label>
+              <Input 
+                value={formData.url || ''} 
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder="Enter image URL"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Alt Text</label>
+              <Input 
+                value={formData.alt || ''} 
+                onChange={(e) => setFormData({ ...formData, alt: e.target.value })}
+                placeholder="Enter alt text for accessibility"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Caption (optional)</label>
+              <Input 
+                value={formData.caption || ''} 
+                onChange={(e) => setFormData({ ...formData, caption: e.target.value })}
+                placeholder="Enter image caption"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Width (optional)</label>
+                <Input 
+                  value={formData.width || ''} 
+                  onChange={(e) => setFormData({ ...formData, width: e.target.value })}
+                  placeholder="e.g., 100%, 400px"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Height (optional)</label>
+                <Input 
+                  value={formData.height || ''} 
+                  onChange={(e) => setFormData({ ...formData, height: e.target.value })}
+                  placeholder="e.g., auto, 300px"
+                />
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 'faq':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-3">FAQ Items</label>
+              
+              {(formData.items || []).map((item: any, index: number) => (
+                <div key={index} className="border rounded-md p-4 mb-3 bg-background">
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Question {index + 1}</label>
+                    <Input 
+                      value={item.question || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], question: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter question"
+                    />
+                  </div>
+                  
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Answer {index + 1}</label>
+                    <Textarea 
+                      value={item.answer || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], answer: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter answer"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      const newItems = [...(formData.items || [])];
+                      newItems.splice(index, 1);
+                      setFormData({ ...formData, items: newItems });
+                    }}
+                  >
+                    Remove Item
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => {
+                  const newItems = [...(formData.items || []), { question: '', answer: '' }];
+                  setFormData({ ...formData, items: newItems });
+                }}
+              >
+                Add FAQ Item
+              </Button>
+            </div>
+          </div>
+        );
+        
+      case 'links':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-3">Links</label>
+              
+              {(formData.links || []).map((link: any, index: number) => (
+                <div key={index} className="border rounded-md p-4 mb-3 bg-background">
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Link Label {index + 1}</label>
+                    <Input 
+                      value={link.label || ''} 
+                      onChange={(e) => {
+                        const newLinks = [...(formData.links || [])];
+                        newLinks[index] = { ...newLinks[index], label: e.target.value };
+                        setFormData({ ...formData, links: newLinks });
+                      }}
+                      placeholder="Enter link text"
+                    />
+                  </div>
+                  
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">URL {index + 1}</label>
+                    <Input 
+                      value={link.url || ''} 
+                      onChange={(e) => {
+                        const newLinks = [...(formData.links || [])];
+                        newLinks[index] = { ...newLinks[index], url: e.target.value };
+                        setFormData({ ...formData, links: newLinks });
+                      }}
+                      placeholder="Enter URL"
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      const newLinks = [...(formData.links || [])];
+                      newLinks.splice(index, 1);
+                      setFormData({ ...formData, links: newLinks });
+                    }}
+                  >
+                    Remove Link
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => {
+                  const newLinks = [...(formData.links || []), { label: '', url: '' }];
+                  setFormData({ ...formData, links: newLinks });
+                }}
+              >
+                Add Link
+              </Button>
+            </div>
+          </div>
+        );
+        
+      case 'dropdown':
+        return (
+          <div className="space-y-4">
+            {commonFields}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Dropdown Title</label>
+              <Input 
+                value={formData.title || ''} 
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Enter dropdown title"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-3">Dropdown Items</label>
+              
+              {(formData.items || []).map((item: any, index: number) => (
+                <div key={index} className="border rounded-md p-4 mb-3 bg-background">
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Item Label {index + 1}</label>
+                    <Input 
+                      value={item.label || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], label: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter item label"
+                    />
+                  </div>
+                  
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium mb-1">Item Content {index + 1}</label>
+                    <Textarea 
+                      value={item.content || ''} 
+                      onChange={(e) => {
+                        const newItems = [...(formData.items || [])];
+                        newItems[index] = { ...newItems[index], content: e.target.value };
+                        setFormData({ ...formData, items: newItems });
+                      }}
+                      placeholder="Enter item content"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      const newItems = [...(formData.items || [])];
+                      newItems.splice(index, 1);
+                      setFormData({ ...formData, items: newItems });
+                    }}
+                  >
+                    Remove Item
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => {
+                  const newItems = [...(formData.items || []), { label: '', content: '' }];
+                  setFormData({ ...formData, items: newItems });
+                }}
+              >
+                Add Dropdown Item
+              </Button>
+            </div>
+          </div>
+        );
+        
+      default:
+        return (
+          <div className="p-4 text-center text-muted-foreground">
+            <p>Please select a block type to continue</p>
+          </div>
+        );
+    }
+  };
+  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
