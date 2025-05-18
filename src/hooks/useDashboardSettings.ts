@@ -21,18 +21,25 @@ export const useDashboardSettings = (companyId: string | undefined) => {
   const fetchAttemptsRef = useRef(0);
   const maxAttempts = 3;
   const { authState } = useAuth();
+  const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Only fetch if auth is fully established
+  // Only fetch if auth is fully established and user is authenticated
   const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
 
   useEffect(() => {
-    // Reset state when companyId changes
+    // Reset state when companyId changes or auth state changes
     setSettings(defaultSettings);
     setLoading(true);
     setError(null);
     fetchAttemptsRef.current = 0;
     
-    // Skip fetch if authentication is not ready
+    // Abort any in-flight request when unmounting or when dependencies change
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Skip fetch if authentication is not ready or user is not authenticated
     if (!isAuthReady) {
       console.log("Skipping dashboard settings fetch - auth not ready:", authState);
       setLoading(false);
@@ -59,14 +66,24 @@ export const useDashboardSettings = (companyId: string | undefined) => {
       try {
         console.log(`Fetching company settings for companyId: ${companyId}`);
         
+        // Create a new AbortController for this request
+        abortControllerRef.current = new AbortController();
+        
         // Use proper error handling that won't affect auth state
         const { data, error: settingsError } = await supabase
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)
-          .maybeSingle();
+          .maybeSingle()
+          .abortSignal(abortControllerRef.current.signal);
         
         if (settingsError) {
+          // Check if request was aborted
+          if (settingsError.message === 'The operation was aborted') {
+            console.log('Settings fetch aborted');
+            return;
+          }
+          
           console.error('Error fetching company settings:', settingsError);
           setError(settingsError instanceof Error ? settingsError : new Error(String(settingsError)));
           
@@ -97,6 +114,12 @@ export const useDashboardSettings = (companyId: string | undefined) => {
           setSettings(defaultSettings);
         }
       } catch (err) {
+        // Check if the error is due to the request being aborted
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          console.log('Settings fetch aborted');
+          return;
+        }
+        
         console.error('Exception in fetching dashboard settings:', err);
         setError(err instanceof Error ? err : new Error(String(err)));
         // Still maintain the default settings
@@ -107,11 +130,17 @@ export const useDashboardSettings = (companyId: string | undefined) => {
     
     // Add a small delay before fetching settings to ensure auth is stable
     const timeoutId = setTimeout(() => {
-      fetchSettings();
+      if (isAuthReady) {
+        fetchSettings();
+      }
     }, 500);
     
     return () => {
       clearTimeout(timeoutId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, [companyId, isAuthReady, authState]);
 

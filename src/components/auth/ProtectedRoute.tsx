@@ -13,6 +13,7 @@ const ProtectedRoute = () => {
     loading, 
     resetAuth 
   } = useAuth();
+  
   const navigate = useNavigate();
   const location = useLocation();
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
@@ -20,9 +21,9 @@ const ProtectedRoute = () => {
   const navigationTimerRef = useRef<number | null>(null);
   const isAuthPage = location.pathname === '/auth';
   const stableAuthRef = useRef(authState);
+  const delayRef = useRef<number | null>(null);
 
   // Register the navigate function with the navigation service on mount
-  // This is crucial for proper navigation throughout the app
   useEffect(() => {
     console.log('ProtectedRoute: Registering navigation service');
     navigationService.setNavigateFunction(navigate);
@@ -36,6 +37,11 @@ const ProtectedRoute = () => {
         clearTimeout(navigationTimerRef.current);
         navigationTimerRef.current = null;
       }
+      
+      if (delayRef.current !== null) {
+        clearTimeout(delayRef.current);
+        delayRef.current = null;
+      }
     };
   }, [navigate, location.pathname]);
   
@@ -44,6 +50,7 @@ const ProtectedRoute = () => {
     // Only update our stable auth ref if the state has persisted
     // This prevents flickering between auth states
     const authChangeTimer = setTimeout(() => {
+      console.log(`ProtectedRoute: Updating stable auth state from ${stableAuthRef.current} to ${authState}`);
       stableAuthRef.current = authState;
     }, 1000); // 1 second stability required
     
@@ -52,10 +59,10 @@ const ProtectedRoute = () => {
     };
   }, [authState]);
   
-  // IMPROVED: Add significant debouncing for auth state changes to prevent rapid redirects
+  // Handle navigation based on auth state
   useEffect(() => {
-    // Skip everything if already on auth page
-    if (isAuthPage) {
+    // Skip everything if already on auth page and not authenticated
+    if (isAuthPage && authState !== 'AUTHENTICATED' && authState !== 'IMPERSONATING') {
       return;
     }
     
@@ -69,8 +76,23 @@ const ProtectedRoute = () => {
       return;
     }
 
+    // If authenticated and on auth page, redirect to home
+    if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && isAuthPage) {
+      setNavigationAttempted(true);
+      console.log('ProtectedRoute: User is authenticated, redirecting to home from auth page');
+      
+      // Use a short delay to prevent immediate navigation
+      delayRef.current = window.setTimeout(() => {
+        // Get the redirectTo from state or default to '/'
+        const redirectTo = location.state?.from || '/';
+        navigationService.navigate(redirectTo, { replace: true });
+      }, 100);
+      
+      return;
+    }
+
     // If there's no user and we're not on the auth page, redirect with debounce
-    if (authState === 'UNAUTHENTICATED' && stableAuthRef.current === 'UNAUTHENTICATED') {
+    if (authState === 'UNAUTHENTICATED' && stableAuthRef.current === 'UNAUTHENTICATED' && !isAuthPage) {
       // Store current path for redirect after login
       let currentPath = location.pathname;
       if (currentPath === '/') {
@@ -80,7 +102,7 @@ const ProtectedRoute = () => {
       console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
       setNavigationAttempted(true);
       
-      // IMPROVED: Use a longer timeout to debounce the navigation
+      // Use a longer timeout to debounce the navigation
       // This prevents navigation jumps if auth state is still settling
       if (navigationTimerRef.current !== null) {
         clearTimeout(navigationTimerRef.current);
@@ -95,9 +117,9 @@ const ProtectedRoute = () => {
           });
           navigationTimerRef.current = null;
         }
-      }, 800); // Longer debounce for auth state changes
+      }, 800);
     }
-  }, [authState, loading, isAuthPage, location.pathname, navigationAttempted]);
+  }, [authState, loading, isAuthPage, location.pathname, navigationAttempted, location.state]);
   
   // Function to handle auth reset if user is stuck
   const handleResetAuth = async () => {

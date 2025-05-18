@@ -17,20 +17,21 @@ const UserDashboard = () => {
   const [hasSettingsError, setHasSettingsError] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
-  // Only proceed if auth is stable
+  // Only proceed if auth is stable and user is authenticated
   const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
   
   // Wait for auth to stabilize before processing
   useEffect(() => {
     if (isAuthReady && currentUser) {
       setIsReady(true);
-    } else {
+    } else if (authState === 'UNAUTHENTICATED') {
+      // If user is unauthenticated, don't try to render dashboard
       setIsReady(false);
     }
-  }, [isAuthReady, currentUser]);
+  }, [isAuthReady, currentUser, authState]);
   
-  // Don't try to process if we're not ready
-  if (!isReady) {
+  // Don't try to process if we're not ready or user is not authenticated
+  if (!isReady || !isAuthReady) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -41,9 +42,9 @@ const UserDashboard = () => {
     );
   }
   
-  // Get user's cases only and map to UserCaseItem format
-  const userCases: UserCaseItem[] = cases
-    .filter(c => c.userId === currentUser?.id)
+  // Only get user's cases if currentUser is available
+  const userCases: UserCaseItem[] = currentUser ? cases
+    .filter(c => c.userId === currentUser.id)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .filter(c => c.status !== 'completed')
     .slice(0, 3)
@@ -52,7 +53,7 @@ const UserDashboard = () => {
       title: c.title,
       status: c.status,
       updatedAt: c.updatedAt.toISOString() // Convert Date to string
-    }));
+    })) : [];
   
   // IMPROVED: Better validation of companyId
   const safeCompanyId = currentUser?.companyId && 
