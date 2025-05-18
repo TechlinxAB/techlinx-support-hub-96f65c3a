@@ -19,6 +19,7 @@ const AuthPage = () => {
   const [searchParams] = useSearchParams();
   const { status } = useAuth();
   const redirectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const hasRedirected = React.useRef<boolean>(false);
   
   // Get return URL from query params or default to home
   const getReturnUrl = () => {
@@ -35,7 +36,10 @@ const AuthPage = () => {
     
     // Only redirect if we're definitely authenticated
     // And don't redirect during loading state
-    if (status === 'AUTHENTICATED') {
+    // And prevent multiple redirects
+    if (status === 'AUTHENTICATED' && !hasRedirected.current) {
+      hasRedirected.current = true;
+      
       // Add a delay to ensure auth state is stable before redirecting
       redirectTimeoutRef.current = setTimeout(() => {
         const returnUrl = getReturnUrl();

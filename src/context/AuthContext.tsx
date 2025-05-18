@@ -12,11 +12,6 @@ interface AuthContextType {
   user: User | null;
   profile: any | null;
   signOut: () => Promise<void>;
-  debug: {
-    lastEvent: string | null;
-    lastEventTime: Date | null;
-    sessionCheck: boolean;
-  };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,14 +21,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [status, setStatus] = useState<AuthStatus>('LOADING');
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
-  const [lastEvent, setLastEvent] = useState<string | null>(null);
-  const [lastEventTime, setLastEventTime] = useState<Date | null>(null);
-  const [sessionCheck, setSessionCheck] = useState<boolean>(false);
   
   // Use refs to prevent race conditions
   const isInitialized = useRef(false);
   const isAuthChanging = useRef(false);
   const authTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const authListenerInitialized = useRef(false);
+  const sessionChecked = useRef(false);
   
   // Debounced status updates to prevent rapid state changes
   const updateAuthStatus = (newStatus: AuthStatus, newUser: User | null) => {
@@ -47,16 +41,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     // Add a small delay to batch potential rapid changes
     authTimeoutRef.current = setTimeout(() => {
-      console.log(`Auth status update: ${newStatus}`);
-      
-      setStatus(newStatus);
-      setUser(newUser);
-      
-      // Only fetch profile if authenticated and we have a user
-      if (newStatus === 'AUTHENTICATED' && newUser) {
-        fetchUserProfile(newUser.id);
-      } else if (newStatus === 'UNAUTHENTICATED') {
-        setProfile(null);
+      if (newStatus !== status || (newStatus === 'AUTHENTICATED' && !user)) {
+        console.log(`Auth status update: ${newStatus}`);
+        
+        setStatus(newStatus);
+        setUser(newUser);
+        
+        // Only fetch profile if authenticated and we have a user
+        if (newStatus === 'AUTHENTICATED' && newUser) {
+          fetchUserProfile(newUser.id);
+        } else if (newStatus === 'UNAUTHENTICATED') {
+          setProfile(null);
+        }
       }
       
       // Clear the changing flag
@@ -84,6 +80,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Initialize auth state once on component mount
   useEffect(() => {
+    if (authListenerInitialized.current) return;
+    
     console.log("Initializing authentication");
     let mounted = true;
     let authSubscription: { unsubscribe: () => void } | null = null;
@@ -94,18 +92,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!mounted) return;
         
         console.log(`Auth event: ${event}`);
-        setLastEvent(event);
-        setLastEventTime(new Date());
         
         // Handle different auth events
         if (session && session.user) {
           updateAuthStatus('AUTHENTICATED', session.user);
         } else if (event === 'SIGNED_OUT') {
           updateAuthStatus('UNAUTHENTICATED', null);
-        } else if (event === 'USER_UPDATED') {
-          if (!session) {
-            updateAuthStatus('UNAUTHENTICATED', null);
-          }
+        } else if (event === 'USER_UPDATED' && !session) {
+          updateAuthStatus('UNAUTHENTICATED', null);
         }
       });
       
@@ -114,13 +108,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     // Check for existing session
     const checkSession = async () => {
+      if (sessionChecked.current) return;
+      
       try {
         // Set up auth listener before checking session
         authSubscription = setupAuthListener();
+        authListenerInitialized.current = true;
         
         // Now check for session
         const { data, error } = await supabase.auth.getSession();
-        setSessionCheck(true);
+        sessionChecked.current = true;
         
         if (!mounted) return;
         
@@ -207,12 +204,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     status,
     user,
     profile,
-    signOut,
-    debug: {
-      lastEvent,
-      lastEventTime,
-      sessionCheck
-    }
+    signOut
   };
   
   return (

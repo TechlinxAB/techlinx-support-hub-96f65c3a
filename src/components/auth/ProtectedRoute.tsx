@@ -3,14 +3,12 @@ import React, { useEffect, useRef } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
 
 const ProtectedRoute = () => {
   const { status } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectAttempted = useRef(false);
-  const toastShown = useRef(false);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Effect for handling redirects based on auth status
@@ -37,19 +35,12 @@ const ProtectedRoute = () => {
           // Include current location as return URL
           const returnUrl = encodeURIComponent(location.pathname + location.search);
           navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
-          
-          // Show toast notification (only once)
-          if (!toastShown.current) {
-            toast.error("Please sign in to continue");
-            toastShown.current = true;
-          }
         }
-      }, 50);
+      }, 100);
     }
     
-    // Reset redirect flag if user navigates to auth page directly
-    // This allows future redirects to work if needed
-    if (location.pathname === '/auth') {
+    // Reset redirect flag if auth status changes to AUTHENTICATED
+    if (status === 'AUTHENTICATED') {
       redirectAttempted.current = false;
     }
     
@@ -60,15 +51,6 @@ const ProtectedRoute = () => {
       }
     };
   }, [status, navigate, location.pathname, location.search]);
-  
-  // Reset the redirect flag when auth status changes to AUTHENTICATED
-  // This ensures proper handling if the user signs out later
-  useEffect(() => {
-    if (status === 'AUTHENTICATED') {
-      redirectAttempted.current = false;
-      toastShown.current = false;
-    }
-  }, [status]);
   
   // Show loading state
   if (status === 'LOADING') {
