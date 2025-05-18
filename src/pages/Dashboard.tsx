@@ -10,8 +10,9 @@ import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
 
 const Dashboard = () => {
+  // All hooks must be called unconditionally at the top level
   const { currentUser } = useAppContext();
-  const { profile, isImpersonating } = useAuth();
+  const { profile, isImpersonating, authState } = useAuth();
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
@@ -19,57 +20,54 @@ const Dashboard = () => {
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   
-  // Load starred cases safely with error handling
+  // Load starred cases with error handling
   const safelyLoadStarredCases = useCallback(() => {
     try {
       loadStarredCases();
     } catch (error) {
       console.error("Error loading starred cases:", error);
-      // Don't set error state for this non-critical feature
+      // Non-critical feature, don't show error UI
     }
   }, [loadStarredCases]);
   
   // Wait for profile to be ready
   useEffect(() => {
-    if (profile) {
-      // Check for valid profile
-      if (!profile.id || !profile.role) {
-        console.error("Dashboard: Invalid profile data", profile);
-        setHasError(true);
-      } else {
-        setIsReady(true);
-        // Load starred cases once profile is available
-        safelyLoadStarredCases();
-      }
+    // Only set ready state when profile is valid
+    if (profile && profile.id && profile.role) {
+      setIsReady(true);
+      safelyLoadStarredCases();
+    } else if (profile) {
+      // Profile exists but is invalid
+      console.error("Dashboard: Invalid profile data", profile);
+      setHasError(true);
     }
+    // Don't include authState here to prevent unnecessary re-runs
   }, [profile, safelyLoadStarredCases]);
   
-  // Enhanced navigation handling with improved direct access for dashboard builder
+  // Handle query param redirects
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const redirectTarget = params.get('redirectTarget');
     
     if (redirectTarget && !navigationAttemptedRef.current && profile) {
-      // Mark that we've attempted navigation to prevent loops
       navigationAttemptedRef.current = true;
       
       console.log(`Dashboard: Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
       
       try {
-        // For dashboard builder pages, verify role before redirecting
+        // Verify role for dashboard builder pages
         if (redirectTarget.includes('company-dashboard-builder')) {
           if (profile?.role === 'consultant') {
             toast.info("Loading dashboard builder...");
             navigate(redirectTarget);
-            return;
           } else {
             console.log("Dashboard: Cannot redirect: User is not a consultant");
             toast.error("You don't have permission to access the dashboard builder");
-            return;
           }
+          return;
         }
         
-        // For other pages, use React Router navigation
+        // Handle other redirects
         navigate(redirectTarget, { replace: true });
         toast.info("Redirecting you to the requested page...");
       } catch (error) {
@@ -111,8 +109,7 @@ const Dashboard = () => {
     );
   }
   
-  // Determine which dashboard to show based on role
-  // When impersonating, use the impersonated user's role
+  // Determine dashboard type based on role and impersonation status
   const showConsultantDashboard = profile?.role === 'consultant' && !isImpersonating;
   
   return (

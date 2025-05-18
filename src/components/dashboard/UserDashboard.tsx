@@ -11,26 +11,26 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
-  // Always call ALL hooks at the top level, unconditionally
+  // Important: All hooks must be called unconditionally at the top level
   const { currentUser, cases } = useAppContext();
   const { authState } = useAuth();
   const [isReady, setIsReady] = useState(false);
   const [hasSettingsError, setHasSettingsError] = useState(false);
   
-  // Define safeCompanyId always, even if it's undefined
-  const safeCompanyId = currentUser?.companyId && 
-                        typeof currentUser.companyId === 'string' &&
-                        currentUser.companyId !== 'undefined' && 
-                        currentUser.companyId !== 'null' 
-                        ? currentUser.companyId 
-                        : undefined;
+  // Process companyId safely
+  const safeCompanyId = 
+    currentUser?.companyId && 
+    typeof currentUser.companyId === 'string' &&
+    currentUser.companyId !== 'undefined' && 
+    currentUser.companyId !== 'null'
+      ? currentUser.companyId 
+      : undefined;
   
-  // Always call these hooks, even if the data might not be ready
-  // React requires hooks to be called on every render in the same order
+  // Call hooks - these must be called on every render in the same order
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
   const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
   
-  // Update the isReady state based on auth status
+  // Set readiness state based on auth status
   useEffect(() => {
     if ((authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') && currentUser) {
       setIsReady(true);
@@ -39,7 +39,7 @@ const UserDashboard = () => {
     }
   }, [authState, currentUser]);
   
-  // Handle settings error separately
+  // Handle settings errors
   useEffect(() => {
     if (settingsError) {
       console.error("Dashboard settings error:", settingsError);
@@ -49,7 +49,7 @@ const UserDashboard = () => {
     }
   }, [settingsError]);
   
-  // Create loading content - extracted as a constant to reduce repetition
+  // Loading state component
   const loadingContent = (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -60,29 +60,26 @@ const UserDashboard = () => {
   );
 
   // Early return for loading states
-  // Show loading when auth is not ready or when settings/announcements are loading
   if (!isReady || settingsLoading || announcementsLoading) {
     return loadingContent;
   }
   
-  // Filter user cases - this is a normal function, not a hook
-  const userCases = (() => {
-    if (!currentUser?.id || !cases) return [];
-    
-    return cases
-      .filter(c => c.userId === currentUser.id)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .filter(c => c.status !== 'completed')
-      .slice(0, 3)
-      .map(c => ({
-        id: c.id,
-        title: c.title,
-        status: c.status,
-        updatedAt: c.updatedAt.toISOString()
-      }));
-  })();
+  // Process user cases - do this AFTER all hook calls
+  const userCases = !currentUser?.id || !cases 
+    ? [] 
+    : cases
+        .filter(c => c.userId === currentUser.id)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .filter(c => c.status !== 'completed')
+        .slice(0, 3)
+        .map(c => ({
+          id: c.id,
+          title: c.title,
+          status: c.status,
+          updatedAt: c.updatedAt.toISOString()
+        }));
   
-  // Extract first name - move this here, after early returns
+  // Extract first name
   const firstName = currentUser?.name?.split(' ')?.[0] || 'User';
   
   // Render the dashboard
