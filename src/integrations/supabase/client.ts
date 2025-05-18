@@ -6,40 +6,74 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
-// Define a stable storage mechanism that works across contexts
+// Improved storage provider with cookies fallback for cross-browser reliability
 const getStorageProvider = () => {
   if (typeof window === 'undefined') {
     return undefined; // No storage in SSR context
   }
   
-  // Use localStorage with a fallback mechanism
-  return {
-    getItem: (key: string) => {
-      try {
-        return window.localStorage.getItem(key);
-      } catch (error) {
-        console.error('Error accessing localStorage:', error);
-        return null;
-      }
-    },
-    setItem: (key: string, value: string) => {
-      try {
-        window.localStorage.setItem(key, value);
-      } catch (error) {
-        console.error('Error writing to localStorage:', error);
-      }
-    },
-    removeItem: (key: string) => {
-      try {
-        window.localStorage.removeItem(key);
-      } catch (error) {
-        console.error('Error removing from localStorage:', error);
-      }
+  // Detect if localStorage is actually available and working
+  const isLocalStorageAvailable = () => {
+    try {
+      const testKey = '__supabase_storage_test__';
+      window.localStorage.setItem(testKey, 'test');
+      window.localStorage.removeItem(testKey);
+      return true;
+    } catch (e) {
+      console.warn('localStorage not available, using memory storage');
+      return false;
     }
+  };
+  
+  // If localStorage is available, use it with better error handling
+  if (isLocalStorageAvailable()) {
+    return {
+      getItem: (key) => {
+        try {
+          const value = window.localStorage.getItem(key);
+          if (value === 'undefined' || value === 'null') {
+            console.warn(`Invalid value stored for key: ${key}`);
+            return null;
+          }
+          return value;
+        } catch (error) {
+          console.error('Error accessing localStorage:', error);
+          return null;
+        }
+      },
+      setItem: (key, value) => {
+        // Don't store null or undefined values
+        if (value === null || value === undefined) {
+          console.warn(`Attempted to store null/undefined for key: ${key}`);
+          return;
+        }
+        
+        try {
+          window.localStorage.setItem(key, value);
+        } catch (error) {
+          console.error('Error writing to localStorage:', error);
+        }
+      },
+      removeItem: (key) => {
+        try {
+          window.localStorage.removeItem(key);
+        } catch (error) {
+          console.error('Error removing from localStorage:', error);
+        }
+      }
+    };
+  }
+  
+  // Fallback to in-memory storage if localStorage isn't available
+  const memoryStorage = {};
+  return {
+    getItem: (key) => memoryStorage[key] || null,
+    setItem: (key, value) => { memoryStorage[key] = value; },
+    removeItem: (key) => { delete memoryStorage[key]; }
   };
 };
 
-// Create and export the supabase client with proper typing
+// Create and export the supabase client with improved configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
@@ -49,28 +83,75 @@ export const supabase = createClient<Database>(
       storage: getStorageProvider(),
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      flowType: 'pkce' // More secure authentication flow
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'techlinx-helpdesk'
+      }
+    },
+    // Configure more reliable API requests
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
     }
   }
 );
 
-// Simplified session checking with better error handling
-export const hasValidSession = async () => {
+// Enhanced session checking with better error handling and timeout
+export const hasValidSession = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.auth.getSession();
+    // Set a timeout for the session check to avoid hanging
+    const timeout = new Promise<{data: null, error: Error}>(
+      (_, reject) => setTimeout(() => reject(new Error('Session check timeout')), 3000)
+    );
+    
+    const sessionPromise = supabase.auth.getSession();
+    const { data, error } = await Promise.race([sessionPromise, timeout]) as any;
     
     if (error) {
       console.error("Error checking session:", error.message);
       return false;
     }
     
-    return !!data?.session;
+    // Verify session exists and has valid structure
+    if (!data?.session) {
+      return false;
+    }
+    
+    // Basic token expiration validation
+    const expiresAt = data.session.expires_at;
+    if (expiresAt && new Date(expiresAt * 1000) < new Date()) {
+      console.log("Session expired");
+      return false;
+    }
+    
+    return true;
   } catch (err) {
     console.error("Failed to check session:", err);
     return false;
   }
 };
 
-// Helper to check if auth is ready - more reliable now
-export const isAuthReady = () => {
-  return typeof window !== 'undefined';
+// Improved auth ready check
+export const isAuthReady = (): boolean => {
+  return typeof window !== 'undefined' && !!window.localStorage;
+};
+
+// Simple function to clear all auth data - useful for debugging and resolving stuck states
+export const clearAuthData = (): void => {
+  try {
+    if (typeof window !== 'undefined') {
+      // Clear Supabase related items from localStorage
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('supabase.auth.')) {
+          localStorage.removeItem(key);
+        }
+      });
+      console.log('Auth data cleared');
+    }
+  } catch (error) {
+    console.error('Error clearing auth data:', error);
+  }
 };
