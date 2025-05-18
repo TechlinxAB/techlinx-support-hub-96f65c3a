@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Star } from 'lucide-react';
@@ -10,11 +9,9 @@ import { Input } from '@/components/ui/input';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useAuth } from '@/context/AuthContext';
 
 const CasesPage = () => {
   const { loadingCases, cases } = useAppContext();
-  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<CaseStatus | 'all' | 'watchlist'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { starredCases, toggleStar } = useStarredCases();
@@ -30,13 +27,8 @@ const CasesPage = () => {
     }
   }, [location]);
 
-  // Filter cases based on user role
-  const userCases = profile?.role === 'consultant' 
-    ? cases // Consultants can see all cases
-    : cases.filter(c => c.userId === profile?.id); // Normal users only see their own cases
-  
   // Get watchlist count for badge
-  const watchlistCount = userCases.filter(c => starredCases.includes(c.id)).length;
+  const watchlistCount = cases.filter(c => starredCases.includes(c.id)).length;
   
   // Navigate to case detail
   const viewCase = (caseId: string) => {
@@ -56,7 +48,7 @@ const CasesPage = () => {
     searchQuery: string 
   }) => {
     // Filter cases based on the provided filters
-    const filteredCases = userCases.filter(c => {
+    const filteredCases = cases.filter(c => {
       // Text search filter
       const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase());
       

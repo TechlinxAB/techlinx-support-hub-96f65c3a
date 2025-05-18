@@ -43,7 +43,7 @@ const ProtectedRoute = () => {
     }
   }, [user, loading, navigate, location.pathname, redirectAttempted]);
   
-  // Check if the path requires a specific role
+  // Check if the path requires a consultant role
   useEffect(() => {
     // Only check role requirements if we have both user and profile data
     // Skip when still loading or missing user/profile
@@ -51,20 +51,9 @@ const ProtectedRoute = () => {
       return;
     }
     
-    // List of paths that require specific roles
-    const requiresConsultantRole = [
-      '/company-dashboard-builder',
-      '/company-news-builder',
-      '/users',
-      '/company-management'
-    ];
+    const requiresConsultantRole = location.pathname.includes('company-dashboard-builder');
     
-    // Check if current path starts with any restricted path
-    const isRestrictedPath = requiresConsultantRole.some(path => 
-      location.pathname.startsWith(path)
-    );
-    
-    if (isRestrictedPath) {
+    if (requiresConsultantRole) {
       // For impersonation, check the original role for protected routes
       const effectiveRole = isImpersonating && originalProfile ? originalProfile.role : profile.role;
       
@@ -73,14 +62,6 @@ const ProtectedRoute = () => {
         toast.error("You don't have permission to access this page");
         navigate('/', { replace: true });
       }
-    }
-    
-    // Additional check: Viewing other users' cases
-    if (location.pathname.startsWith('/cases/') && !location.pathname.includes('/cases/new')) {
-      const caseId = location.pathname.split('/').pop();
-      // Case detail access control should be managed by backend
-      // Here we just log for informational purposes
-      console.log(`User ${profile.id} accessing case ${caseId}`);
     }
   }, [user, profile, originalProfile, isImpersonating, loading, location.pathname, navigate]);
   

@@ -51,12 +51,9 @@ const Dashboard = () => {
     }
   }, [location, navigate, navigationAttempted, profile]);
   
-  // Determine which dashboard to show based on user role
-  const userRole = profile?.role || 'user';
-  
   return (
     <div className="w-full">
-      {userRole === 'consultant' ? (
+      {currentUser?.role === 'consultant' ? (
         <ConsultantDashboard />
       ) : (
         <UserDashboard />

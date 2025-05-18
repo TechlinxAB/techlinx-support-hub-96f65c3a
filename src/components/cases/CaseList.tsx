@@ -1,8 +1,6 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
-import { useAuth } from '@/context/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,7 +43,6 @@ const CaseList = ({
 }: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
-  const { profile } = useAuth();
   const { starredCases, toggleStar } = useStarredCases();
   
   const [localSearchQuery, setLocalSearchQuery] = useState('');
@@ -60,10 +57,10 @@ const CaseList = ({
     setRefreshing(false);
   };
   
-  // Filter cases based on user role - this is the key security fix
-  let filteredCases = profile?.role === 'consultant' 
+  // Filter cases based on user role
+  let filteredCases = currentUser?.role === 'consultant' 
     ? cases 
-    : cases.filter(c => c.userId === profile?.id);
+    : cases.filter(c => c.userId === currentUser?.id);
   
   // Apply search filter (either from props or local state)
   const effectiveSearchQuery = searchQuery || localSearchQuery;
@@ -224,7 +221,7 @@ const CaseList = ({
             </TableHeader>
             <TableBody>
               {filteredCases.map((caseItem) => {
-                const user = profile?.role === 'consultant'
+                const user = currentUser?.role === 'consultant'
                   ? companies.find(c => c.id === caseItem.userId)?.name
                   : null;
                 const company = companies.find(c => c.id === caseItem.companyId)?.name;
