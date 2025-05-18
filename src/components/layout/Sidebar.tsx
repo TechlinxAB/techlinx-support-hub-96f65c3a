@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
@@ -60,8 +61,9 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
   return (
     <aside 
       className={cn(
-        "fixed h-screen w-64 bg-sidebar z-30 flex flex-col transition-transform duration-300 md:translate-x-0",
-        isOpen ? "translate-x-0" : "-translate-x-full"
+        "h-screen bg-sidebar z-30 flex flex-col transition-all duration-300 md:relative",
+        isOpen ? "w-64" : "w-0",
+        "fixed md:sticky md:top-0 md:left-0 md:h-screen"
       )}
     >
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border bg-sidebar">

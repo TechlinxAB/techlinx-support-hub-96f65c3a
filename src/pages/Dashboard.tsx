@@ -52,13 +52,13 @@ const Dashboard = () => {
   }, [location, navigate, navigationAttempted, profile]);
   
   return (
-    <>
+    <div className="w-full">
       {currentUser?.role === 'consultant' ? (
         <ConsultantDashboard />
       ) : (
         <UserDashboard />
       )}
-    </>
+    </div>
   );
 };
 
