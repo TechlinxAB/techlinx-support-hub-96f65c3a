@@ -27,17 +27,22 @@ const LogoutButton = ({
       setIsLoggingOut(true);
       const toastId = toast.loading('Logging out...');
       
-      // Hard navigation instead of react-router to ensure full page refresh
+      // First clear any local storage/session storage to prevent stale data
+      try {
+        localStorage.removeItem('supabase.auth.token');
+        sessionStorage.removeItem('supabase.auth.token');
+      } catch (e) {
+        // Silent error - just continue
+      }
+      
+      // Call auth signOut and then trigger hard navigation
       await signOut();
       
       toast.success('Successfully logged out', { id: toastId });
       
       // Hard redirect to auth page to ensure clean state
-      // IMPROVED: Add a small delay to ensure signOut has time to cleanup
-      setTimeout(() => {
-        // Add ?clean=true to signal a clean session is needed
-        navigationService.hardRedirect('/auth?clean=true');
-      }, 800); // Increased from 500ms to 800ms
+      // IMPROVED: Use a more reliable method to clear state
+      navigationService.hardRedirect('/auth?clean=true');
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');

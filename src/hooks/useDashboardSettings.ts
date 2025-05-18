@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardSettings, CompanySettingsRow } from '@/types/dashboardTypes';
-import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const defaultSettings: DashboardSettings = {
   showWelcome: true,
@@ -20,6 +20,10 @@ export const useDashboardSettings = (companyId: string | undefined) => {
   const [error, setError] = useState<Error | null>(null);
   const fetchAttemptsRef = useRef(0);
   const maxAttempts = 3;
+  const { authState } = useAuth();
+  
+  // Only fetch if auth is fully established
+  const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
 
   useEffect(() => {
     // Reset state when companyId changes
@@ -28,7 +32,14 @@ export const useDashboardSettings = (companyId: string | undefined) => {
     setError(null);
     fetchAttemptsRef.current = 0;
     
-    // Skip fetch if companyId is undefined, null or invalid format
+    // Skip fetch if authentication is not ready
+    if (!isAuthReady) {
+      console.log("Skipping dashboard settings fetch - auth not ready:", authState);
+      setLoading(false);
+      return;
+    }
+    
+    // Skip fetch if companyId is invalid
     if (!companyId || companyId === "undefined" || companyId === "null") {
       console.log("Skipping dashboard settings fetch - invalid companyId:", companyId);
       setLoading(false);
@@ -44,12 +55,11 @@ export const useDashboardSettings = (companyId: string | undefined) => {
       
       fetchAttemptsRef.current += 1;
       setLoading(true);
-      setError(null);
       
       try {
         console.log(`Fetching company settings for companyId: ${companyId}`);
         
-        // FIX: Don't use eq.%3Aid:1 format - use proper UUID format
+        // Use proper error handling that won't affect auth state
         const { data, error: settingsError } = await supabase
           .from('company_settings')
           .select('*')
@@ -59,7 +69,13 @@ export const useDashboardSettings = (companyId: string | undefined) => {
         if (settingsError) {
           console.error('Error fetching company settings:', settingsError);
           setError(settingsError instanceof Error ? settingsError : new Error(String(settingsError)));
-          // Don't early return, still set the defaults below
+          
+          // If we get a 401/403, don't retry - this will prevent auth loops
+          if (settingsError.code === '401' || settingsError.code === '403') {
+            console.log('Authorization error fetching settings, using defaults');
+            setLoading(false);
+            return;
+          }
         }
         
         if (data) {
@@ -89,8 +105,15 @@ export const useDashboardSettings = (companyId: string | undefined) => {
       }
     };
     
-    fetchSettings();
-  }, [companyId]);
+    // Add a small delay before fetching settings to ensure auth is stable
+    const timeoutId = setTimeout(() => {
+      fetchSettings();
+    }, 500);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [companyId, isAuthReady, authState]);
 
   return { settings, loading, error };
 };

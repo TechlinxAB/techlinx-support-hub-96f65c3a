@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase, resetAuthState } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ const AuthPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [redirectAttempted, setRedirectAttempted] = useState(false);
+  const redirectTimerRef = useRef<number | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, authState, signIn } = useAuth();
@@ -56,10 +57,19 @@ const AuthPage = () => {
         window.history.replaceState(null, '', newUrl);
       }
     }
+    
+    // Clean up any pending redirect timers on unmount
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
   }, [cleanSession, forcedLogout, resetComplete]);
   
-  // IMPROVED: Better redirect handling to prevent loops
+  // IMPROVED: Better redirect handling with longer debounce to prevent loops
   useEffect(() => {
+    // Only redirect if we have a fully authenticated user
     if (!user || authState !== 'AUTHENTICATED' || redirectAttempted) {
       return;
     }
@@ -69,8 +79,13 @@ const AuthPage = () => {
     
     console.log('AuthPage: User is authenticated, redirecting to:', from);
     
-    // Debounce the redirect to prevent rapid state changes
-    const redirectTimer = setTimeout(() => {
+    // Clear any existing redirect timer
+    if (redirectTimerRef.current !== null) {
+      clearTimeout(redirectTimerRef.current);
+    }
+    
+    // Set longer debounce for the redirect to ensure auth is stable
+    redirectTimerRef.current = window.setTimeout(() => {
       // Redirect once NavigationService is ready
       if (navigationService.isReady()) {
         navigationService.navigate(from);
@@ -78,9 +93,8 @@ const AuthPage = () => {
         // Fallback if NavigationService is not ready
         navigate(from);
       }
-    }, 300);
-    
-    return () => clearTimeout(redirectTimer);
+      redirectTimerRef.current = null;
+    }, 800);
   }, [user, authState, from, navigate, redirectAttempted]);
   
   const handleSignIn = async (e: React.FormEvent) => {

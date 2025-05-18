@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
@@ -17,7 +17,9 @@ const ProtectedRoute = () => {
   const location = useLocation();
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const navigationTimerRef = useRef<number | null>(null);
   const isAuthPage = location.pathname === '/auth';
+  const stableAuthRef = useRef(authState);
 
   // Register the navigate function with the navigation service on mount
   // This is crucial for proper navigation throughout the app
@@ -28,17 +30,36 @@ const ProtectedRoute = () => {
     // Reset navigation tracking when route changes
     return () => {
       setNavigationAttempted(false);
+      
+      // Clear any pending navigation timers
+      if (navigationTimerRef.current !== null) {
+        clearTimeout(navigationTimerRef.current);
+        navigationTimerRef.current = null;
+      }
     };
   }, [navigate, location.pathname]);
   
-  // IMPROVED: Add debouncing for auth state changes to prevent rapid redirects
+  // Track auth state changes with a cooldown to prevent rapid changes
+  useEffect(() => {
+    // Only update our stable auth ref if the state has persisted
+    // This prevents flickering between auth states
+    const authChangeTimer = setTimeout(() => {
+      stableAuthRef.current = authState;
+    }, 1000); // 1 second stability required
+    
+    return () => {
+      clearTimeout(authChangeTimer);
+    };
+  }, [authState]);
+  
+  // IMPROVED: Add significant debouncing for auth state changes to prevent rapid redirects
   useEffect(() => {
     // Skip everything if already on auth page
     if (isAuthPage) {
       return;
     }
     
-    // Wait until auth state is fully loaded
+    // Wait until auth state is fully loaded and stable
     if (loading) {
       return;
     }
@@ -48,8 +69,8 @@ const ProtectedRoute = () => {
       return;
     }
 
-    // If there's no user and we're not on the auth page, redirect
-    if (authState === 'UNAUTHENTICATED') {
+    // If there's no user and we're not on the auth page, redirect with debounce
+    if (authState === 'UNAUTHENTICATED' && stableAuthRef.current === 'UNAUTHENTICATED') {
       // Store current path for redirect after login
       let currentPath = location.pathname;
       if (currentPath === '/') {
@@ -59,18 +80,22 @@ const ProtectedRoute = () => {
       console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
       setNavigationAttempted(true);
       
-      // IMPROVED: Use a timeout to debounce the navigation
-      const navigationTimer = setTimeout(() => {
+      // IMPROVED: Use a longer timeout to debounce the navigation
+      // This prevents navigation jumps if auth state is still settling
+      if (navigationTimerRef.current !== null) {
+        clearTimeout(navigationTimerRef.current);
+      }
+      
+      navigationTimerRef.current = window.setTimeout(() => {
         // Use navigation service to prevent loops
         if (navigationService.isReady()) {
           navigationService.navigate('/auth', { 
             replace: true, 
             state: { from: currentPath || '/' } 
           });
+          navigationTimerRef.current = null;
         }
-      }, 300);
-      
-      return () => clearTimeout(navigationTimer);
+      }, 800); // Longer debounce for auth state changes
     }
   }, [authState, loading, isAuthPage, location.pathname, navigationAttempted]);
   
@@ -88,9 +113,7 @@ const ProtectedRoute = () => {
       toast.error("Failed to reset auth state. Please try refreshing your browser.");
       
       // Last resort: direct refresh
-      setTimeout(() => {
-        window.location.href = '/auth';
-      }, 1000);
+      window.location.href = '/auth';
     }
   };
   

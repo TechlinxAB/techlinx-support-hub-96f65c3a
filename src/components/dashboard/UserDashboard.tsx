@@ -9,10 +9,37 @@ import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 import { useCompanyAnnouncements } from '@/hooks/useCompanyAnnouncements';
 import { UserCaseItem } from '@/types/dashboardTypes';
 import { AlertCircle } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
   const { currentUser, cases } = useAppContext();
+  const { authState } = useAuth();
   const [hasSettingsError, setHasSettingsError] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  
+  // Only proceed if auth is stable
+  const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
+  
+  // Wait for auth to stabilize before processing
+  useEffect(() => {
+    if (isAuthReady && currentUser) {
+      setIsReady(true);
+    } else {
+      setIsReady(false);
+    }
+  }, [isAuthReady, currentUser]);
+  
+  // Don't try to process if we're not ready
+  if (!isReady) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
   
   // Get user's cases only and map to UserCaseItem format
   const userCases: UserCaseItem[] = cases
