@@ -11,17 +11,20 @@ import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const UserDashboard = () => {
-  // Use primitive references to context values to prevent re-renders
+  // Context values
   const { currentUser, cases } = useAppContext();
   const { authState } = useAuth();
+  
+  // Local state
   const [hasSettingsError, setHasSettingsError] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const errorHandledRef = useRef(false);
   
   // Create stable primitive references to prevent hook dependency issues
-  const userId = useMemo(() => currentUser?.id, [currentUser?.id]);
-  const userName = useMemo(() => currentUser?.name, [currentUser?.name]);
-  const userCompanyId = useMemo(() => currentUser?.companyId, [currentUser?.companyId]);
+  // These must be unconditionally called at the top level
+  const userId = currentUser?.id;
+  const userName = currentUser?.name;
+  const userCompanyId = currentUser?.companyId;
   
   // Only proceed if auth is stable and user is authenticated
   const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
@@ -36,7 +39,7 @@ const UserDashboard = () => {
     }
   }, [isAuthReady, currentUser, authState]);
   
-  // Don't try to process if we're not ready or user is not authenticated
+  // Early return for loading state - must be placed after all hooks
   if (!isReady || !isAuthReady) {
     return (
       <div className="space-y-6">
@@ -47,6 +50,19 @@ const UserDashboard = () => {
       </div>
     );
   }
+
+  // Safely derive companyId without creating new objects
+  const safeCompanyId = useMemo(() => {
+    if (!userCompanyId) return undefined;
+    if (typeof userCompanyId !== 'string') return undefined;
+    if (userCompanyId === "undefined" || userCompanyId === "null") return undefined;
+    
+    return userCompanyId;
+  }, [userCompanyId]); // Only depend on the userCompanyId primitive
+  
+  // Fetch company settings and announcements
+  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
+  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
 
   // Memoize user's cases to prevent recreation on each render
   const userCases = useMemo(() => {
@@ -65,19 +81,6 @@ const UserDashboard = () => {
       }));
   }, [userId, cases]);
   
-  // Safely derive companyId without creating new objects
-  const safeCompanyId = useMemo(() => {
-    if (!userCompanyId) return undefined;
-    if (typeof userCompanyId !== 'string') return undefined;
-    if (userCompanyId === "undefined" || userCompanyId === "null") return undefined;
-    
-    return userCompanyId;
-  }, [userCompanyId]); // Only depend on the userCompanyId primitive
-  
-  // Fetch company settings and announcements
-  const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
-  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(safeCompanyId);
-  
   // Track settings errors - with useCallback to ensure stable function reference
   const handleSettingsError = useCallback(() => {
     if (settingsError && !errorHandledRef.current) {
@@ -95,8 +98,14 @@ const UserDashboard = () => {
     handleSettingsError();
   }, [handleSettingsError]);
   
+  // Get user's first name for welcome message - ensure stable reference
+  const firstName = useMemo(() => {
+    return userName?.split(' ')?.[0] || 'User';
+  }, [userName]);
+  
   const loading = settingsLoading || announcementsLoading;
   
+  // Second loading state - must be consistent across renders
   if (loading) {
     return (
       <div className="space-y-6">
@@ -107,11 +116,6 @@ const UserDashboard = () => {
       </div>
     );
   }
-  
-  // Get user's first name for welcome message - ensure stable reference
-  const firstName = useMemo(() => {
-    return userName?.split(' ')[0] || 'User';
-  }, [userName]);
   
   // Use the dashboard with default settings if needed
   return (
