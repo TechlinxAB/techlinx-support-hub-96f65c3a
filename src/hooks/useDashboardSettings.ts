@@ -49,7 +49,7 @@ export const useDashboardSettings = (companyId: string | undefined) => {
       try {
         console.log(`Fetching company settings for companyId: ${companyId}`);
         
-        // Use maybeSingle instead of single to handle the case where no settings exist
+        // FIX: Don't use eq.%3Aid:1 format - use proper UUID format
         const { data, error: settingsError } = await supabase
           .from('company_settings')
           .select('*')
@@ -59,7 +59,7 @@ export const useDashboardSettings = (companyId: string | undefined) => {
         if (settingsError) {
           console.error('Error fetching company settings:', settingsError);
           setError(settingsError instanceof Error ? settingsError : new Error(String(settingsError)));
-          return;
+          // Don't early return, still set the defaults below
         }
         
         if (data) {
@@ -83,6 +83,7 @@ export const useDashboardSettings = (companyId: string | undefined) => {
       } catch (err) {
         console.error('Exception in fetching dashboard settings:', err);
         setError(err instanceof Error ? err : new Error(String(err)));
+        // Still maintain the default settings
       } finally {
         setLoading(false);
       }

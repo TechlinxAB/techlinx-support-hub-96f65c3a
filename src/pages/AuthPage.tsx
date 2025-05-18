@@ -15,6 +15,7 @@ const AuthPage = () => {
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [redirectAttempted, setRedirectAttempted] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, authState, signIn } = useAuth();
@@ -57,11 +58,19 @@ const AuthPage = () => {
     }
   }, [cleanSession, forcedLogout, resetComplete]);
   
-  // Redirect if user is authenticated
+  // IMPROVED: Better redirect handling to prevent loops
   useEffect(() => {
-    if (user && authState === 'AUTHENTICATED') {
-      console.log('AuthPage: User is authenticated, redirecting to:', from);
-      
+    if (!user || authState !== 'AUTHENTICATED' || redirectAttempted) {
+      return;
+    }
+    
+    // Mark that we've attempted navigation to prevent loops
+    setRedirectAttempted(true);
+    
+    console.log('AuthPage: User is authenticated, redirecting to:', from);
+    
+    // Debounce the redirect to prevent rapid state changes
+    const redirectTimer = setTimeout(() => {
       // Redirect once NavigationService is ready
       if (navigationService.isReady()) {
         navigationService.navigate(from);
@@ -69,8 +78,10 @@ const AuthPage = () => {
         // Fallback if NavigationService is not ready
         navigate(from);
       }
-    }
-  }, [user, authState, from, navigate]);
+    }, 300);
+    
+    return () => clearTimeout(redirectTimer);
+  }, [user, authState, from, navigate, redirectAttempted]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

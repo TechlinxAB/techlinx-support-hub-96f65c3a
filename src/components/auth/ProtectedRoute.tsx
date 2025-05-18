@@ -17,6 +17,7 @@ const ProtectedRoute = () => {
   const location = useLocation();
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const isAuthPage = location.pathname === '/auth';
 
   // Register the navigate function with the navigation service on mount
   // This is crucial for proper navigation throughout the app
@@ -30,10 +31,7 @@ const ProtectedRoute = () => {
     };
   }, [navigate, location.pathname]);
   
-  // Special handle for the auth page
-  const isAuthPage = location.pathname === '/auth';
-  
-  // Handle authentication redirects with improved debouncing
+  // IMPROVED: Add debouncing for auth state changes to prevent rapid redirects
   useEffect(() => {
     // Skip everything if already on auth page
     if (isAuthPage) {
@@ -61,13 +59,18 @@ const ProtectedRoute = () => {
       console.log(`ProtectedRoute: Unauthenticated, redirecting to auth page from ${currentPath || '/'}`);
       setNavigationAttempted(true);
       
-      // Use navigation service to prevent loops
-      if (navigationService.isReady()) {
-        navigationService.navigate('/auth', { 
-          replace: true, 
-          state: { from: currentPath || '/' } 
-        });
-      }
+      // IMPROVED: Use a timeout to debounce the navigation
+      const navigationTimer = setTimeout(() => {
+        // Use navigation service to prevent loops
+        if (navigationService.isReady()) {
+          navigationService.navigate('/auth', { 
+            replace: true, 
+            state: { from: currentPath || '/' } 
+          });
+        }
+      }, 300);
+      
+      return () => clearTimeout(navigationTimer);
     }
   }, [authState, loading, isAuthPage, location.pathname, navigationAttempted]);
   
@@ -79,7 +82,7 @@ const ProtectedRoute = () => {
       await resetAuth();
       
       // Redirect to auth page via hard redirect
-      navigationService.hardRedirect('/auth');
+      navigationService.hardRedirect('/auth?reset=complete');
     } catch (error) {
       console.error("Critical error during auth reset:", error);
       toast.error("Failed to reset auth state. Please try refreshing your browser.");

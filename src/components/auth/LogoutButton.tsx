@@ -33,9 +33,11 @@ const LogoutButton = ({
       toast.success('Successfully logged out', { id: toastId });
       
       // Hard redirect to auth page to ensure clean state
+      // IMPROVED: Add a small delay to ensure signOut has time to cleanup
       setTimeout(() => {
-        navigationService.hardRedirect('/auth');
-      }, 500);
+        // Add ?clean=true to signal a clean session is needed
+        navigationService.hardRedirect('/auth?clean=true');
+      }, 800); // Increased from 500ms to 800ms
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');

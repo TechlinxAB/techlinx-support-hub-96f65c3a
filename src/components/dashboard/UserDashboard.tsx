@@ -27,8 +27,9 @@ const UserDashboard = () => {
       updatedAt: c.updatedAt.toISOString() // Convert Date to string
     }));
   
-  // Safety check for company ID before fetching settings
+  // IMPROVED: Better validation of companyId
   const safeCompanyId = currentUser?.companyId && 
+    typeof currentUser.companyId === 'string' &&
     currentUser.companyId !== "undefined" && 
     currentUser.companyId !== "null" ? 
     currentUser.companyId : undefined;
