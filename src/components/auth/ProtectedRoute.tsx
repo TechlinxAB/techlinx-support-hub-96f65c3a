@@ -1,30 +1,45 @@
 
-import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
+import { toast } from 'sonner';
 
 const ProtectedRoute = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   
-  // Show loading spinner while checking authentication
+  useEffect(() => {
+    // Only redirect if we're done loading and there's no user
+    if (!loading && !user) {
+      console.log("No authenticated user, redirecting to auth");
+      toast.error("Please sign in to continue");
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+  
+  // Check if the path requires a consultant role
+  useEffect(() => {
+    const requiresConsultantRole = location.pathname.includes('company-dashboard-builder');
+    
+    // Only check role requirements if we have both user and profile data
+    if (!loading && user && profile && requiresConsultantRole && profile.role !== 'consultant') {
+      console.log("User is not a consultant but trying to access restricted route:", location.pathname);
+      toast.error("You don't have permission to access this page");
+      navigate('/');
+    }
+  }, [user, profile, loading, location.pathname, navigate]);
+  
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-sm text-muted-foreground">Checking authentication status...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
   
-  // If not authenticated, redirect to login
-  if (!isAuthenticated) {
-    return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
-  }
-  
-  // If authenticated, render the child routes
-  return <Outlet />;
+  return user ? <Outlet /> : null;
 };
 
 export default ProtectedRoute;

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
@@ -232,7 +233,9 @@ export const useNewsBlockEditor = (
     }
     
     try {
-      // Save without relying on the toastIdRef
+      // Show a toast immediately to indicate saving is in progress
+      toastIdRef.current = toast("Saving changes...");
+      
       await saveNewsBlock(
         selectedBlockId, 
         {
@@ -240,18 +243,36 @@ export const useNewsBlockEditor = (
           content: editedBlockData.content
         }, 
         {
-          showToast: true, // Let the save function handle toast management
+          showToast: false, // We'll handle toasts manually for better control
           onStart: () => {
             setLocalSaving(true);
             console.log("Save operation started");
           },
           onSuccess: () => {
+            // Update toast on success
+            toast({
+              title: "Changes saved",
+              description: "Your changes have been saved successfully",
+              id: toastIdRef.current as string | number,
+              variant: "success"
+            });
+            toastIdRef.current = null;
+            
             setHasUnsavedChanges(false);
             options?.onSaveSuccess?.();
             console.log("Save operation completed successfully");
           },
           onError: (error) => {
             console.error("Save operation failed:", error);
+            // Update toast on error
+            toast({
+              title: "Failed to save",
+              description: "Please try again",
+              id: toastIdRef.current as string | number,
+              variant: "destructive"
+            });
+            toastIdRef.current = null;
+            
             options?.onSaveError?.(error);
           }
         }

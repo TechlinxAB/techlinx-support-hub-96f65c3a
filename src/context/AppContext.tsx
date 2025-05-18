@@ -245,9 +245,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: profile.name,
         email: profile.email,
         phone: profile.phone || undefined,
-        companyId: profile.companyId || '',
+        companyId: profile.company_id || '',
         role: profile.role as UserRole,
-        preferredLanguage: (profile.preferredLanguage as Language) || 'en',
+        preferredLanguage: (profile.preferred_language as Language) || 'en',
         avatar: profile.avatar || undefined,
       };
       

@@ -20,11 +20,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { CasePriority, CaseStatus } from '@/context/AppContext';
-import { useAuth } from '@/context/AuthContext';
 
 const SearchPage = () => {
-  const { cases, users, companies, categories } = useAppContext();
-  const { profile, isImpersonating } = useAuth();
+  const { cases, users, companies, categories, currentUser } = useAppContext();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<typeof cases>([]);
@@ -40,13 +38,10 @@ const SearchPage = () => {
   const handleSearch = () => {
     setIsSearched(true);
     
-    // Apply search logic - filter cases based on user role and impersonation
-    let results = cases;
-    
-    // If user is not a consultant OR is impersonating a non-consultant user
-    if (profile?.role !== 'consultant' || isImpersonating && profile?.role !== 'consultant') {
-      results = cases.filter(c => c.userId === profile?.id);
-    }
+    // Apply search logic
+    let results = currentUser?.role === 'consultant'
+      ? cases
+      : cases.filter(c => c.userId === currentUser?.id);
     
     // Apply text search
     if (searchQuery.trim()) {
@@ -73,7 +68,7 @@ const SearchPage = () => {
     }
     
     // Apply company filter (consultants only)
-    if (profile?.role === 'consultant' && !isImpersonating && companyFilter !== 'all') {
+    if (currentUser?.role === 'consultant' && companyFilter !== 'all') {
       results = results.filter(c => c.companyId === companyFilter);
     }
     
@@ -180,7 +175,7 @@ const SearchPage = () => {
               </Select>
             </div>
             
-            {profile?.role === 'consultant' && !isImpersonating && (
+            {currentUser?.role === 'consultant' && (
               <div>
                 <label className="text-sm mb-1 block">Company</label>
                 <Select 

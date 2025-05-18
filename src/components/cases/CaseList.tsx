@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
@@ -24,7 +23,6 @@ import { Filter, RefreshCw, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useStarredCases } from '@/hooks/useStarredCases';
-import { useAuth } from '@/context/AuthContext';
 
 interface CaseListProps {
   title?: string;
@@ -45,7 +43,6 @@ const CaseList = ({
 }: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
-  const { profile, isImpersonating } = useAuth();
   const { starredCases, toggleStar } = useStarredCases();
   
   const [localSearchQuery, setLocalSearchQuery] = useState('');
@@ -60,13 +57,10 @@ const CaseList = ({
     setRefreshing(false);
   };
   
-  // Filter cases based on user role and impersonation state
-  let filteredCases = cases;
-  
-  // If user is not a consultant OR is impersonating a non-consultant user
-  if (profile?.role !== 'consultant' || isImpersonating && profile?.role !== 'consultant') {
-    filteredCases = cases.filter(c => c.userId === profile?.id);
-  }
+  // Filter cases based on user role
+  let filteredCases = currentUser?.role === 'consultant' 
+    ? cases 
+    : cases.filter(c => c.userId === currentUser?.id);
   
   // Apply search filter (either from props or local state)
   const effectiveSearchQuery = searchQuery || localSearchQuery;
@@ -227,7 +221,7 @@ const CaseList = ({
             </TableHeader>
             <TableBody>
               {filteredCases.map((caseItem) => {
-                const user = profile?.role === 'consultant' && !isImpersonating
+                const user = currentUser?.role === 'consultant'
                   ? companies.find(c => c.id === caseItem.userId)?.name
                   : null;
                 const company = companies.find(c => c.id === caseItem.companyId)?.name;

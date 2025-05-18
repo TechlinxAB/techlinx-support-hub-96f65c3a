@@ -50,15 +50,6 @@ export const useOptimizedNewsBlockSave = () => {
       saveQueue.current.delete(blockId);
       console.log(`Removed block ${blockId} from save queue`);
     }
-
-    // Clear any active toast for this block
-    if (activeToastIds.current.has(blockId)) {
-      const toastId = activeToastIds.current.get(blockId);
-      if (toastId) {
-        toast.dismiss(toastId);
-        activeToastIds.current.delete(blockId);
-      }
-    }
   };
 
   // Process the save queue with better request handling and throttling
@@ -98,15 +89,14 @@ export const useOptimizedNewsBlockSave = () => {
         // If we already have a toast for this block, use that ID
         if (activeToastIds.current.has(blockId)) {
           toastId = activeToastIds.current.get(blockId);
-          console.log(`Using existing toast ID for saving: ${toastId}`);
+          console.log(`Prevented duplicate loading toast: Saving changes...-${toastId}`);
         } else {
-          // Using toast which returns string or number
+          // Using toast.loading which returns string or number
           toastId = toast({
             title: "Saving changes...",
             variant: "default"
           });
-          
-          if (toastId && toastId !== -1) { // Skip if toast is a duplicate (-1)
+          if (toastId) {
             activeToastIds.current.set(blockId, toastId);
           }
         }
@@ -117,7 +107,7 @@ export const useOptimizedNewsBlockSave = () => {
       
       const timestamp = new Date().toISOString();
 
-      // Add a small delay to ensure UI updates show the loading state
+      // Add a delay to ensure UI updates show the loading state
       await new Promise(resolve => setTimeout(resolve, 300));
       
       // Send the actual request with the abort signal and proper error handling
@@ -138,11 +128,7 @@ export const useOptimizedNewsBlockSave = () => {
       setLastSaveTime(saveTime);
       
       // Update toast status if it was shown
-      if (toastId && toastId !== -1 && options?.showToast !== false) {
-        // Clear previous toast first to avoid stacking
-        toast.dismiss(toastId);
-        
-        // Show success toast
+      if (toastId && options?.showToast !== false) {
         toast({
           title: "News Block Updated",
           description: "The news block has been successfully updated",
@@ -163,11 +149,6 @@ export const useOptimizedNewsBlockSave = () => {
       if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
         console.log('Save operation was cancelled');
         if (options?.showToast !== false) {
-          // Clear any existing toast
-          if (activeToastIds.current.has(blockId)) {
-            toast.dismiss(activeToastIds.current.get(blockId));
-          }
-          
           toast({
             title: "Save cancelled",
             variant: "default"
@@ -178,14 +159,6 @@ export const useOptimizedNewsBlockSave = () => {
       
       // Properly log the error for debugging
       console.error('Error saving news block:', error);
-      
-      // Clear any existing toast for this block
-      if (activeToastIds.current.has(blockId)) {
-        const existingToastId = activeToastIds.current.get(blockId);
-        if (existingToastId) {
-          toast.dismiss(existingToastId);
-        }
-      }
       
       if (options?.showToast !== false) {
         toast({
@@ -233,7 +206,6 @@ export const useOptimizedNewsBlockSave = () => {
       options.onStart();
     }
     
-    // Process the queue
     processQueue();
   }, [processQueue]);
 

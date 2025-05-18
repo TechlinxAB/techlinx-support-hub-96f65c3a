@@ -1,5 +1,5 @@
 
-export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image' | 'table';
+export type BlockType = 'heading' | 'text' | 'card' | 'faq' | 'links' | 'dropdown' | 'image';
 
 export interface DashboardBlock {
   id: string;
@@ -18,12 +18,10 @@ export interface DashboardBlock {
 export interface HeadingBlockContent {
   level: 1 | 2 | 3 | 4 | 5 | 6;
   text: string;
-  showTitle?: boolean;
 }
 
 export interface TextBlockContent {
   text: string;
-  showTitle?: boolean;
 }
 
 export interface CardBlockContent {
@@ -34,7 +32,6 @@ export interface CardBlockContent {
     label: string;
     link: string;
   };
-  showTitle?: boolean;
 }
 
 export interface FAQBlockContent {
@@ -42,7 +39,6 @@ export interface FAQBlockContent {
     question: string;
     answer: string;
   }[];
-  showTitle?: boolean;
 }
 
 export interface LinkBlockContent {
@@ -51,7 +47,6 @@ export interface LinkBlockContent {
     url: string;
     icon?: string;
   }[];
-  showTitle?: boolean;
 }
 
 export interface DropdownBlockContent {
@@ -60,7 +55,6 @@ export interface DropdownBlockContent {
     label: string;
     content: string;
   }[];
-  showTitle?: boolean;
 }
 
 export interface ImageBlockContent {
@@ -71,18 +65,4 @@ export interface ImageBlockContent {
   height?: string | number; // Optional, can maintain aspect ratio if not specified
   objectFit?: 'cover' | 'contain' | 'fill' | 'none'; // CSS object-fit property
   objectPosition?: string; // CSS object-position property (e.g., "center", "top left")
-  showTitle?: boolean;
-}
-
-export interface TableBlockContent {
-  headers: string[];
-  rows: {
-    id: string;
-    cells: string[];
-    link?: string;
-  }[];
-  isInteractive?: boolean;
-  sortable?: boolean;
-  variant?: 'default' | 'compact' | 'striped';
-  showTitle?: boolean;
 }
