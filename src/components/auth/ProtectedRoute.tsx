@@ -31,8 +31,10 @@ const ProtectedRoute = () => {
     if (!user && !redirectAttempted) {
       console.log("No authenticated user, redirecting to auth");
       setRedirectAttempted(true);
-      toast.error("Please sign in to continue");
-      navigate('/auth', { replace: true, state: { from: location.pathname } });
+      
+      // Store current path for redirect after login
+      const currentPath = location.pathname !== '/' ? location.pathname : '';
+      navigate('/auth', { replace: true, state: { from: currentPath || '/' } });
     } else if (user) {
       // Reset the redirect flag when user is available
       if (redirectAttempted) {
@@ -44,21 +46,21 @@ const ProtectedRoute = () => {
   // Check if the path requires a consultant role
   useEffect(() => {
     // Only check role requirements if we have both user and profile data
-    // Skip when still loading
-    if (loading || !user) {
+    // Skip when still loading or missing user/profile
+    if (loading || !user || !profile) {
       return;
     }
     
     const requiresConsultantRole = location.pathname.includes('company-dashboard-builder');
     
-    if (requiresConsultantRole && profile) {
+    if (requiresConsultantRole) {
       // For impersonation, check the original role for protected routes
       const effectiveRole = isImpersonating && originalProfile ? originalProfile.role : profile.role;
       
       if (effectiveRole !== 'consultant') {
         console.log("User is not a consultant but trying to access restricted route:", location.pathname);
         toast.error("You don't have permission to access this page");
-        navigate('/');
+        navigate('/', { replace: true });
       }
     }
   }, [user, profile, originalProfile, isImpersonating, loading, location.pathname, navigate]);

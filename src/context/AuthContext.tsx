@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
@@ -62,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   
   // Impersonation state
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -114,6 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsImpersonating(false);
       setOriginalProfile(null);
       setImpersonatedProfile(null);
+      setProfileLoaded(false);
     } catch (err) {
       console.error('Error signing out:', err);
     }
@@ -193,8 +196,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log('No profile found for user:', userId);
         setProfile(null);
       }
+      
+      // Mark profile as loaded regardless of result
+      setProfileLoaded(true);
+      
     } catch (err) {
       console.error('Exception fetching profile:', err);
+      // Mark profile as loaded even on error to prevent infinite loading
+      setProfileLoaded(true);
     }
   };
 
@@ -209,55 +218,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }, MAX_AUTH_LOADING_TIME);
     
-    // Set up auth listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event);
-        
-        // Update session and user state
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // If we have a valid session and user, fetch the profile
-        if (session?.user) {
-          // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
-          setTimeout(() => {
-            fetchProfile(session.user!.id);
-          }, 0);
-        } else {
-          setProfile(null);
-        }
-        
-        setLoading(false);
-      }
-    );
+    let authSubscription: { unsubscribe: () => void } | null = null;
     
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session check:', session ? 'Session found' : 'No session');
-      
+    // Helper function to handle auth state changes
+    const handleAuthChange = (session: Session | null, user: User | null) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(user);
       
-      if (session?.user) {
+      if (user) {
         // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
         setTimeout(() => {
-          fetchProfile(session.user!.id);
+          fetchProfile(user.id);
         }, 0);
       } else {
         setProfile(null);
+        setProfileLoaded(true);
         setLoading(false);
       }
+    };
+    
+    // Set up auth listener
+    authSubscription = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
+      handleAuthChange(session, session?.user ?? null);
+    }).data.subscription;
+    
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session ? 'Session found' : 'No session');
+      handleAuthChange(session, session?.user ?? null);
     }).catch(err => {
       console.error('Error during initial session check:', err);
       setLoading(false);
+      setProfileLoaded(true);
     });
     
     return () => {
-      subscription.unsubscribe();
+      if (authSubscription) authSubscription.unsubscribe();
       clearTimeout(loadingTimeout);
     };
   }, []);
+  
+  // Update loading state when profile is loaded
+  useEffect(() => {
+    if (user === null || profileLoaded) {
+      setLoading(false);
+    }
+  }, [user, profileLoaded]);
 
   const value = {
     user,

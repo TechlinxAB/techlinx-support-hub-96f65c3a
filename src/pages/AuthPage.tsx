@@ -83,8 +83,11 @@ const AuthPage = () => {
       console.log('Sign in successful:', data.session ? 'Session exists' : 'No session');
       toast.success("You have been logged in");
       
-      // Redirect after successful authentication
-      navigate(from, { replace: true });
+      // Small delay before redirect to allow toast to show
+      setTimeout(() => {
+        // Redirect after successful authentication
+        navigate(from, { replace: true });
+      }, 300);
       
     } catch (error: any) {
       console.error('Sign in error:', error);
