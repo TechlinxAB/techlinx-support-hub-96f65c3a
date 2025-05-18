@@ -1,6 +1,5 @@
-
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { supabase, resetAuthState } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -20,6 +19,7 @@ export type AuthContextType = {
   setProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   startImpersonation: (userId: string) => Promise<void>;
   endImpersonation: () => Promise<void>;
+  resetAuth: () => Promise<void>;
 };
 
 // Keep the UserProfile type
@@ -70,11 +70,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
 
+  // Reset auth state (for troubleshooting auth issues)
+  const resetAuth = useCallback(async () => {
+    try {
+      await resetAuthState();
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setIsImpersonating(false);
+      setOriginalProfile(null);
+      setImpersonatedProfile(null);
+      setProfileLoaded(false);
+      
+      toast.success('Authentication state has been reset');
+      
+      // Force reload the page to ensure clean state
+      window.location.href = '/auth';
+    } catch (err) {
+      console.error('Failed to reset auth state:', err);
+      toast.error('Failed to reset authentication state');
+    }
+  }, []);
+
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     try {
       console.log('Attempting to sign in with email and password');
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.error('Sign in error:', error);
         setError(error);
@@ -174,8 +196,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Fetch user profile
-  const fetchProfile = async (userId: string) => {
+  // Fetch user profile with retry mechanism
+  const fetchProfile = useCallback(async (userId: string, retryCount = 0) => {
     try {
       console.log('Fetching profile for user:', userId);
       const { data, error } = await supabase
@@ -194,6 +216,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setProfile(mapDbProfileToUserProfile(data));
       } else {
         console.log('No profile found for user:', userId);
+        // If no profile is found and we have retries left, try again after a delay
+        if (retryCount < 3) {
+          console.log(`Retrying profile fetch (${retryCount + 1}/3) in 1 second...`);
+          setTimeout(() => fetchProfile(userId, retryCount + 1), 1000);
+          return; // Exit without marking profile as loaded yet
+        }
         setProfile(null);
       }
       
@@ -202,10 +230,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
     } catch (err) {
       console.error('Exception fetching profile:', err);
+      // If we have retries left, try again after a delay
+      if (retryCount < 3) {
+        console.log(`Retrying profile fetch (${retryCount + 1}/3) in 1 second...`);
+        setTimeout(() => fetchProfile(userId, retryCount + 1), 1000);
+        return; // Exit without marking profile as loaded yet
+      }
       // Mark profile as loaded even on error to prevent infinite loading
       setProfileLoaded(true);
     }
-  };
+  }, []);
 
   // Listen for auth changes
   useEffect(() => {
@@ -218,35 +252,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }, MAX_AUTH_LOADING_TIME);
     
-    let authSubscription: { unsubscribe: () => void } | null = null;
-    
-    // Helper function to handle auth state changes
-    const handleAuthChange = (session: Session | null, user: User | null) => {
+    // Set up auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
       setSession(session);
-      setUser(user);
+      setUser(session?.user ?? null);
       
-      if (user) {
+      if (session?.user) {
         // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
         setTimeout(() => {
-          fetchProfile(user.id);
+          fetchProfile(session.user.id);
         }, 0);
       } else {
         setProfile(null);
         setProfileLoaded(true);
         setLoading(false);
       }
-    };
-    
-    // Set up auth listener
-    authSubscription = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
-      handleAuthChange(session, session?.user ?? null);
-    }).data.subscription;
+    });
     
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('Initial session check:', session ? 'Session found' : 'No session');
-      handleAuthChange(session, session?.user ?? null);
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
+        setTimeout(() => {
+          fetchProfile(session.user.id);
+        }, 0);
+      } else {
+        setProfile(null);
+        setProfileLoaded(true);
+        setLoading(false);
+      }
     }).catch(err => {
       console.error('Error during initial session check:', err);
       setLoading(false);
@@ -254,10 +293,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
     
     return () => {
-      if (authSubscription) authSubscription.unsubscribe();
+      subscription.unsubscribe();
       clearTimeout(loadingTimeout);
     };
-  }, []);
+  }, [fetchProfile]);
   
   // Update loading state when profile is loaded
   useEffect(() => {
@@ -280,7 +319,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
     setProfile,
     startImpersonation,
-    endImpersonation
+    endImpersonation,
+    resetAuth
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,13 +3,29 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 const ProtectedRoute = () => {
-  const { user, profile, loading, isImpersonating, originalProfile } = useAuth();
+  const { user, profile, loading, isImpersonating, originalProfile, resetAuth } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [redirectAttempted, setRedirectAttempted] = useState(false);
+  const [authResetAttempted, setAuthResetAttempted] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  
+  // Set a loading timeout to prevent infinite loading states
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        setLoadingTimeout(true);
+      }, 10000); // 10 seconds
+      
+      return () => clearTimeout(timer);
+    }
+    
+    return undefined;
+  }, [loading]);
   
   // Handle authentication redirects
   useEffect(() => {
@@ -20,7 +36,7 @@ const ProtectedRoute = () => {
     }
     
     // Wait until auth state is fully loaded
-    if (loading) {
+    if (loading && !loadingTimeout) {
       console.log("Auth state is still loading...");
       return;
     }
@@ -41,7 +57,7 @@ const ProtectedRoute = () => {
         setRedirectAttempted(false);
       }
     }
-  }, [user, loading, navigate, location.pathname, redirectAttempted]);
+  }, [user, profile, loading, loadingTimeout, navigate, location.pathname, redirectAttempted]);
   
   // Check if the path requires a consultant role
   useEffect(() => {
@@ -65,12 +81,42 @@ const ProtectedRoute = () => {
     }
   }, [user, profile, originalProfile, isImpersonating, loading, location.pathname, navigate]);
   
+  // Function to handle auth reset if user is stuck
+  const handleResetAuth = async () => {
+    setAuthResetAttempted(true);
+    await resetAuth();
+  };
+  
   // Enhanced loading state with timeout to prevent infinite loading
-  if (loading) {
+  if (loading && !loadingTimeout) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-sm text-muted-foreground">Loading authentication state...</p>
+      </div>
+    );
+  }
+  
+  // Show recovery option if loading is taking too long
+  if (loadingTimeout && !authResetAttempted) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="max-w-md p-6 space-y-4 bg-white shadow-md rounded-md">
+          <h2 className="text-xl font-semibold text-red-600">Authentication Issue</h2>
+          <p className="text-gray-600">
+            Authentication is taking longer than expected. You might be experiencing an issue with your auth session.
+          </p>
+          <Button 
+            onClick={handleResetAuth} 
+            variant="destructive"
+            className="w-full"
+          >
+            Reset Authentication State
+          </Button>
+          <p className="text-xs text-gray-500">
+            This will log you out and reset your authentication state. You'll need to log in again.
+          </p>
+        </div>
       </div>
     );
   }

@@ -45,6 +45,14 @@ const createFallbackStorage = () => {
         console.log('Storage removeItem fallback used:', key);
         inMemoryStorage.delete(key);
       }
+    },
+    clear: () => {
+      try {
+        localStorage.clear();
+      } catch (error) {
+        console.log('Storage clear fallback used');
+        inMemoryStorage.clear();
+      }
     }
   };
 };
@@ -58,11 +66,11 @@ export const supabase = createClient<Database>(
       storage: createFallbackStorage(),
       persistSession: true,
       autoRefreshToken: true,
-      debug: false // Disable debug for production
+      detectSessionInUrl: false, // Prevent auto-detection of OAuth redirects to avoid loops
+      flowType: 'implicit', // Use implicit flow instead of PKCE to be more resilient
+      debug: process.env.NODE_ENV === 'development' // Enable debug logs in development only
     },
     global: {
-      // NEVER use credentials: 'include' with fetch as it causes CORS issues
-      // Instead properly pass authentication via headers
       headers: {
         'apikey': SUPABASE_PUBLISHABLE_KEY,
         'Content-Type': 'application/json'
@@ -72,6 +80,38 @@ export const supabase = createClient<Database>(
 );
 
 // Add a listener to log auth state changes for debugging
+// But limit the frequency of logged events to prevent console spam
+let lastAuthEvent = '';
+let lastAuthEventTime = 0;
+
 supabase.auth.onAuthStateChange((event, session) => {
-  console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
+  const now = Date.now();
+  // Only log if different event or same event but after 1 second
+  if (event !== lastAuthEvent || (now - lastAuthEventTime) > 1000) {
+    console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
+    lastAuthEvent = event;
+    lastAuthEventTime = now;
+  }
 });
+
+// Export a helper function to clear auth state in case of corruption
+export const resetAuthState = async () => {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { success: true };
+  } catch (error) {
+    console.error('Error resetting auth state:', error);
+    return { success: false, error };
+  }
+};
+
+// Export a function to check if session is valid (without triggering refresh)
+export const isSessionValid = () => {
+  try {
+    const { data } = supabase.auth.getSession();
+    return !!data.session;
+  } catch (error) {
+    console.error('Error checking session validity:', error);
+    return false;
+  }
+};
