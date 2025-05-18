@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +15,10 @@ const AuthPage = () => {
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get the redirect path from location state
+  const from = location.state?.from || '/';
   
   // Check if user is already logged in
   useEffect(() => {
@@ -35,8 +38,8 @@ const AuthPage = () => {
             });
           }
         } else if (data.session && isMounted) {
-          console.log('Active session found, redirecting to home');
-          navigate('/', { replace: true });
+          console.log('Active session found, redirecting to:', from);
+          navigate(from, { replace: true });
         } else {
           console.log('No active session found, showing login form');
         }
@@ -55,7 +58,7 @@ const AuthPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [navigate, from]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +84,7 @@ const AuthPage = () => {
       toast.success("You have been logged in");
       
       // Redirect after successful authentication
-      navigate('/', { replace: true });
+      navigate(from, { replace: true });
       
     } catch (error: any) {
       console.error('Sign in error:', error);
