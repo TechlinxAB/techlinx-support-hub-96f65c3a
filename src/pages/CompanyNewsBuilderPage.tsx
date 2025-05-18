@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -21,8 +22,6 @@ import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { ArrowLeft, Trash2, Plus, ArrowUp, ArrowDown, Eye, Save, Loader2, Edit } from 'lucide-react';
 import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
-import { Slider } from '@/components/ui/slider';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -402,7 +401,7 @@ const CompanyNewsBuilderPage = () => {
       
       case 'image':
         return (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="image-url">Image URL</Label>
               <Input 
@@ -427,152 +426,24 @@ const CompanyNewsBuilderPage = () => {
                 onChange={(e) => handleFormChange('content.caption', e.target.value)}
               />
             </div>
-            
-            {/* Image Width Control */}
-            <div className="space-y-2">
-              <Label htmlFor="image-width">Image Width ({content.width || '100%'})</Label>
-              <div className="flex gap-4 items-center">
-                <Slider 
-                  id="image-width"
-                  min={10}
-                  max={100}
-                  step={5}
-                  defaultValue={[parseInt(content.width) || 100]}
-                  onValueChange={(values) => handleFormChange('content.width', `${values[0]}%`)}
-                  className="flex-1"
-                />
-              </div>
-            </div>
-
-            {/* Aspect Ratio Control for Widescreen Effect */}
-            <div className="space-y-2">
-              <Label htmlFor="image-aspect-ratio">Aspect Ratio</Label>
-              <Select 
-                value={content.aspectRatio || "16/9"} 
-                onValueChange={(value) => handleFormChange('content.aspectRatio', value)}
-              >
-                <SelectTrigger id="image-aspect-ratio">
-                  <SelectValue placeholder="Select aspect ratio" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="16/9">16:9 (Widescreen)</SelectItem>
-                  <SelectItem value="21/9">21:9 (Ultra Widescreen)</SelectItem>
-                  <SelectItem value="4/3">4:3 (Standard)</SelectItem>
-                  <SelectItem value="1/1">1:1 (Square)</SelectItem>
-                  <SelectItem value="9/16">9:16 (Portrait)</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Custom Aspect Ratio (only shown when "custom" is selected) */}
-            {content.aspectRatio === 'custom' && (
-              <div className="space-y-2">
-                <Label htmlFor="custom-aspect-ratio">Custom Aspect Ratio (width/height)</Label>
-                <div className="flex items-center space-x-2">
-                  <Input 
-                    id="custom-aspect-ratio-width" 
-                    value={content.customAspectRatioWidth || '16'} 
-                    onChange={(e) => handleFormChange('content.customAspectRatioWidth', e.target.value)}
-                    className="w-20"
-                  />
-                  <span>/</span>
-                  <Input 
-                    id="custom-aspect-ratio-height" 
-                    value={content.customAspectRatioHeight || '9'} 
-                    onChange={(e) => handleFormChange('content.customAspectRatioHeight', e.target.value)}
-                    className="w-20"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Object Fit Control */}
-            <div className="space-y-2">
-              <Label htmlFor="image-object-fit">Object Fit</Label>
-              <Select 
-                value={content.objectFit || "cover"} 
-                onValueChange={(value) => handleFormChange('content.objectFit', value)}
-              >
-                <SelectTrigger id="image-object-fit">
-                  <SelectValue placeholder="Select how the image should fit" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cover">Cover (fill space, may crop)</SelectItem>
-                  <SelectItem value="contain">Contain (show full image)</SelectItem>
-                  <SelectItem value="fill">Fill (stretch to fit)</SelectItem>
-                  <SelectItem value="none">None (original size)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Object Position Control */}
-            <div className="space-y-2">
-              <Label htmlFor="image-object-position">Focus Point</Label>
-              <Select 
-                value={content.objectPosition || "center"} 
-                onValueChange={(value) => handleFormChange('content.objectPosition', value)}
-              >
-                <SelectTrigger id="image-object-position">
-                  <SelectValue placeholder="Select image focus point" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="center">Center</SelectItem>
-                  <SelectItem value="top">Top</SelectItem>
-                  <SelectItem value="bottom">Bottom</SelectItem>
-                  <SelectItem value="left">Left</SelectItem>
-                  <SelectItem value="right">Right</SelectItem>
-                  <SelectItem value="top left">Top Left</SelectItem>
-                  <SelectItem value="top right">Top Right</SelectItem>
-                  <SelectItem value="bottom left">Bottom Left</SelectItem>
-                  <SelectItem value="bottom right">Bottom Right</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {content.url && (
               <div className="mt-4 border rounded-md p-4">
                 <p className="text-sm text-muted-foreground mb-2">Preview:</p>
-                <div style={{ width: content.width || '100%' }}>
-                  <AspectRatio 
-                    ratio={
-                      content.aspectRatio === 'custom'
-                        ? parseInt(content.customAspectRatioWidth || '16') / parseInt(content.customAspectRatioHeight || '9')
-                        : content.aspectRatio === '21/9' 
-                          ? 21/9 
-                          : content.aspectRatio === '16/9' 
-                            ? 16/9 
-                            : content.aspectRatio === '4/3' 
-                              ? 4/3 
-                              : content.aspectRatio === '1/1' 
-                                ? 1 
-                                : content.aspectRatio === '9/16'
-                                  ? 9/16
-                                  : 16/9
-                    } 
-                    className="bg-muted"
-                  >
-                    <img 
-                      src={content.url} 
-                      alt={content.alt} 
-                      className="w-full h-full rounded-md"
-                      style={{ 
-                        objectFit: content.objectFit || 'cover',
-                        objectPosition: content.objectPosition || 'center'
-                      }}
-                    />
-                  </AspectRatio>
-                  {content.caption && (
-                    <p className="text-sm text-center mt-2">{content.caption}</p>
-                  )}
-                </div>
+                <img 
+                  src={content.url} 
+                  alt={content.alt} 
+                  className="max-w-full h-auto rounded-md"
+                />
+                {content.caption && (
+                  <p className="text-sm text-center mt-2">{content.caption}</p>
+                )}
               </div>
             )}
           </div>
         );
       
-      case 'notice': 
-        const noticeType = content.type || 'info';
+      case 'notice': {
+        const noticeType = content.type || 'info';  // Fixed: changed displayContent to content
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
         let textColor = 'text-blue-800';
@@ -601,12 +472,13 @@ const CompanyNewsBuilderPage = () => {
             <p className={`mt-2 ${textColor}`}>{content.message || 'Notice message'}</p>
           </div>
         );
+      }
       
-      case 'faq': 
-        const faqItems = content.items || [];
+      case 'faq': {
+        const items = content.items || []; // Fixed: changed displayContent to content
         return (
           <div className="mt-4 space-y-6">
-            {faqItems.length > 0 ? faqItems.map((item: any, index: number) => (
+            {items.length > 0 ? items.map((item: any, index: number) => (
               <div key={index} className="space-y-4 border-b pb-4">
                 <div className="space-y-2">
                   <Label htmlFor={`faq-question-${index}`}>Question {index + 1}</Label>
@@ -662,9 +534,10 @@ const CompanyNewsBuilderPage = () => {
             </Button>
           </div>
         );
+      }
       
-      case 'links': 
-        const links = content.links || [];
+      case 'links': {
+        const links = content.links || []; // Fixed: changed displayContent to content
         return (
           <div className="mt-4 space-y-6">
             {links.length > 0 ? links.map((link: any, index: number) => (
@@ -733,16 +606,17 @@ const CompanyNewsBuilderPage = () => {
             </Button>
           </div>
         );
+      }
       
-      case 'dropdown': 
-        const dropdownTitle = content.title || 'Dropdown Title';
-        const dropdownItems = content.items || [];
+      case 'dropdown': {
+        const title = content.title || 'Dropdown Title'; // Fixed: changed displayContent to content
+        const items = content.items || []; // Fixed: changed displayContent to content
         
         return (
           <div className="mt-4">
-            <h3 className="font-medium">{dropdownTitle}</h3>
+            <h3 className="font-medium">{title}</h3>
             <div className="mt-2 border rounded-md divide-y">
-              {dropdownItems.length > 0 ? dropdownItems.map((item: any, index: number) => (
+              {items.length > 0 ? items.map((item: any, index: number) => (
                 <div key={index} className="p-3">
                   <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
                   {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
@@ -756,6 +630,7 @@ const CompanyNewsBuilderPage = () => {
             </div>
           </div>
         );
+      }
       
       default:
         return <div>Select a block type</div>;
@@ -774,11 +649,12 @@ const CompanyNewsBuilderPage = () => {
     const displayContent = { ...defaultContent, ...content };
     
     switch (block.type) {
-      case 'heading': 
+      case 'heading': {
         // Safely handle the heading level with a default
         const level = displayContent.level || 2; // Default to h2 if level is undefined
         const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
         return <HeadingTag className={`mt-${level} font-bold`}>{displayContent.text || 'Heading Text'}</HeadingTag>;
+      }
       
       case 'text':
         return (
@@ -808,37 +684,14 @@ const CompanyNewsBuilderPage = () => {
       
       case 'image':
         return (
-          <div className="mt-4" style={{ width: displayContent.width || '100%' }}>
+          <div className="mt-4">
             {displayContent.url ? (
               <>
-                <AspectRatio 
-                  ratio={
-                    displayContent.aspectRatio === 'custom'
-                      ? parseInt(displayContent.customAspectRatioWidth || '16') / parseInt(displayContent.customAspectRatioHeight || '9')
-                      : displayContent.aspectRatio === '21/9' 
-                        ? 21/9 
-                        : displayContent.aspectRatio === '16/9' 
-                          ? 16/9 
-                          : displayContent.aspectRatio === '4/3' 
-                            ? 4/3 
-                            : displayContent.aspectRatio === '1/1' 
-                              ? 1 
-                              : displayContent.aspectRatio === '9/16'
-                                ? 9/16
-                                : 16/9
-                  } 
-                  className="bg-muted"
-                >
-                  <img 
-                    src={displayContent.url} 
-                    alt={displayContent.alt || 'Image'} 
-                    className="w-full h-full rounded-md"
-                    style={{ 
-                      objectFit: displayContent.objectFit || 'cover',
-                      objectPosition: displayContent.objectPosition || 'center'
-                    }}
-                  />
-                </AspectRatio>
+                <img 
+                  src={displayContent.url} 
+                  alt={displayContent.alt || 'Image'} 
+                  className="max-w-full h-auto rounded-md"
+                />
                 {displayContent.caption && (
                   <p className="text-sm text-center mt-2">{displayContent.caption}</p>
                 )}
@@ -851,7 +704,7 @@ const CompanyNewsBuilderPage = () => {
           </div>
         );
       
-      case 'notice': 
+      case 'notice': {
         const noticeType = displayContent.type || 'info';
         let bgColor = 'bg-blue-50';
         let borderColor = 'border-blue-300';
@@ -881,12 +734,13 @@ const CompanyNewsBuilderPage = () => {
             <p className={`mt-2 ${textColor}`}>{displayContent.message || 'Notice message'}</p>
           </div>
         );
+      }
       
-      case 'faq': 
-        const faqPreviewItems = displayContent.items || [];
+      case 'faq': {
+        const items = displayContent.items || [];
         return (
           <div className="mt-4 space-y-4">
-            {faqPreviewItems.length > 0 ? faqPreviewItems.map((item: any, index: number) => (
+            {items.length > 0 ? items.map((item: any, index: number) => (
               <div key={index}>
                 <h4 className="font-medium">{item.question || `Question ${index + 1}`}</h4>
                 <p className="mt-1">{item.answer || `Answer ${index + 1}`}</p>
@@ -899,12 +753,13 @@ const CompanyNewsBuilderPage = () => {
             )}
           </div>
         );
+      }
       
-      case 'links': 
-        const linksPreview = displayContent.links || [];
+      case 'links': {
+        const links = displayContent.links || [];
         return (
           <div className="mt-4 space-y-2">
-            {linksPreview.length > 0 ? linksPreview.map((link: any, index: number) => (
+            {links.length > 0 ? links.map((link: any, index: number) => (
               <div key={index} className="flex items-center">
                 <a href={link.url || '#'} className="text-blue-600 hover:underline">
                   {link.label || `Link ${index + 1}`}
@@ -917,16 +772,17 @@ const CompanyNewsBuilderPage = () => {
             )}
           </div>
         );
+      }
       
-      case 'dropdown': 
-        const dropdownPreviewTitle = displayContent.title || 'Dropdown Title';
-        const dropdownPreviewItems = displayContent.items || [];
+      case 'dropdown': {
+        const title = displayContent.title || 'Dropdown Title';
+        const items = displayContent.items || [];
         
         return (
           <div className="mt-4">
-            <h3 className="font-medium">{dropdownPreviewTitle}</h3>
+            <h3 className="font-medium">{title}</h3>
             <div className="mt-2 border rounded-md divide-y">
-              {dropdownPreviewItems.length > 0 ? dropdownPreviewItems.map((item: any, index: number) => (
+              {items.length > 0 ? items.map((item: any, index: number) => (
                 <div key={index} className="p-3">
                   <h4 className="text-sm font-medium">{item.label || `Item ${index + 1}`}</h4>
                   {item.content && <p className="mt-1 text-sm text-muted-foreground">{item.content}</p>}
@@ -940,6 +796,7 @@ const CompanyNewsBuilderPage = () => {
             </div>
           </div>
         );
+      }
       
       default:
         return null;
@@ -1174,3 +1031,4 @@ const CompanyNewsBuilderPage = () => {
 };
 
 export default CompanyNewsBuilderPage;
+

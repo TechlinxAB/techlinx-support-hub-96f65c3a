@@ -4,7 +4,6 @@ import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { DashboardBlock } from '@/types/dashboard';
 import { CompanyNewsBlock } from '@/types/companyNews';
-import { isTechlinxCompany } from '@/utils/techlinxTestCompany';
 
 // Define types
 export type UserRole = 'user' | 'consultant';
@@ -245,9 +244,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: profile.name,
         email: profile.email,
         phone: profile.phone || undefined,
-        companyId: profile.companyId || '',
+        companyId: profile.company_id || '',
         role: profile.role as UserRole,
-        preferredLanguage: (profile.preferredLanguage as Language) || 'en',
+        preferredLanguage: (profile.preferred_language as Language) || 'en',
         avatar: profile.avatar || undefined,
       };
       
@@ -414,18 +413,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteCompany = async (companyId: string) => {
     try {
-      // First check if this is the Techlinx company
-      const companyToDelete = companies.find(c => c.id === companyId);
-      
-      if (companyToDelete && isTechlinxCompany(companyToDelete.name)) {
-        toast({
-          title: "Cannot Delete Techlinx",
-          description: "The Techlinx test company cannot be deleted as it serves as a test environment for consultants.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
       const { error } = await supabase
         .from('companies')
         .delete()
@@ -596,25 +583,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       if (data) {
-        const mappedBlocks: DashboardBlock[] = data.map(block => {
-          // Safely extract showTitle from content if it exists
-          const content = block.content as Record<string, any> || {};
-          const showTitle = content.showTitle !== false; // Default to true if not specified
-          
-          return {
-            id: block.id,
-            companyId: block.company_id,
-            title: block.title,
-            content: block.content,
-            type: block.type as DashboardBlock['type'],
-            position: block.position,
-            parentId: block.parent_id || undefined,
-            createdAt: new Date(block.created_at),
-            updatedAt: new Date(block.updated_at),
-            createdBy: block.created_by,
-            showTitle: showTitle
-          };
-        });
+        const mappedBlocks: DashboardBlock[] = data.map(block => ({
+          id: block.id,
+          companyId: block.company_id,
+          title: block.title,
+          content: block.content,
+          type: block.type as DashboardBlock['type'], // Cast to ensure compatibility
+          position: block.position,
+          parentId: block.parent_id || undefined,
+          createdAt: new Date(block.created_at),
+          updatedAt: new Date(block.updated_at),
+          createdBy: block.created_by
+        }));
         setDashboardBlocks(mappedBlocks);
       }
     } catch (error: any) {
@@ -637,18 +617,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         throw new Error('User must be logged in to add dashboard blocks');
       }
 
-      // Store showTitle in the content object
-      const content = {
-        ...block.content,
-        showTitle: block.showTitle
-      };
-
       const { data, error } = await supabase
         .from('dashboard_blocks')
         .insert({
           company_id: block.companyId,
           title: block.title,
-          content: content, // Save showTitle as part of content
+          content: block.content,
           type: block.type,
           position: block.position,
           parent_id: block.parentId,
@@ -679,37 +653,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateDashboardBlock = async (blockId: string, updates: Partial<DashboardBlock>) => {
     try {
-      // Find the existing block to merge with updates
-      const existingBlock = dashboardBlocks.find(block => block.id === blockId);
-      if (!existingBlock) {
-        throw new Error('Dashboard block not found');
-      }
-      
       // Convert from camelCase to snake_case for Supabase
       const dbUpdates: any = {};
       
       if (updates.title !== undefined) dbUpdates.title = updates.title;
-      
-      // For content updates, merge with existing content
-      if (updates.content !== undefined || updates.showTitle !== undefined) {
-        // Start with existing content as a Record<string, any> to avoid type errors
-        const existingContent = (existingBlock.content as Record<string, any>) || {};
-        const updatedContent = { 
-          ...existingContent,
-          ...(updates.content as Record<string, any> || {}),
-          // Always include showTitle in content
-          showTitle: updates.showTitle !== undefined ? updates.showTitle : existingBlock.showTitle
-        };
-        
-        dbUpdates.content = updatedContent;
-      }
-      
+      if (updates.content !== undefined) dbUpdates.content = updates.content;
       if (updates.type !== undefined) dbUpdates.type = updates.type;
       if (updates.position !== undefined) dbUpdates.position = updates.position;
       if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId;
       if (updates.companyId !== undefined) dbUpdates.company_id = updates.companyId;
-      
-      console.log('Updating dashboard block with:', dbUpdates);
       
       const { error } = await supabase
         .from('dashboard_blocks')
@@ -719,8 +671,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       // Find the company ID for refetching
-      if (existingBlock) {
-        await refetchDashboardBlocks(existingBlock.companyId);
+      const blockToUpdate = dashboardBlocks.find(block => block.id === blockId);
+      if (blockToUpdate) {
+        await refetchDashboardBlocks(blockToUpdate.companyId);
       }
       
       toast({

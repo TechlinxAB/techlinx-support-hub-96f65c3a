@@ -14,8 +14,7 @@ import {
   Settings,
   Edit,
   Eye,
-  Search,
-  Beaker
+  Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -36,14 +35,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
-import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
   const navigate = useNavigate();
-  const { toast: uiToast } = useToast();
+  const { toast } = useToast();
   
   // Company management state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -59,31 +55,12 @@ const CompaniesPage = () => {
     navigate('/company-dashboard');
     return null;
   }
-
-  // Force direct URL navigation for dashboard builder
-  const handleDashboardNavigation = (companyId: string) => {
-    const path = `/company-dashboard-builder/${companyId}`;
-    console.log(`Direct navigation to: ${path}`);
-    // Force direct URL navigation to avoid routing issues
-    toast.info("Opening dashboard builder...");
-    window.location.href = path;
-  };
-  
-  // Regular navigation for other links
-  const handleNavigation = (path: string) => {
-    try {
-      navigate(path);
-    } catch (error) {
-      console.error(`Navigation error to ${path}:`, error);
-      window.location.href = path;
-    }
-  };
   
   // Functions for managing companies
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim()) {
-      uiToast({
+      toast({
         title: "Error",
         description: "Company name is required",
         variant: "destructive",
@@ -101,13 +78,13 @@ const CompaniesPage = () => {
       setIsDialogOpen(false);
       setCompanyName('');
       setCompanyLogo('');
-      uiToast({
+      toast({
         title: "Success",
         description: "Company created successfully",
       });
     } catch (error) {
       console.error('Error creating company:', error);
-      uiToast({
+      toast({
         title: "Error",
         description: "Failed to create company",
         variant: "destructive",
@@ -125,13 +102,13 @@ const CompaniesPage = () => {
       await deleteCompany(companyToDelete);
       setIsDeleteDialogOpen(false);
       setCompanyToDelete(null);
-      uiToast({
+      toast({
         title: "Success",
         description: "Company deleted successfully",
       });
     } catch (error) {
       console.error('Error deleting company:', error);
-      uiToast({
+      toast({
         title: "Error",
         description: "Failed to delete company",
         variant: "destructive",
@@ -181,15 +158,8 @@ const CompaniesPage = () => {
           const companyCases = cases.filter(c => c.companyId === company.id);
           const activeCases = companyCases.filter(c => c.status !== 'completed').length;
           
-          // Check if this is the Techlinx test company
-          const isTechlinx = company.name === TECHLINX_NAME;
-          
           return (
-            <Card 
-              key={company.id} 
-              className={isTechlinx ? 
-                "border-purple-200 bg-gradient-to-r from-purple-50 to-white" : ""}
-            >
+            <Card key={company.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -200,14 +170,7 @@ const CompaniesPage = () => {
                         <Building className="h-5 w-5 text-muted-foreground" />
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold">{company.name}</h2>
-                      {isTechlinx && (
-                        <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-200">
-                          <Beaker className="h-3 w-3 mr-1" /> Test Zone
-                        </Badge>
-                      )}
-                    </div>
+                    <h2 className="text-lg font-semibold">{company.name}</h2>
                   </div>
                   
                   {currentUser?.role === 'consultant' && (
@@ -222,21 +185,19 @@ const CompaniesPage = () => {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          onClick={() => handleNavigation(`/company/${company.id}/settings`)}
+                          onClick={() => navigate(`/company/${company.id}/settings`)}
                           className="cursor-pointer"
                         >
                           <Settings className="h-4 w-4 mr-2" />
                           Company Settings
                         </DropdownMenuItem>
-                        {!isTechlinx && (
-                          <DropdownMenuItem
-                            onClick={() => confirmDeleteCompany(company.id)}
-                            className="text-red-600 cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Company
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem
+                          onClick={() => confirmDeleteCompany(company.id)}
+                          className="text-red-600 cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Company
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -262,7 +223,7 @@ const CompaniesPage = () => {
                     <Button 
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"
-                      onClick={() => handleNavigation(`/companies/${company.id}`)}
+                      onClick={() => navigate(`/companies/${company.id}`)}
                     >
                       <FileText className="h-4 w-4" />
                       <span className="hidden sm:inline">Documentation</span>
@@ -272,7 +233,7 @@ const CompaniesPage = () => {
                     <Button 
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"
-                      onClick={() => handleDashboardNavigation(company.id)}
+                      onClick={() => navigate(`/company-dashboard-builder/${company.id}`)}
                     >
                       <LayoutDashboard className="h-4 w-4" />
                       Dashboard
@@ -282,7 +243,7 @@ const CompaniesPage = () => {
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"
                       onClick={() => {
-                        handleNavigation('/cases');
+                        navigate('/cases');
                         // Here we would implement filtering by company
                       }}
                     >
@@ -297,7 +258,7 @@ const CompaniesPage = () => {
                       <Button 
                         variant="outline" 
                         className="flex gap-1 items-center justify-center h-11"
-                        onClick={() => handleNavigation(`/company-news-builder/${company.id}`)}
+                        onClick={() => navigate(`/company-news-builder/${company.id}`)}
                       >
                         <Edit className="h-4 w-4" />
                         Edit News
@@ -306,7 +267,7 @@ const CompaniesPage = () => {
                     <Button 
                       variant="outline" 
                       className={`flex gap-1 items-center justify-center h-11 ${currentUser?.role !== 'consultant' ? 'col-span-2' : ''}`}
-                      onClick={() => handleNavigation(`/company-news/${company.id}`)}
+                      onClick={() => navigate(`/company-news/${company.id}`)}
                     >
                       <Eye className="h-4 w-4" />
                       View News
