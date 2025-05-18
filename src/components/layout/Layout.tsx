@@ -9,7 +9,7 @@ import { Loader } from 'lucide-react';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { user, profile, loading } = useAuth();
+  const { loading } = useAuth();
 
   useEffect(() => {
     const handleResize = () => {
@@ -31,19 +31,13 @@ const Layout = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  // Show a loading state until we have confirmed authentication
+  // Show a loading state until authentication is confirmed
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
-
-  // Don't render layout if user isn't authenticated
-  // This prevents layout flash before redirect happens
-  if (!user || !profile) {
-    return null;
   }
 
   return (

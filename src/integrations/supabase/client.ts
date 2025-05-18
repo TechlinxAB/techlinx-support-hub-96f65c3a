@@ -10,52 +10,40 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 const createFallbackStorage = () => {
   // In-memory storage fallback
   const inMemoryStorage = new Map<string, string>();
-
-  // Check if localStorage is available
-  const isLocalStorageAvailable = () => {
-    try {
-      const testKey = '__supabase_test__';
-      localStorage.setItem(testKey, testKey);
-      localStorage.removeItem(testKey);
-      return true;
-    } catch (e) {
-      console.warn('localStorage not available, using in-memory storage fallback');
-      return false;
-    }
-  };
-
+  console.log("Initializing fallback storage mechanism");
+  
   return {
     getItem: (key: string) => {
       try {
-        if (isLocalStorageAvailable()) {
-          return localStorage.getItem(key);
+        // Try localStorage first
+        const localStorageValue = localStorage.getItem(key);
+        if (localStorageValue !== null) {
+          return localStorageValue;
         }
+        
+        // Fall back to in-memory if needed
         return inMemoryStorage.get(key) || null;
       } catch (error) {
-        console.error('Storage getItem error:', error);
-        return null;
+        console.log('Storage getItem fallback used:', key);
+        return inMemoryStorage.get(key) || null;
       }
     },
     setItem: (key: string, value: string) => {
       try {
-        if (isLocalStorageAvailable()) {
-          localStorage.setItem(key, value);
-        } else {
-          inMemoryStorage.set(key, value);
-        }
+        // Try localStorage first
+        localStorage.setItem(key, value);
       } catch (error) {
-        console.error('Storage setItem error:', error);
+        console.log('Storage setItem fallback used:', key);
+        inMemoryStorage.set(key, value);
       }
     },
     removeItem: (key: string) => {
       try {
-        if (isLocalStorageAvailable()) {
-          localStorage.removeItem(key);
-        } else {
-          inMemoryStorage.delete(key);
-        }
+        // Try localStorage first
+        localStorage.removeItem(key);
       } catch (error) {
-        console.error('Storage removeItem error:', error);
+        console.log('Storage removeItem fallback used:', key);
+        inMemoryStorage.delete(key);
       }
     }
   };
@@ -73,11 +61,8 @@ export const supabase = createClient<Database>(
       storage: createFallbackStorage(),
       persistSession: true,
       autoRefreshToken: true,
-      debug: true, // Enable debug mode to see auth-related logs
-      flowType: 'implicit' // More compatible flow type for iframe environments
-    },
-    db: {
-      schema: 'public'
+      // Reduce debug level to avoid console noise
+      debug: false
     },
     global: {
       // Add additional fetch parameters for CORS

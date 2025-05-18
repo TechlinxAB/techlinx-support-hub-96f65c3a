@@ -31,7 +31,7 @@ const AuthPage = () => {
           if (isMounted) setAuthError(error.message);
         } else if (data.session && isMounted) {
           console.log('Active session found, redirecting to home');
-          navigate('/');
+          navigate('/', { replace: true });
         }
       } catch (error) {
         console.error('Exception during session check:', error);
@@ -40,24 +40,12 @@ const AuthPage = () => {
       }
     };
     
-    // Small delay to ensure auth state is properly initialized
-    const timeoutId = setTimeout(checkSession, 100);
+    // Run check immediately without delay
+    checkSession();
     
-    // Set up auth listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('Auth state changed:', event);
-        if (session && isMounted) {
-          navigate('/', { replace: true });
-        }
-      }
-    );
-    
-    // Cleanup
+    // Clean up
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
-      subscription.unsubscribe();
     };
   }, [navigate]);
   
@@ -90,6 +78,9 @@ const AuthPage = () => {
         title: "Success!",
         description: "You have been logged in",
       });
+      
+      // Redirect now instead of waiting for the auth state change
+      navigate('/', { replace: true });
       
     } catch (error: any) {
       console.error('Sign in error:', error);

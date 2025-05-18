@@ -13,23 +13,29 @@ const ProtectedRoute = () => {
   
   // Handle authentication redirects
   useEffect(() => {
-    // Only check auth state after loading is complete
-    if (loading) return;
+    // Skip auth check if we're already on the auth page
+    if (location.pathname === '/auth') {
+      console.log("Already on auth page, skipping redirect check");
+      return;
+    }
     
-    // Auth page doesn't need redirection
-    if (location.pathname === '/auth') return;
+    // Wait until auth state is fully loaded
+    if (loading) {
+      console.log("Auth state is still loading...");
+      return;
+    }
     
     // If there's no user and we haven't attempted redirect yet
     if (!user && !redirectAttempted) {
       console.log("No authenticated user, redirecting to auth");
       setRedirectAttempted(true);
       toast.error("Please sign in to continue");
-      navigate('/auth', { replace: true }); // Use replace to prevent history stacking
-    }
-    
-    // Reset redirect flag when user is available
-    if (user) {
-      setRedirectAttempted(false);
+      navigate('/auth', { replace: true });
+    } else if (user) {
+      // Reset the redirect flag when user is available
+      if (redirectAttempted) {
+        setRedirectAttempted(false);
+      }
     }
   }, [user, loading, navigate, location.pathname, redirectAttempted]);
   
@@ -59,7 +65,8 @@ const ProtectedRoute = () => {
     );
   }
   
-  // Only render the outlet if we have a user or if we're on the auth page
+  // Allow access to auth page without authentication
+  // For all other routes, only render when authenticated
   return location.pathname === '/auth' || user ? <Outlet /> : null;
 };
 
