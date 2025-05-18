@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -23,6 +24,7 @@ import { CasePriority, CaseStatus } from '@/context/AppContext';
 
 const SearchPage = () => {
   const { cases, users, companies, categories, currentUser } = useAppContext();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<typeof cases>([]);
@@ -38,10 +40,10 @@ const SearchPage = () => {
   const handleSearch = () => {
     setIsSearched(true);
     
-    // Apply search logic
-    let results = currentUser?.role === 'consultant'
-      ? cases
-      : cases.filter(c => c.userId === currentUser?.id);
+    // Apply search logic - fix security issue by filtering by user role
+    let results = profile?.role === 'consultant'
+      ? cases // Consultants see all cases
+      : cases.filter(c => c.userId === profile?.id); // Normal users only see their own cases
     
     // Apply text search
     if (searchQuery.trim()) {
@@ -68,7 +70,7 @@ const SearchPage = () => {
     }
     
     // Apply company filter (consultants only)
-    if (currentUser?.role === 'consultant' && companyFilter !== 'all') {
+    if (profile?.role === 'consultant' && companyFilter !== 'all') {
       results = results.filter(c => c.companyId === companyFilter);
     }
     
@@ -175,7 +177,7 @@ const SearchPage = () => {
               </Select>
             </div>
             
-            {currentUser?.role === 'consultant' && (
+            {profile?.role === 'consultant' && (
               <div>
                 <label className="text-sm mb-1 block">Company</label>
                 <Select 
