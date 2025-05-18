@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Star } from 'lucide-react';
@@ -89,7 +88,7 @@ const CasesPage = () => {
                   caseItem.status === 'new' ? 'default' :
                   caseItem.status === 'ongoing' ? 'secondary' :
                   caseItem.status === 'resolved' ? 'outline' :
-                  'success'
+                  'default'
                 }>
                   {caseItem.status === 'new' ? 'New' :
                    caseItem.status === 'ongoing' ? 'Ongoing' :
