@@ -106,9 +106,9 @@ export const resetAuthState = async () => {
 };
 
 // Export a function to check if session is valid (without triggering refresh)
-export const isSessionValid = () => {
+export const isSessionValid = async () => {
   try {
-    const { data } = supabase.auth.getSession();
+    const { data } = await supabase.auth.getSession();
     return !!data.session;
   } catch (error) {
     console.error('Error checking session validity:', error);
