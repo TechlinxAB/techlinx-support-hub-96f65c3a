@@ -26,7 +26,7 @@ const ProtectedRoute = () => {
     // Only check role requirements if we have both user and profile data
     if (!loading && user && profile) {
       // For impersonation, check the original role for protected routes
-      const effectiveRole = isImpersonating ? originalProfile?.role : profile.role;
+      const effectiveRole = isImpersonating && originalProfile ? originalProfile.role : profile.role;
       
       if (requiresConsultantRole && effectiveRole !== 'consultant') {
         console.log("User is not a consultant but trying to access restricted route:", location.pathname);
