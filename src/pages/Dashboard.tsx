@@ -8,11 +8,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
-// Simple state tracking to prevent navigation loops
+// State tracking to prevent navigation loops
 const DASH_STATE = {
   NAVIGATION_ATTEMPTED: false,
   LAST_NAVIGATION: 0,
-  COOLDOWN_MS: 1000
+  COOLDOWN_MS: 2000,
+  NAVIGATION_IN_PROGRESS: false
 };
 
 const Dashboard = () => {
@@ -23,7 +24,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Load starred cases on component mount
+  // Load starred cases on component mount when authenticated
   useEffect(() => {
     if (user) {
       loadStarredCases();
@@ -40,45 +41,46 @@ const Dashboard = () => {
   
   // Handle redirect targets from URL parameters
   useEffect(() => {
-    // Skip if already attempted or no user/profile
-    if (DASH_STATE.NAVIGATION_ATTEMPTED || !profile || !user) {
-      return;
-    }
+    // Skip if no user/profile
+    if (!profile || !user) return;
+    
+    // Skip if navigation is in progress or already attempted
+    if (DASH_STATE.NAVIGATION_IN_PROGRESS || DASH_STATE.NAVIGATION_ATTEMPTED) return;
     
     const params = new URLSearchParams(location.search);
     const redirectTarget = params.get('redirectTarget');
     
-    if (!redirectTarget) {
-      return;
-    }
+    if (!redirectTarget) return;
     
+    // Apply cooldown to prevent navigation loops
     const now = Date.now();
+    if (now - DASH_STATE.LAST_NAVIGATION < DASH_STATE.COOLDOWN_MS) return;
     
-    // Prevent navigation if too recent
-    if (now - DASH_STATE.LAST_NAVIGATION < DASH_STATE.COOLDOWN_MS) {
-      return;
-    }
-    
-    // Mark navigation as attempted
-    DASH_STATE.NAVIGATION_ATTEMPTED = true;
+    // Mark navigation in progress
     DASH_STATE.LAST_NAVIGATION = now;
+    DASH_STATE.NAVIGATION_ATTEMPTED = true;
+    DASH_STATE.NAVIGATION_IN_PROGRESS = true;
     
-    // Use timeout for navigation
+    // Navigate with delay
     redirectTimeoutRef.current = setTimeout(() => {
-      console.log(`Attempting to redirect to: ${redirectTarget}, user role:`, profile.role);
+      console.log(`Redirecting to: ${redirectTarget}, user role:`, profile.role);
       
       // Check role before redirecting to restricted areas
-      if (redirectTarget.includes('company-dashboard-builder')) {
-        if (profile.role !== 'consultant') {
-          console.log("Cannot redirect: User is not a consultant");
-          toast.error("You don't have permission to access the dashboard builder");
-          return;
-        }
+      if (redirectTarget.includes('company-dashboard-builder') && profile.role !== 'consultant') {
+        toast.error("You don't have permission to access the dashboard builder");
+        DASH_STATE.NAVIGATION_IN_PROGRESS = false;
+        return;
       }
       
       // Navigate to requested page
       navigate(redirectTarget, { replace: true });
       toast.info("Redirecting you to the requested page...");
+      
+      // Reset navigation in progress after a delay
+      setTimeout(() => {
+        DASH_STATE.NAVIGATION_IN_PROGRESS = false;
+      }, 500);
+      
       redirectTimeoutRef.current = null;
     }, 300);
   }, [location, navigate, profile, user]);

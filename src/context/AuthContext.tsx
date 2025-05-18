@@ -16,12 +16,12 @@ interface AuthContextType {
 // Create the context with undefined as default
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Global auth state to track initialization state
+// Global auth state tracker
 const AUTH_STATE = {
-  INITIALIZED: false,
-  SESSION_CHECKED: false,
+  IS_INITIALIZING: false,
+  IS_INITIALIZED: false,
   LAST_AUTH_ACTION: 0,
-  DEBOUNCE_TIME: 500, // ms to debounce auth actions
+  DEBOUNCE_TIME: 2000, // Increased debounce time to prevent rapid actions
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -31,16 +31,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Refs to properly handle cleanup
+  // Refs for cleanup and state tracking
   const isMounted = useRef(true);
   const authListenerUnsubscribe = useRef<(() => void) | null>(null);
-  const profileTimeouts = useRef<NodeJS.Timeout[]>([]);
+  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
+  const profileFetchAttempted = useRef<Record<string, boolean>>({});
   
-  // Clean up function to prevent memory leaks
+  // Clean up function to prevent memory leaks and cancel pending operations
   const cleanupResources = () => {
     // Clear all timeouts
-    profileTimeouts.current.forEach(timeoutId => clearTimeout(timeoutId));
-    profileTimeouts.current = [];
+    timeoutRefs.current.forEach(timeoutId => clearTimeout(timeoutId));
+    timeoutRefs.current = [];
     
     // Unsubscribe from auth listener
     if (authListenerUnsubscribe.current) {
@@ -50,9 +51,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
   
-  // Fetch user profile with better error handling
-  const fetchUserProfile = async (userId: string): Promise<any | null> => {
-    if (!isMounted.current) return null;
+  // Fetch user profile with improved tracking to prevent duplicate requests
+  const fetchUserProfile = async (userId: string): Promise<void> => {
+    if (!isMounted.current || profileFetchAttempted.current[userId]) return;
+    
+    // Mark this user ID as having a fetch attempt
+    profileFetchAttempted.current[userId] = true;
     
     try {
       console.log("Fetching profile for user:", userId);
@@ -65,134 +69,132 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         console.error("Error fetching user profile:", error.message);
-        return null;
+        return;
       }
       
       if (data && isMounted.current) {
         console.log("Profile data retrieved successfully");
         setProfile(data);
-        return data;
       }
-      
-      return null;
     } catch (error: any) {
       console.error('Error fetching user profile:', error.message);
-      return null;
     }
   };
   
-  // Initialize authentication
+  // Set user info with debouncing to prevent rapid state changes
+  const setUserInfo = (newSession: Session | null) => {
+    const now = Date.now();
+    if (now - AUTH_STATE.LAST_AUTH_ACTION < AUTH_STATE.DEBOUNCE_TIME) {
+      // Skip if too soon after last update
+      return;
+    }
+    
+    AUTH_STATE.LAST_AUTH_ACTION = now;
+    
+    if (newSession?.user) {
+      console.log("Setting new user:", newSession.user.id);
+      setSession(newSession);
+      setUser(newSession.user);
+      
+      // Fetch profile with a slight delay to avoid auth deadlocks
+      const timeoutId = setTimeout(() => {
+        if (isMounted.current) {
+          fetchUserProfile(newSession.user.id);
+        }
+      }, 100);
+      
+      timeoutRefs.current.push(timeoutId);
+    } else {
+      // Clear user data if no session
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+    }
+  };
+  
+  // Initialize authentication one time only
   useEffect(() => {
-    // Set mounted ref for cleanup
+    // Set mounted flag for cleanup
     isMounted.current = true;
     
     const initAuth = async () => {
-      if (AUTH_STATE.INITIALIZED) return;
+      // Prevent multiple initializations
+      if (AUTH_STATE.IS_INITIALIZING || AUTH_STATE.IS_INITIALIZED) {
+        return;
+      }
       
+      AUTH_STATE.IS_INITIALIZING = true;
       console.log("Initializing auth state");
-      setLoading(true);
       
       try {
-        // 1. First set up auth state listener
-        const { data: authListener } = supabase.auth.onAuthStateChange(
-          async (event, currentSession) => {
-            if (!isMounted.current) return;
-            
-            console.log(`Auth state changed: ${event} for user ${currentSession?.user?.id || 'null'}`);
-            
-            // Handle signed out event
-            if (event === 'SIGNED_OUT') {
-              console.log("User signed out, clearing state");
-              setSession(null);
-              setUser(null);
-              setProfile(null);
-              return;
-            }
-            
-            // For sign in and session events, update state
-            if (currentSession?.user) {
-              setSession(currentSession);
-              setUser(currentSession.user);
-              
-              // Debounce profile fetching
-              const now = Date.now();
-              if (now - AUTH_STATE.LAST_AUTH_ACTION > AUTH_STATE.DEBOUNCE_TIME) {
-                AUTH_STATE.LAST_AUTH_ACTION = now;
-                
-                // Use setTimeout to avoid potential auth deadlocks
-                const timeoutId = setTimeout(() => {
-                  if (isMounted.current) {
-                    fetchUserProfile(currentSession.user.id);
-                  }
-                }, 100);
-                
-                profileTimeouts.current.push(timeoutId);
-              }
-            }
+        // First set up the auth change listener to catch future changes
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
+          if (!isMounted.current) return;
+          
+          console.log(`Auth state changed: ${event} for user ${newSession?.user?.id || 'null'}`);
+          
+          if (event === 'SIGNED_OUT') {
+            // Handle sign out - clear state immediately
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            profileFetchAttempted.current = {};
+            return;
           }
-        );
+          
+          // For all other events, update session state
+          setUserInfo(newSession);
+        });
         
+        // Store unsubscribe function for cleanup
         authListenerUnsubscribe.current = authListener.subscription.unsubscribe;
         
-        // 2. Then check for existing session
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        // After setting up the listener, check for an existing session
+        const { data, error } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error("Error getting session:", sessionError.message);
+        if (error) {
+          console.error("Error getting initial session:", error.message);
+          console.log("No valid session found during initial check");
           setSession(null);
           setUser(null);
-          AUTH_STATE.SESSION_CHECKED = true;
-          return;
-        }
-        
-        const initialSession = sessionData?.session;
-        
-        if (initialSession?.user) {
-          console.log("Found existing session for user:", initialSession.user.id);
-          setSession(initialSession);
-          setUser(initialSession.user);
-          AUTH_STATE.INITIALIZED = true;
           
-          // Fetch profile after a small delay
-          const timeoutId = setTimeout(() => {
-            if (isMounted.current) {
-              fetchUserProfile(initialSession.user.id);
-            }
-          }, 100);
+        } else if (data?.session) {
+          console.log("Found existing session for user:", data.session.user.id);
+          setUserInfo(data.session);
           
-          profileTimeouts.current.push(timeoutId);
         } else {
           console.log("No existing session found");
           setSession(null);
           setUser(null);
-          setProfile(null);
         }
       } catch (error: any) {
-        console.error("Error initializing auth:", error.message);
+        console.error("Error in auth initialization:", error.message);
+        setSession(null);
+        setUser(null);
       } finally {
         if (isMounted.current) {
           setLoading(false);
-          AUTH_STATE.SESSION_CHECKED = true;
-          AUTH_STATE.INITIALIZED = true;
+          AUTH_STATE.IS_INITIALIZING = false;
+          AUTH_STATE.IS_INITIALIZED = true;
         }
       }
     };
     
-    // Only run init if not already checked
-    if (!AUTH_STATE.SESSION_CHECKED) {
+    // Run initialization if not already done
+    if (!AUTH_STATE.IS_INITIALIZED) {
       initAuth();
     } else {
       setLoading(false);
     }
     
-    // Cleanup function
+    // Cleanup on unmount
     return () => {
       isMounted.current = false;
       cleanupResources();
     };
   }, []);
   
-  // Improved signOut function
+  // Improved sign out function with proper error handling
   const signOut = async () => {
     try {
       console.log("Attempting to sign out user");
@@ -204,11 +206,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       AUTH_STATE.LAST_AUTH_ACTION = now;
       
-      // First clear local state
-      setUser(null);
-      setProfile(null);
+      // Clear profile fetch tracking
+      profileFetchAttempted.current = {};
       
-      // Then call Supabase signOut
+      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -217,13 +218,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
       
-      // Clear session state after successful signout
+      // Clear local state after successful signout
+      // (The onAuthStateChange will also trigger this but we do it here for immediate effect)
       setSession(null);
+      setUser(null);
+      setProfile(null);
       
       toast.success("Signed out successfully");
     } catch (error: any) {
       console.error('Error in signOut function:', error.message);
-      toast.error("Error signing out: " + (error.message || "An unknown error occurred"));
+      toast.error("Error signing out: " + (error.message || "Unknown error"));
     }
   };
   

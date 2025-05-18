@@ -6,9 +6,6 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
-
 // Create and export the supabase client with proper typing
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
@@ -16,7 +13,7 @@ export const supabase = createClient<Database>(
   {
     auth: {
       persistSession: true,
-      // Always use localStorage for session persistence for consistency
+      // Use localStorage for session persistence
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       autoRefreshToken: true,
       detectSessionInUrl: false // Disable auto URL detection to prevent redirects
@@ -24,17 +21,38 @@ export const supabase = createClient<Database>(
   }
 );
 
-// Helper to check if we have a valid session
+// Global session state checker to prevent duplicate checks
+const SESSION_STATE = {
+  LAST_CHECK: 0,
+  COOLDOWN_MS: 2000,
+  RESULT: null
+};
+
+// Helper to check if we have a valid session with debounce
 export const hasValidSession = async () => {
   try {
+    const now = Date.now();
+    
+    // Use cached result if within cooldown period
+    if (now - SESSION_STATE.LAST_CHECK < SESSION_STATE.COOLDOWN_MS && SESSION_STATE.RESULT !== null) {
+      return SESSION_STATE.RESULT;
+    }
+    
+    SESSION_STATE.LAST_CHECK = now;
     const { data, error } = await supabase.auth.getSession();
+    
     if (error) {
       console.error("Error checking session:", error.message);
+      SESSION_STATE.RESULT = false;
       return false;
     }
-    return !!data?.session;
+    
+    const isValid = !!data?.session;
+    SESSION_STATE.RESULT = isValid;
+    return isValid;
   } catch (err) {
     console.error("Failed to check session:", err);
+    SESSION_STATE.RESULT = false;
     return false;
   }
 };

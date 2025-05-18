@@ -9,11 +9,12 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-// Anti-loop protection for auth page
+// Auth page state manager
 const AUTH_PAGE = {
   REDIRECT_ATTEMPTED: false,
   LAST_REDIRECT: 0,
-  COOLDOWN_MS: 1000
+  COOLDOWN_MS: 2000, // Increased to prevent rapid redirects
+  REDIRECT_IN_PROGRESS: false
 };
 
 const AuthPage = () => {
@@ -26,12 +27,11 @@ const AuthPage = () => {
   const { user } = useAuth();
   const location = useLocation();
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const authAttemptedRef = useRef(false);
   
-  // Get return URL from query params if available
+  // Get return URL from query params
   const getReturnUrl = () => {
     const params = new URLSearchParams(location.search);
-    return params.get('returnUrl') || '/dashboard';
+    return params.get('returnUrl') || '/';
   };
   
   // Clean up timeouts on unmount
@@ -46,24 +46,28 @@ const AuthPage = () => {
   
   // Redirect authenticated users away from login page
   useEffect(() => {
-    // Skip if already attempted redirection
-    if (authAttemptedRef.current) return;
+    // Skip if redirect is in progress
+    if (AUTH_PAGE.REDIRECT_IN_PROGRESS) return;
     
     if (user) {
+      // Apply cooldown to prevent redirect loops
       const now = Date.now();
-      
-      // Prevent redirect loops
       if (now - AUTH_PAGE.LAST_REDIRECT < AUTH_PAGE.COOLDOWN_MS) return;
       
       console.log("User already authenticated, redirecting away from auth page");
-      authAttemptedRef.current = true;
-      AUTH_PAGE.REDIRECT_ATTEMPTED = true;
       AUTH_PAGE.LAST_REDIRECT = now;
+      AUTH_PAGE.REDIRECT_IN_PROGRESS = true;
       
-      // Add a small delay to let state settle
+      // Short delay to allow state to stabilize
       redirectTimeoutRef.current = setTimeout(() => {
         const returnUrl = getReturnUrl();
         navigate(returnUrl, { replace: true });
+        
+        // Reset redirect in progress after a delay
+        setTimeout(() => {
+          AUTH_PAGE.REDIRECT_IN_PROGRESS = false;
+        }, 500);
+        
       }, 100);
     }
   }, [user, navigate, location]);

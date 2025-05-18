@@ -10,7 +10,6 @@ const Index = () => {
   const { user, loading } = useAuth();
   
   const handleNavigation = (path: string) => {
-    // Simple navigation without redirection logic - let ProtectedRoute handle auth
     navigate(path);
   };
   
@@ -32,7 +31,7 @@ const Index = () => {
             <div className="pt-4">
               <Button 
                 size="lg" 
-                onClick={() => handleNavigation('/dashboard')}
+                onClick={() => handleNavigation('/')}
                 className="px-8"
               >
                 Go to Dashboard

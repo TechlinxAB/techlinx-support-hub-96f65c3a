@@ -5,18 +5,20 @@ import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Simple anti-redirect loop protection
-const PROTECTION = {
+// Simplified anti-redirect protection
+const REDIRECT_STATE = {
   LAST_REDIRECT: 0,
-  COOLDOWN_MS: 1000,
-  TOAST_SHOWN: false
+  COOLDOWN_MS: 2000, // Increased to prevent rapid redirects
+  TOAST_SHOWN: false,
+  REDIRECT_IN_PROGRESS: false
 };
 
 const ProtectedRoute = () => {
-  const { user, profile, loading } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const toastShownRef = useRef(false);
 
   // Clear any pending redirects when unmounting
   useEffect(() => {
@@ -28,60 +30,51 @@ const ProtectedRoute = () => {
     };
   }, []);
   
-  // Main auth redirection logic - simplified and more robust
+  // Main auth protection logic - simplified
   useEffect(() => {
     // Skip if still loading
     if (loading) return;
     
-    // Skip if we're already at the auth page
+    // We're already at the auth page, no need to redirect
     if (location.pathname === '/auth') return;
     
-    // Handle unauthenticated users
+    // Not authenticated - redirect to auth
     if (!user) {
+      // Skip if we're in redirect cooldown period
       const now = Date.now();
-      
-      // Apply cooldown to prevent redirect loops
-      if (now - PROTECTION.LAST_REDIRECT < PROTECTION.COOLDOWN_MS) {
+      if (now - REDIRECT_STATE.LAST_REDIRECT < REDIRECT_STATE.COOLDOWN_MS || 
+          REDIRECT_STATE.REDIRECT_IN_PROGRESS) {
         return;
       }
       
-      PROTECTION.LAST_REDIRECT = now;
+      // Mark that we're starting a redirect
+      REDIRECT_STATE.LAST_REDIRECT = now;
+      REDIRECT_STATE.REDIRECT_IN_PROGRESS = true;
+      
       console.log("No authenticated user, redirecting to auth");
       
-      // Show toast only once
-      if (!PROTECTION.TOAST_SHOWN) {
+      // Show toast only once per session
+      if (!toastShownRef.current) {
         toast.error("Please sign in to continue");
-        PROTECTION.TOAST_SHOWN = true;
+        toastShownRef.current = true;
       }
       
-      // Redirect with a slight delay to allow state to settle
+      // Use timeout to allow state to settle
       redirectTimeoutRef.current = setTimeout(() => {
         navigate('/auth', { replace: true });
+        
+        // Reset redirect in progress after a delay
+        setTimeout(() => {
+          REDIRECT_STATE.REDIRECT_IN_PROGRESS = false;
+        }, 500);
+        
         redirectTimeoutRef.current = null;
       }, 100);
-      
-      return;
+    } else {
+      // User is authenticated, reset toast shown flag
+      toastShownRef.current = false;
     }
-    
-    // Reset toast flag when user is authenticated
-    PROTECTION.TOAST_SHOWN = false;
-    
-    // Role-based access protection
-    if (profile && user) {
-      const requiresConsultantRole = location.pathname.includes('company-dashboard-builder');
-      
-      if (requiresConsultantRole && profile.role !== 'consultant') {
-        console.log("Access denied: User is not a consultant");
-        toast.error("You don't have permission to access this page");
-        
-        // Use timeout to avoid immediate redirect conflicts
-        redirectTimeoutRef.current = setTimeout(() => {
-          navigate('/');
-          redirectTimeoutRef.current = null;
-        }, 100);
-      }
-    }
-  }, [user, profile, loading, location.pathname, navigate]);
+  }, [user, loading, location.pathname, navigate]);
   
   // Loading state
   if (loading) {
