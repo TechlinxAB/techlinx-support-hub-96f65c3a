@@ -11,9 +11,16 @@ const ProtectedRoute = () => {
   const location = useLocation();
   const redirectAttempted = useRef(false);
   const toastShown = useRef(false);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Effect for handling redirects based on auth status
   useEffect(() => {
+    // Clear any existing timeout
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current);
+      redirectTimeoutRef.current = null;
+    }
+    
     // Only redirect if status is definitively UNAUTHENTICATED (not during LOADING)
     // and not already at auth page and not already tried redirecting
     if (status === 'UNAUTHENTICATED' && 
@@ -23,15 +30,21 @@ const ProtectedRoute = () => {
       console.log("Not authenticated, redirecting to login");
       redirectAttempted.current = true;
       
-      // Include current location as return URL
-      const returnUrl = encodeURIComponent(location.pathname + location.search);
-      navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
-      
-      // Show toast notification (only once)
-      if (!toastShown.current) {
-        toast.error("Please sign in to continue");
-        toastShown.current = true;
-      }
+      // Add a small delay to allow any pending auth operations to complete
+      redirectTimeoutRef.current = setTimeout(() => {
+        // Double-check status hasn't changed during the delay
+        if (status === 'UNAUTHENTICATED') {
+          // Include current location as return URL
+          const returnUrl = encodeURIComponent(location.pathname + location.search);
+          navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
+          
+          // Show toast notification (only once)
+          if (!toastShown.current) {
+            toast.error("Please sign in to continue");
+            toastShown.current = true;
+          }
+        }
+      }, 50);
     }
     
     // Reset redirect flag if user navigates to auth page directly
@@ -39,6 +52,13 @@ const ProtectedRoute = () => {
     if (location.pathname === '/auth') {
       redirectAttempted.current = false;
     }
+    
+    // Cleanup timeout
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
   }, [status, navigate, location.pathname, location.search]);
   
   // Reset the redirect flag when auth status changes to AUTHENTICATED

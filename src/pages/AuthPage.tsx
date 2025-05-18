@@ -18,6 +18,7 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { status, debug } = useAuth();
+  const redirectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   
   // Get return URL from query params or default to home
   const getReturnUrl = () => {
@@ -27,18 +28,27 @@ const AuthPage = () => {
   
   // Redirect authenticated users away from login page
   useEffect(() => {
+    // Clear any existing timeout
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current);
+    }
+    
     // Only redirect if we're definitely authenticated
     // And don't redirect during loading state
     if (status === 'AUTHENTICATED') {
-      // Add a small delay to ensure auth state is stable
-      const timer = setTimeout(() => {
+      // Add a delay to ensure auth state is stable before redirecting
+      redirectTimeoutRef.current = setTimeout(() => {
         const returnUrl = getReturnUrl();
         console.log(`User authenticated, redirecting to ${returnUrl}`);
         navigate(returnUrl, { replace: true });
       }, 100);
-      
-      return () => clearTimeout(timer);
     }
+    
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
   }, [status, navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
@@ -133,7 +143,7 @@ const AuthPage = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading}
+              disabled={loading || status === 'LOADING'}
             >
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Sign In

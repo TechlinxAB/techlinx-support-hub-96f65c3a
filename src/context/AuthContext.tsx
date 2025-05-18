@@ -30,81 +30,95 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [lastEventTime, setLastEventTime] = useState<Date | null>(null);
   const [sessionCheck, setSessionCheck] = useState<boolean>(false);
   
-  // Use ref to track initialization state
+  // Use refs to prevent race conditions
   const isInitialized = useRef(false);
+  const isAuthChanging = useRef(false);
+  const authTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Debounced status updates to prevent rapid state changes
+  const updateAuthStatus = (newStatus: AuthStatus, newUser: User | null) => {
+    // Clear any pending timeout
+    if (authTimeoutRef.current) {
+      clearTimeout(authTimeoutRef.current);
+    }
+    
+    // Set a flag to indicate auth is changing
+    isAuthChanging.current = true;
+    
+    // Add a small delay to batch potential rapid changes
+    authTimeoutRef.current = setTimeout(() => {
+      console.log(`Auth status update: ${newStatus}`);
+      
+      setStatus(newStatus);
+      setUser(newUser);
+      
+      // Only fetch profile if authenticated and we have a user
+      if (newStatus === 'AUTHENTICATED' && newUser) {
+        fetchUserProfile(newUser.id);
+      } else if (newStatus === 'UNAUTHENTICATED') {
+        setProfile(null);
+      }
+      
+      // Clear the changing flag
+      isAuthChanging.current = false;
+    }, 50); // Small delay to batch updates
+  };
+  
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+        
+      if (!error && data) {
+        setProfile(data);
+      } else {
+        console.log("Could not fetch profile:", error);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
   
   // Initialize auth state once on component mount
   useEffect(() => {
     console.log("Initializing authentication");
     let mounted = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
     
-    // Debounce status changes to prevent fast oscillation
-    const updateStatus = (newStatus: AuthStatus, newUser: User | null) => {
-      if (!mounted) return;
-      
-      console.log(`Auth status update: ${newStatus}`);
-      setStatus(newStatus);
-      setUser(newUser);
-      
-      // Only fetch profile data if we have an authenticated user
-      if (newStatus === 'AUTHENTICATED' && newUser) {
-        // Add delay to prevent contention with auth state change
-        setTimeout(() => {
-          if (!mounted) return;
-          fetchUserProfile(newUser.id);
-        }, 0);
-      } else if (newStatus === 'UNAUTHENTICATED') {
-        setProfile(null);
-      }
-    };
-    
-    const fetchUserProfile = async (userId: string) => {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
-          
-        if (!mounted) return;
-        
-        if (!error && data) {
-          setProfile(data);
-        } else {
-          console.log("Could not fetch profile:", error);
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-      }
-    };
-    
-    // Set up auth state listener - this needs to happen BEFORE session check
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+    // Set up auth state listener first, before checking session
+    const setupAuthListener = () => {
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
         if (!mounted) return;
         
         console.log(`Auth event: ${event}`);
         setLastEvent(event);
         setLastEventTime(new Date());
         
+        // Handle different auth events
         if (session && session.user) {
-          // We have a session, user is authenticated
-          updateStatus('AUTHENTICATED', session.user);
+          updateAuthStatus('AUTHENTICATED', session.user);
         } else if (event === 'SIGNED_OUT') {
-          // Clear auth state on sign out
-          updateStatus('UNAUTHENTICATED', null);
+          updateAuthStatus('UNAUTHENTICATED', null);
         } else if (event === 'USER_UPDATED') {
-          // Handle user updates that might affect auth state
           if (!session) {
-            updateStatus('UNAUTHENTICATED', null);
+            updateAuthStatus('UNAUTHENTICATED', null);
           }
         }
-      }
-    );
+      });
+      
+      return data.subscription;
+    };
     
     // Check for existing session
     const checkSession = async () => {
       try {
+        // Set up auth listener before checking session
+        authSubscription = setupAuthListener();
+        
+        // Now check for session
         const { data, error } = await supabase.auth.getSession();
         setSessionCheck(true);
         
@@ -112,24 +126,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (error) {
           console.error("Session check error:", error);
-          updateStatus('UNAUTHENTICATED', null);
+          updateAuthStatus('UNAUTHENTICATED', null);
           return;
         }
         
-        if (!data.session) {
+        if (data.session) {
+          console.log("Valid session found");
+          updateAuthStatus('AUTHENTICATED', data.session.user);
+        } else {
           console.log("No active session found");
-          updateStatus('UNAUTHENTICATED', null);
-          return;
+          updateAuthStatus('UNAUTHENTICATED', null);
         }
-        
-        // Valid session exists
-        console.log("Valid session found");
-        updateStatus('AUTHENTICATED', data.session.user);
         
       } catch (error) {
         console.error("Session check exception:", error);
         if (mounted) {
-          updateStatus('UNAUTHENTICATED', null);
+          updateAuthStatus('UNAUTHENTICATED', null);
         }
       } finally {
         if (mounted) {
@@ -138,13 +150,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
     
-    // Start session check
+    // Start the authentication process
     checkSession();
     
     // Cleanup function
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+      }
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
     };
   }, []);
   
