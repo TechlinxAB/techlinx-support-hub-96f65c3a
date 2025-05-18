@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -46,11 +47,18 @@ const ProtectedRoute = () => {
   
   // Handle authentication redirects with loop detection
   useEffect(() => {
-    // Skip everything if already on auth page
+    // Skip everything if already on auth page to prevent loop
     if (isAuthPage) {
+      console.log("Already on auth page, skipping redirect logic");
       return;
     }
     
+    // Wait until auth state is fully loaded
+    if (loading && !loadingTimeout) {
+      console.log("Auth state is still loading...");
+      return;
+    }
+
     // Check if time since last navigation is too quick (potential loop)
     const now = Date.now();
     const timeSinceLastNav = now - lastNavigationTime;
@@ -59,35 +67,24 @@ const ProtectedRoute = () => {
     if (timeSinceLastNav < 500 && navigationCount > 3) {
       console.error("Too many navigation attempts detected. Possible redirect loop.");
       toast.error("Navigation loop detected", {
-        description: "Attempting to recover by resetting authentication state"
+        description: "Breaking the loop and redirecting to auth page"
       });
       
       // Force sign out and reset auth state when a loop is detected
       forceSignOut().then(() => {
-        // Stay on current page and let user manually navigate
-        // This breaks the loop but keeps the UI usable
+        // Clear navigation count
         setNavigationCount(0);
+        setRedirectAttempted(false);
         
-        // Redirect to auth page after forced logout
-        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
-        setTimeout(() => {
-          window.location.href = '/auth';
-        }, 300);
+        // Hard redirect to break any React Router loops
+        window.location.href = '/auth';
       });
       
       return;
     }
     
+    // Update last navigation time
     setLastNavigationTime(now);
-    
-    // Wait until auth state is fully loaded
-    if (loading && !loadingTimeout) {
-      console.log("Auth state is still loading...");
-      return;
-    }
-
-    // Increment navigation count to detect potential loops
-    setNavigationCount(prev => prev + 1);
     
     // If we've redirected too many times, something is wrong
     if (navigationCount > 5) {
@@ -96,14 +93,10 @@ const ProtectedRoute = () => {
         description: "Attempting to recover by resetting authentication state"
       });
       
-      // Force sign out and reset auth state when a loop is detected
+      // Force sign out and reset auth state
       forceSignOut().then(() => {
-        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+        // Hard redirect to break loops
         window.location.href = '/auth';
-      }).catch(err => {
-        console.error("Critical error during force sign out:", err);
-        // Last resort - force reload the page
-        window.location.reload();
       });
       
       return;
@@ -116,6 +109,9 @@ const ProtectedRoute = () => {
       console.log("No authenticated user, redirecting to auth");
       setRedirectAttempted(true);
       
+      // Increment navigation count to detect potential loops
+      setNavigationCount(prev => prev + 1);
+      
       // Store current path for redirect after login
       let currentPath = location.pathname;
       if (currentPath === '/') {
@@ -124,7 +120,7 @@ const ProtectedRoute = () => {
       
       // Use the navigate function for the redirect
       navigate('/auth', { replace: true, state: { from: currentPath || '/' } });
-    } else if (user) {
+    } else if (user && profile) {
       // Reset the redirect flag when user is available
       if (redirectAttempted) {
         setRedirectAttempted(false);
@@ -135,7 +131,6 @@ const ProtectedRoute = () => {
   // Check if the path requires a consultant role
   useEffect(() => {
     // Only check role requirements if we have both user and profile data
-    // Skip when still loading or missing user/profile
     if (loading || !user || !profile) {
       return;
     }

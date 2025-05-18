@@ -27,11 +27,15 @@ const AuthPage = () => {
     
     // First clear any potential broken auth state on auth page loads
     const clearBrokenState = async () => {
-      // Check if we have a session with invalid tokens causing 401s
-      const storage = localStorage.getItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
-      if (storage && storage.includes('error')) {
-        console.log('Found potentially corrupted auth state, cleaning up');
-        localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      try {
+        // Check if we have a session with invalid tokens causing 401s
+        const storage = localStorage.getItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+        if (storage && storage.includes('error')) {
+          console.log('Found potentially corrupted auth state, cleaning up');
+          localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+        }
+      } catch (error) {
+        console.error('Error accessing localStorage:', error);
       }
     };
     
@@ -56,12 +60,14 @@ const AuthPage = () => {
           // Use a small timeout to prevent immediate redirect that can cause loops
           redirectTimeout = window.setTimeout(() => {
             if (isMounted) {
-              // Only navigate if we're still on the auth page and not already navigating
-              if (window.location.pathname === '/auth') {
-                navigate(from, { replace: true });
+              // Use window.location.href to avoid React Router potential loops
+              if (from === '/') {
+                window.location.href = '/';
+              } else {
+                window.location.href = from;
               }
             }
-          }, 300);
+          }, 500);
         } else {
           console.log('No active session found, showing login form');
           setCheckingSession(false);
@@ -75,7 +81,7 @@ const AuthPage = () => {
     // Run check with a short delay to allow for storage operations to complete
     const timeoutId = setTimeout(() => {
       checkSession();
-    }, 100);
+    }, 200);
     
     // Clean up function
     return () => {
@@ -108,14 +114,15 @@ const AuthPage = () => {
       console.log('Sign in successful:', data.session ? 'Session exists' : 'No session');
       toast.success("You have been logged in");
       
+      // Use window.location.href for a clean navigation that avoids React Router
       // Small delay before redirect to allow toast to show
       setTimeout(() => {
-        // Make sure we're not already redirecting somewhere else
-        if (window.location.pathname === '/auth') {
-          // Redirect after successful authentication
-          navigate(from, { replace: true });
+        if (from && from !== '/auth') {
+          window.location.href = from;
+        } else {
+          window.location.href = '/';
         }
-      }, 500);
+      }, 300);
       
     } catch (error: any) {
       console.error('Sign in error:', error);

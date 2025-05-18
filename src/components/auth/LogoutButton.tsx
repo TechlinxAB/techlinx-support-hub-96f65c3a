@@ -39,8 +39,11 @@ const LogoutButton = ({
       
       toast.success('Successfully logged out', { id: toastId });
       
-      // Hard redirect to auth page to ensure clean state
-      window.location.href = '/auth';
+      // Small delay to allow toast to show
+      setTimeout(() => {
+        // Hard redirect to auth page to ensure clean state
+        window.location.href = '/auth';
+      }, 100);
     } catch (error) {
       console.error('Error during logout:', error);
       
@@ -49,8 +52,13 @@ const LogoutButton = ({
         localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
         await forceSignOut();
         toast.info('Forced logout completed due to error in normal logout flow.');
-        window.location.href = '/auth';
+        
+        // Small delay to allow toast to show
+        setTimeout(() => {
+          window.location.href = '/auth';
+        }, 100);
       } catch (secondError) {
+        console.error('Critical error during forced logout:', secondError);
         toast.error('Failed to log out. Please try refreshing the page.');
       }
     } finally {
