@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
@@ -8,7 +8,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
-import navigationService from '@/services/navigationService';
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
@@ -16,7 +15,7 @@ const Dashboard = () => {
   const { loadStarredCases } = useStarredCases();
   const location = useLocation();
   const navigate = useNavigate();
-  const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const navigationAttemptedRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   
@@ -50,9 +49,9 @@ const Dashboard = () => {
     const params = new URLSearchParams(location.search);
     const redirectTarget = params.get('redirectTarget');
     
-    if (redirectTarget && !navigationAttempted && profile) {
+    if (redirectTarget && !navigationAttemptedRef.current && profile) {
       // Mark that we've attempted navigation to prevent loops
-      setNavigationAttempted(true);
+      navigationAttemptedRef.current = true;
       
       console.log(`Dashboard: Attempting to redirect to: ${redirectTarget}, user role:`, profile?.role);
       
@@ -78,7 +77,7 @@ const Dashboard = () => {
         toast.error("Failed to redirect to the requested page");
       }
     }
-  }, [location, navigate, navigationAttempted, profile]);
+  }, [location, navigate, profile]);
   
   // Show error state
   if (hasError) {

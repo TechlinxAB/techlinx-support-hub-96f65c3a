@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import DashboardWelcome from './DashboardWelcome';
 import QuickActionButtons from './QuickActionButtons';
@@ -42,25 +42,30 @@ const UserDashboard = () => {
     );
   }
   
-  // Only get user's cases if currentUser is available
-  const userCases: UserCaseItem[] = currentUser ? cases
-    .filter(c => c.userId === currentUser.id)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .filter(c => c.status !== 'completed')
-    .slice(0, 3)
-    .map(c => ({
-      id: c.id,
-      title: c.title,
-      status: c.status,
-      updatedAt: c.updatedAt.toISOString() // Convert Date to string
-    })) : [];
+  // Memoize user's cases to prevent recreation on each render
+  const userCases = useMemo(() => {
+    if (!currentUser) return [];
+    return cases
+      .filter(c => c.userId === currentUser.id)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .filter(c => c.status !== 'completed')
+      .slice(0, 3)
+      .map(c => ({
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        updatedAt: c.updatedAt.toISOString() // Convert Date to string
+      }));
+  }, [currentUser, cases]);
   
   // IMPROVED: Better validation of companyId
-  const safeCompanyId = currentUser?.companyId && 
-    typeof currentUser.companyId === 'string' &&
-    currentUser.companyId !== "undefined" && 
-    currentUser.companyId !== "null" ? 
-    currentUser.companyId : undefined;
+  const safeCompanyId = useMemo(() => {
+    return currentUser?.companyId && 
+      typeof currentUser.companyId === 'string' &&
+      currentUser.companyId !== "undefined" && 
+      currentUser.companyId !== "null" ? 
+      currentUser.companyId : undefined;
+  }, [currentUser?.companyId]);
   
   // Fetch company settings and announcements
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(safeCompanyId);
