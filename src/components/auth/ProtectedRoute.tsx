@@ -22,6 +22,7 @@ const ProtectedRoute = () => {
   const isAuthPage = location.pathname === '/auth';
   const stableAuthRef = useRef(authState);
   const delayRef = useRef<number | null>(null);
+  const stabilityTimerRef = useRef<number | null>(null);
 
   // Register the navigate function with the navigation service on mount
   useEffect(() => {
@@ -42,20 +43,40 @@ const ProtectedRoute = () => {
         clearTimeout(delayRef.current);
         delayRef.current = null;
       }
+      
+      if (stabilityTimerRef.current !== null) {
+        clearTimeout(stabilityTimerRef.current);
+        stabilityTimerRef.current = null;
+      }
     };
   }, [navigate, location.pathname]);
   
   // Track auth state changes with a cooldown to prevent rapid changes
   useEffect(() => {
+    // Clear any existing stability timer
+    if (stabilityTimerRef.current !== null) {
+      clearTimeout(stabilityTimerRef.current);
+    }
+    
     // Only update our stable auth ref if the state has persisted
     // This prevents flickering between auth states
-    const authChangeTimer = setTimeout(() => {
+    stabilityTimerRef.current = window.setTimeout(() => {
+      // Don't allow transitions from AUTHENTICATED to UNAUTHENTICATED unless explicitly signed out
+      // This prevents the initialization timeout from causing users to be logged out
+      if (stableAuthRef.current === 'AUTHENTICATED' && authState === 'UNAUTHENTICATED') {
+        console.log('ProtectedRoute: Ignoring transition from AUTHENTICATED to UNAUTHENTICATED');
+        return;
+      }
+      
       console.log(`ProtectedRoute: Updating stable auth state from ${stableAuthRef.current} to ${authState}`);
       stableAuthRef.current = authState;
     }, 1000); // 1 second stability required
     
     return () => {
-      clearTimeout(authChangeTimer);
+      if (stabilityTimerRef.current !== null) {
+        clearTimeout(stabilityTimerRef.current);
+        stabilityTimerRef.current = null;
+      }
     };
   }, [authState]);
   
@@ -174,7 +195,7 @@ const ProtectedRoute = () => {
   }
   
   // Allow access to auth page without authentication
-  // For all other routes, only render when authenticated
+  // For all other routes, only render when authenticated or impersonating
   return isAuthPage || (authState === 'AUTHENTICATED' || authState === 'IMPERSONATING') ? <Outlet /> : null;
 };
 

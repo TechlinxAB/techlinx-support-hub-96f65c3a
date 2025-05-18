@@ -32,11 +32,8 @@ const LogoutButton = ({
       
       toast.success('Successfully logged out', { id: toastId });
       
-      // Give a short delay before redirect to allow AuthContext to process the logout
-      setTimeout(() => {
-        // Hard redirect to auth page to ensure clean state
-        navigationService.hardRedirect('/auth?clean=true');
-      }, 100);
+      // Skip the timeout and redirect immediately to ensure clean state
+      navigationService.hardRedirect('/auth?clean=true');
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');

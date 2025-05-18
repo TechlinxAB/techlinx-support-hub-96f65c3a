@@ -85,6 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const profileFetchDebounceTimer = useRef<number | null>(null);
   const authErrorCount = useRef<number>(0);
   const maxErrorsBeforeUnauthenticated = 5;
+  const authInitCompleted = useRef(false);
   
   // Calculate loading state from auth state
   const loading = authState === 'INITIALIZING';
@@ -331,6 +332,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Set auth state to authenticated since we have a valid profile
         setAuthState('AUTHENTICATED');
         console.log('Profile fetch successful, user authenticated');
+        
+        // Mark authentication as completed to prevent timeout from changing state
+        authInitCompleted.current = true;
+        
+        // Clear the initialization timeout as we're now authenticated
+        if (initializationTimeout.current !== null) {
+          clearTimeout(initializationTimeout.current);
+          initializationTimeout.current = null;
+        }
       } else {
         // Profile not found for this user ID
         setProfile(null);
@@ -349,6 +359,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  // Clear all timers and subscriptions to prevent memory leaks
+  const clearAllTimers = useCallback(() => {
+    if (authSubscription.current) {
+      authSubscription.current.unsubscribe();
+      authSubscription.current = null;
+    }
+    
+    if (initializationTimeout.current !== null) {
+      clearTimeout(initializationTimeout.current);
+      initializationTimeout.current = null;
+    }
+    
+    if (profileFetchDebounceTimer.current !== null) {
+      clearTimeout(profileFetchDebounceTimer.current);
+      profileFetchDebounceTimer.current = null;
+    }
+  }, []);
+
   // Main auth initialization and listener setup
   useEffect(() => {
     // Skip if already initialized
@@ -361,7 +389,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     // Safety timeout to prevent infinite loading
     initializationTimeout.current = window.setTimeout(() => {
-      if (authState === 'INITIALIZING') {
+      // Only change state if we're still initializing and haven't completed auth
+      if (authState === 'INITIALIZING' && !authInitCompleted.current) {
         console.log('Auth initialization timeout, forcing completion');
         setAuthState('UNAUTHENTICATED');
       }
@@ -379,14 +408,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(newSession);
           setUser(newSession?.user ?? null);
           
-          // Defer any API calls or complex state updates
+          // Mark as authenticated if we have a session
           if (newSession?.user) {
-            // Using setTimeout with 0ms delay moves this to the next tick
-            // This is crucial to prevent deadlocks in the auth state
+            // This marks that we have a successful auth state
+            authInitCompleted.current = true;
+            
+            // Clear the timeout since auth is confirmed
+            if (initializationTimeout.current !== null) {
+              clearTimeout(initializationTimeout.current);
+              initializationTimeout.current = null;
+            }
+            
+            // Defer any API calls or complex state updates
             setTimeout(() => {
               debounceFetchProfile(newSession.user.id);
             }, 0);
-          } else {
+          } else if (event === 'SIGNED_OUT') {
+            // If explicitly signed out, update state immediately
             setTimeout(() => {
               setProfile(null);
               setAuthState('UNAUTHENTICATED');
@@ -410,6 +448,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(session);
           setUser(session.user);
           
+          // Mark that we have auth data to prevent timeout from changing state
+          authInitCompleted.current = true;
+          
+          // Clear the timeout since we have a session
+          if (initializationTimeout.current !== null) {
+            clearTimeout(initializationTimeout.current);
+            initializationTimeout.current = null;
+          }
+          
           // Defer profile fetch to avoid potential deadlock
           setTimeout(() => {
             debounceFetchProfile(session.user.id);
@@ -417,10 +464,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           // No session, set state to unauthenticated
           setAuthState('UNAUTHENTICATED');
+          
+          // Clear the timeout since we've determined auth state
+          if (initializationTimeout.current !== null) {
+            clearTimeout(initializationTimeout.current);
+            initializationTimeout.current = null;
+          }
         }
       } catch (err) {
         console.error('Error checking session:', err);
         setAuthState('UNAUTHENTICATED');
+        
+        // Clear the timeout in error case too
+        if (initializationTimeout.current !== null) {
+          clearTimeout(initializationTimeout.current);
+          initializationTimeout.current = null;
+        }
       }
     };
     
@@ -433,20 +492,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, 100);
     
     // Clean up on unmount
-    return () => {
-      if (authSubscription.current) {
-        authSubscription.current.unsubscribe();
-      }
-      
-      if (initializationTimeout.current !== null) {
-        clearTimeout(initializationTimeout.current);
-      }
-      
-      if (profileFetchDebounceTimer.current !== null) {
-        clearTimeout(profileFetchDebounceTimer.current);
-      }
-    };
-  }, [debounceFetchProfile]);
+    return clearAllTimers;
+  }, [debounceFetchProfile, clearAllTimers, authState]);
+
+  // Additional effect to ensure cleanup happens when component unmounts
+  useEffect(() => {
+    return clearAllTimers;
+  }, [clearAllTimers]);
 
   // Create the context value
   const value: AuthContextType = {
