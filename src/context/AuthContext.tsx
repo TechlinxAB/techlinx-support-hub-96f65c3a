@@ -1,6 +1,6 @@
 
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import { User } from '@supabase/supabase-js';
 import { supabase, clearAuthData } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -12,6 +12,11 @@ interface AuthContextType {
   user: User | null;
   profile: any | null;
   signOut: () => Promise<void>;
+  debug: {
+    lastEvent: string | null;
+    lastEventTime: Date | null;
+    sessionCheck: boolean;
+  };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,42 +26,76 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [status, setStatus] = useState<AuthStatus>('LOADING');
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
+  const [lastEvent, setLastEvent] = useState<string | null>(null);
+  const [lastEventTime, setLastEventTime] = useState<Date | null>(null);
+  const [sessionCheck, setSessionCheck] = useState<boolean>(false);
+  
+  // Use ref to track initialization state
+  const isInitialized = useRef(false);
   
   // Initialize auth state once on component mount
   useEffect(() => {
     console.log("Initializing authentication");
     let mounted = true;
     
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    // Debounce status changes to prevent fast oscillation
+    const updateStatus = (newStatus: AuthStatus, newUser: User | null) => {
+      if (!mounted) return;
+      
+      console.log(`Auth status update: ${newStatus}`);
+      setStatus(newStatus);
+      setUser(newUser);
+      
+      // Only fetch profile data if we have an authenticated user
+      if (newStatus === 'AUTHENTICATED' && newUser) {
+        // Add delay to prevent contention with auth state change
+        setTimeout(() => {
+          if (!mounted) return;
+          fetchUserProfile(newUser.id);
+        }, 0);
+      } else if (newStatus === 'UNAUTHENTICATED') {
+        setProfile(null);
+      }
+    };
+    
+    const fetchUserProfile = async (userId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+          
         if (!mounted) return;
+        
+        if (!error && data) {
+          setProfile(data);
+        } else {
+          console.log("Could not fetch profile:", error);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      }
+    };
+    
+    // Set up auth state listener - this needs to happen BEFORE session check
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) return;
+        
         console.log(`Auth event: ${event}`);
+        setLastEvent(event);
+        setLastEventTime(new Date());
         
         if (session && session.user) {
           // We have a session, user is authenticated
-          setUser(session.user);
-          setStatus('AUTHENTICATED');
-          
-          // Fetch user profile data
-          try {
-            const { data, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-              
-            if (!error && data && mounted) {
-              setProfile(data);
-            }
-          } catch (error) {
-            console.error('Error fetching profile:', error);
-          }
+          updateStatus('AUTHENTICATED', session.user);
         } else if (event === 'SIGNED_OUT') {
           // Clear auth state on sign out
-          setUser(null);
-          setProfile(null);
-          setStatus('UNAUTHENTICATED');
+          updateStatus('UNAUTHENTICATED', null);
+        } else if (event === 'USER_DELETED') {
+          // Handle user deletion
+          updateStatus('UNAUTHENTICATED', null);
         }
       }
     );
@@ -65,39 +104,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const checkSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
+        setSessionCheck(true);
         
-        if (error || !data.session) {
-          // No valid session
-          if (mounted) {
-            setStatus('UNAUTHENTICATED');
-          }
+        if (!mounted) return;
+        
+        if (error) {
+          console.error("Session check error:", error);
+          updateStatus('UNAUTHENTICATED', null);
           return;
         }
         
-        // We have a valid session
-        if (mounted) {
-          setUser(data.session.user);
-          setStatus('AUTHENTICATED');
-          
-          // Fetch user profile
-          try {
-            const { data: profileData, error: profileError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', data.session.user.id)
-              .maybeSingle();
-              
-            if (!profileError && profileData && mounted) {
-              setProfile(profileData);
-            }
-          } catch (error) {
-            console.error('Error fetching profile:', error);
-          }
+        if (!data.session) {
+          console.log("No active session found");
+          updateStatus('UNAUTHENTICATED', null);
+          return;
         }
+        
+        // Valid session exists
+        console.log("Valid session found");
+        updateStatus('AUTHENTICATED', data.session.user);
+        
       } catch (error) {
-        console.error("Session check error:", error);
+        console.error("Session check exception:", error);
         if (mounted) {
-          setStatus('UNAUTHENTICATED');
+          updateStatus('UNAUTHENTICATED', null);
+        }
+      } finally {
+        if (mounted) {
+          isInitialized.current = true;
         }
       }
     };
@@ -112,16 +146,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
   
-  // Simple sign out function
+  // Enhanced sign out function with multiple fallbacks
   const signOut = async () => {
     try {
+      console.log("Signing out: started");
       setStatus('LOADING'); // Update UI state immediately
       
       // First clear local storage to prevent auto-relogin 
       clearAuthData();
+      console.log("Signing out: cleared local storage");
       
       // Then try server-side signout
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error("Sign out API error:", error);
+        // Continue anyway - we want to sign out locally regardless
+      } else {
+        console.log("Signing out: server-side sign out successful");
+      }
       
       // Force UI state update regardless of server response
       setUser(null);
@@ -130,7 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       toast.success("Signed out successfully");
     } catch (error) {
-      console.error("Sign out error:", error);
+      console.error("Sign out exception:", error);
       
       // Still update UI state even if server request fails
       setUser(null);
@@ -146,6 +189,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     profile,
     signOut,
+    debug: {
+      lastEvent,
+      lastEventTime,
+      sessionCheck
+    }
   };
   
   return (

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
@@ -9,21 +9,46 @@ const ProtectedRoute = () => {
   const { status } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const redirectAttempted = useRef(false);
+  const toastShown = useRef(false);
   
   // Effect for handling redirects based on auth status
-  React.useEffect(() => {
-    // Only redirect if not authenticated and not already at auth page
-    if (status === 'UNAUTHENTICATED' && location.pathname !== '/auth') {
+  useEffect(() => {
+    // Only redirect if status is definitively UNAUTHENTICATED (not during LOADING)
+    // and not already at auth page and not already tried redirecting
+    if (status === 'UNAUTHENTICATED' && 
+        location.pathname !== '/auth' && 
+        !redirectAttempted.current) {
+      
       console.log("Not authenticated, redirecting to login");
+      redirectAttempted.current = true;
       
       // Include current location as return URL
       const returnUrl = encodeURIComponent(location.pathname + location.search);
       navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
       
-      // Show toast notification
-      toast.error("Please sign in to continue");
+      // Show toast notification (only once)
+      if (!toastShown.current) {
+        toast.error("Please sign in to continue");
+        toastShown.current = true;
+      }
+    }
+    
+    // Reset redirect flag if user navigates to auth page directly
+    // This allows future redirects to work if needed
+    if (location.pathname === '/auth') {
+      redirectAttempted.current = false;
     }
   }, [status, navigate, location.pathname, location.search]);
+  
+  // Reset the redirect flag when auth status changes to AUTHENTICATED
+  // This ensures proper handling if the user signs out later
+  useEffect(() => {
+    if (status === 'AUTHENTICATED') {
+      redirectAttempted.current = false;
+      toastShown.current = false;
+    }
+  }, [status]);
   
   // Show loading state
   if (status === 'LOADING') {

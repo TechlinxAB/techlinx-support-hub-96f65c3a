@@ -17,7 +17,7 @@ const AuthPage = () => {
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { status } = useAuth();
+  const { status, debug } = useAuth();
   
   // Get return URL from query params or default to home
   const getReturnUrl = () => {
@@ -27,10 +27,17 @@ const AuthPage = () => {
   
   // Redirect authenticated users away from login page
   useEffect(() => {
+    // Only redirect if we're definitely authenticated
+    // And don't redirect during loading state
     if (status === 'AUTHENTICATED') {
-      const returnUrl = getReturnUrl();
-      console.log(`User authenticated, redirecting to ${returnUrl}`);
-      navigate(returnUrl, { replace: true });
+      // Add a small delay to ensure auth state is stable
+      const timer = setTimeout(() => {
+        const returnUrl = getReturnUrl();
+        console.log(`User authenticated, redirecting to ${returnUrl}`);
+        navigate(returnUrl, { replace: true });
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [status, navigate]);
   
@@ -113,6 +120,13 @@ const AuthPage = () => {
                 disabled={loading}
               />
             </div>
+            
+            {/* Add debug info for development purposes */}
+            <div className="text-xs text-muted-foreground border-t border-border pt-2 space-y-1">
+              <div>Auth Status: {status}</div>
+              <div>Last Event: {debug.lastEvent || 'none'} {debug.lastEventTime ? `at ${debug.lastEventTime.toLocaleTimeString()}` : ''}</div>
+              <div>Session Check: {debug.sessionCheck ? 'Completed' : 'Pending'}</div>
+            </div>
           </CardContent>
           
           <CardFooter className="flex flex-col space-y-3">
@@ -131,10 +145,6 @@ const AuthPage = () => {
           <p className="text-sm text-muted-foreground text-center">
             New users must be created by an administrator through the User Management page.
           </p>
-          
-          <div className="text-xs text-muted-foreground text-center">
-            Auth Status: {status}
-          </div>
         </CardFooter>
       </Card>
     </div>

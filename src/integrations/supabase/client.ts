@@ -6,53 +6,93 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
-// Simple storage provider with fallbacks
-const getStorageProvider = () => {
-  if (typeof localStorage === "undefined") {
-    return undefined; // No storage in SSR context
+// Ensure localStorage is available and working
+const getLocalStorageProvider = () => {
+  // Check for localStorage availability
+  if (typeof window === 'undefined' || !window.localStorage) {
+    console.warn("localStorage is not available - using memory storage");
+    // Create in-memory storage fallback
+    let memoryStorage: Record<string, string> = {};
+    
+    return {
+      getItem: (key: string) => memoryStorage[key] || null,
+      setItem: (key: string, value: string) => { memoryStorage[key] = value },
+      removeItem: (key: string) => { delete memoryStorage[key] },
+      clear: () => { memoryStorage = {} }
+    };
   }
   
+  // Use localStorage with error handling
   return {
-    getItem: (key) => localStorage.getItem(key),
-    setItem: (key, value) => localStorage.setItem(key, value),
-    removeItem: (key) => localStorage.removeItem(key),
+    getItem: (key: string) => {
+      try {
+        return window.localStorage.getItem(key);
+      } catch (e) {
+        console.error("localStorage.getItem failed:", e);
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch (e) {
+        console.error("localStorage.setItem failed:", e);
+      }
+    },
+    removeItem: (key: string) => {
+      try {
+        window.localStorage.removeItem(key);
+      } catch (e) {
+        console.error("localStorage.removeItem failed:", e);
+      }
+    },
     clear: () => {
-      // Only clear Supabase-related items
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('supabase.auth.')) {
-          localStorage.removeItem(key);
-        }
-      });
+      try {
+        // Only clear Supabase-related items
+        Object.keys(window.localStorage).forEach(key => {
+          if (key.startsWith('supabase.auth.')) {
+            window.localStorage.removeItem(key);
+          }
+        });
+      } catch (e) {
+        console.error("localStorage.clear failed:", e);
+      }
     }
   };
 };
 
-// Create Supabase client with simplified configuration
+// Create Supabase client with robust configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
   {
     auth: {
       persistSession: true,
-      storage: getStorageProvider(),
+      storage: getLocalStorageProvider(),
       autoRefreshToken: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      flowType: 'implicit'
     }
   }
 );
 
 // Function to clear auth data from local storage
 export const clearAuthData = () => {
-  if (typeof localStorage === "undefined") return;
+  if (typeof window === "undefined") return;
   
   console.log("Clearing auth data from local storage");
   
   try {
     // Clear all Supabase auth related items from localStorage
-    Object.keys(localStorage).forEach(key => {
+    Object.keys(window.localStorage).forEach(key => {
       if (key.startsWith('supabase.auth.')) {
-        localStorage.removeItem(key);
+        window.localStorage.removeItem(key);
       }
+    });
+    
+    // Also try the client's logout
+    supabase.auth.signOut({ scope: 'local' }).catch(err => {
+      console.warn("Error during local signout:", err);
     });
   } catch (error) {
     console.error('Error clearing auth data:', error);
