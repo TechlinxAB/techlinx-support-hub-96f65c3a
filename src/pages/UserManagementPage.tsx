@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +21,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -44,16 +42,19 @@ import {
   UserX, 
   UserCheck,
   AlertCircle,
-  Loader2
+  Loader2,
+  UserIcon
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { UserRole, Language } from '@/context/AppContext'; 
 import { userManagementService } from '@/services/userManagementService';
+import { useAuth } from '@/context/AuthContext';
 
 const UserManagementPage = () => {
   const { users, companies, currentUser, refetchUsers } = useAppContext();
+  const { startImpersonation, profile } = useAuth();
   
   // All hooks first, regardless of conditions - this follows React's rules of hooks
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -514,6 +515,18 @@ const UserManagementPage = () => {
     );
   }
 
+  const handleImpersonateUser = async (userId: string) => {
+    try {
+      await startImpersonation(userId);
+    } catch (error: any) {
+      toast({
+        title: "Error starting impersonation",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -546,6 +559,8 @@ const UserManagementPage = () => {
             ) : (
               users.map((user) => {
                 const company = companies.find(c => c.id === user.companyId);
+                // Don't allow impersonating self or impersonating consultants if you're not a consultant
+                const canImpersonate = profile?.role === 'consultant' && user.id !== profile?.id && !(user.role === 'consultant' && profile?.role !== 'consultant');
                 
                 return (
                   <TableRow key={user.id}>
@@ -581,6 +596,12 @@ const UserManagementPage = () => {
                             <KeyRound className="h-4 w-4 mr-2" />
                             Reset Password
                           </DropdownMenuItem>
+                          {canImpersonate && (
+                            <DropdownMenuItem onClick={() => handleImpersonateUser(user.id)}>
+                              <UserIcon className="h-4 w-4 mr-2" />
+                              Impersonate User
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
                             onClick={() => handleConfirmDelete(user.id)}

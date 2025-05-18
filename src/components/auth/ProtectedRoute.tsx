@@ -6,7 +6,7 @@ import { Loader } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ProtectedRoute = () => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isImpersonating, originalProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -24,12 +24,17 @@ const ProtectedRoute = () => {
     const requiresConsultantRole = location.pathname.includes('company-dashboard-builder');
     
     // Only check role requirements if we have both user and profile data
-    if (!loading && user && profile && requiresConsultantRole && profile.role !== 'consultant') {
-      console.log("User is not a consultant but trying to access restricted route:", location.pathname);
-      toast.error("You don't have permission to access this page");
-      navigate('/');
+    if (!loading && user && profile) {
+      // For impersonation, check the original role for protected routes
+      const effectiveRole = isImpersonating ? originalProfile?.role : profile.role;
+      
+      if (requiresConsultantRole && effectiveRole !== 'consultant') {
+        console.log("User is not a consultant but trying to access restricted route:", location.pathname);
+        toast.error("You don't have permission to access this page");
+        navigate('/');
+      }
     }
-  }, [user, profile, loading, location.pathname, navigate]);
+  }, [user, profile, originalProfile, isImpersonating, loading, location.pathname, navigate]);
   
   if (loading) {
     return (
