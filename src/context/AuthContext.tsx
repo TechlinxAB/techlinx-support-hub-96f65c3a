@@ -93,9 +93,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } else if (event === 'SIGNED_OUT') {
           // Clear auth state on sign out
           updateStatus('UNAUTHENTICATED', null);
-        } else if (event === 'USER_DELETED') {
-          // Handle user deletion
-          updateStatus('UNAUTHENTICATED', null);
+        } else if (event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+          // Handle user deletion or updates that might affect auth state
+          if (!session) {
+            updateStatus('UNAUTHENTICATED', null);
+          }
         }
       }
     );
