@@ -68,18 +68,21 @@ export const useDashboardSettings = (companyId: string | undefined) => {
         
         // Create a new AbortController for this request
         abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
         
-        // Use proper error handling that won't affect auth state
+        // Fix: Pass the signal correctly in the fetch options
         const { data, error: settingsError } = await supabase
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)
-          .maybeSingle()
-          .abortSignal(abortControllerRef.current.signal);
+          .maybeSingle({
+            signal: signal // Correctly pass the abort signal in an options object
+          });
         
         if (settingsError) {
           // Check if request was aborted
-          if (settingsError.message === 'The operation was aborted') {
+          if (settingsError.message === 'The operation was aborted' || 
+              settingsError.message?.includes('abort')) {
             console.log('Settings fetch aborted');
             return;
           }
