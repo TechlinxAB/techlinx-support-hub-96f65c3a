@@ -91,7 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Handle different auth events
         if (event === 'SIGNED_IN' && session?.user) {
           updateAuthStatus('AUTHENTICATED', session.user);
-        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        } else if (event === 'SIGNED_OUT') {
           updateAuthStatus('UNAUTHENTICATED', null);
         } else if (event === 'INITIAL_SESSION') {
           if (session?.user) {
