@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
@@ -14,7 +15,6 @@ const AuthPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
-  const { toast } = useToast();
   const navigate = useNavigate();
   
   // Check if user is already logged in
@@ -28,22 +28,30 @@ const AuthPage = () => {
         
         if (error) {
           console.error('Session check error:', error);
-          if (isMounted) setAuthError(error.message);
+          if (isMounted) {
+            setAuthError(error.message);
+            toast.error("Authentication error", {
+              description: error.message
+            });
+          }
         } else if (data.session && isMounted) {
           console.log('Active session found, redirecting to home');
           navigate('/', { replace: true });
+        } else {
+          console.log('No active session found, showing login form');
         }
       } catch (error) {
         console.error('Exception during session check:', error);
       } finally {
+        // Always finish checking session even if there was an error
         if (isMounted) setCheckingSession(false);
       }
     };
     
-    // Run check immediately without delay
+    // Run check immediately
     checkSession();
     
-    // Clean up
+    // Clean up function
     return () => {
       isMounted = false;
     };
@@ -54,11 +62,7 @@ const AuthPage = () => {
     setAuthError(null);
     
     if (!email || !password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
+      toast.error("Please fill in all fields");
       return;
     }
     
@@ -74,21 +78,16 @@ const AuthPage = () => {
       if (error) throw error;
       
       console.log('Sign in successful:', data.session ? 'Session exists' : 'No session');
-      toast({
-        title: "Success!",
-        description: "You have been logged in",
-      });
+      toast.success("You have been logged in");
       
-      // Redirect now instead of waiting for the auth state change
+      // Redirect after successful authentication
       navigate('/', { replace: true });
       
     } catch (error: any) {
       console.error('Sign in error:', error);
       setAuthError(error.message);
-      toast({
-        title: "Error",
-        description: error.message || "Invalid email or password",
-        variant: "destructive"
+      toast.error("Login failed", {
+        description: error.message || "Invalid email or password"
       });
     } finally {
       setLoading(false);
@@ -98,8 +97,9 @@ const AuthPage = () => {
   // Show loading state while checking the session
   if (checkingSession) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Checking authentication status...</p>
       </div>
     );
   }

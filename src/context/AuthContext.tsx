@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
@@ -53,6 +52,9 @@ const mapDbProfileToUserProfile = (dbProfile: any): UserProfile => {
   };
 };
 
+// Maximum time to wait for auth loading before forcing completion
+const MAX_AUTH_LOADING_TIME = 5000; // 5 seconds
+
 // Provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -69,11 +71,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('Attempting to sign in with email and password');
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error);
+      if (error) {
+        console.error('Sign in error:', error);
+        setError(error);
+      } else {
+        console.log('Sign in successful');
+      }
       return { error };
     } catch (err) {
-      console.error('Error signing in:', err);
+      console.error('Exception during sign in:', err);
       return { error: err as AuthError };
     }
   };
@@ -166,45 +174,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Fetch user profile
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('Fetching profile for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        throw error;
+      }
+      
       if (data) {
+        console.log('Profile data received:', data.email);
         setProfile(mapDbProfileToUserProfile(data));
+      } else {
+        console.log('No profile found for user:', userId);
+        setProfile(null);
       }
     } catch (err) {
-      console.error('Error fetching profile:', err);
+      console.error('Exception fetching profile:', err);
     }
   };
 
   // Listen for auth changes
   useEffect(() => {
+    console.log('Setting up authentication state');
     setLoading(true);
     
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      
+    // Safety timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+      console.log('Auth loading timeout reached, forcing completion');
       setLoading(false);
-    });
+    }, MAX_AUTH_LOADING_TIME);
     
-    // Set up auth listener
+    // Set up auth listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event);
+        
+        // Update session and user state
         setSession(session);
         setUser(session?.user ?? null);
         
+        // If we have a valid session and user, fetch the profile
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
+          setTimeout(() => {
+            fetchProfile(session.user!.id);
+          }, 0);
         } else {
           setProfile(null);
         }
@@ -213,8 +232,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
     
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session ? 'Session found' : 'No session');
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        // Use setTimeout to defer the profile fetch to avoid Supabase SDK deadlock
+        setTimeout(() => {
+          fetchProfile(session.user!.id);
+        }, 0);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    }).catch(err => {
+      console.error('Error during initial session check:', err);
+      setLoading(false);
+    });
+    
     return () => {
       subscription.unsubscribe();
+      clearTimeout(loadingTimeout);
     };
   }, []);
 

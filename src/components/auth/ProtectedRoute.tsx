@@ -25,6 +25,8 @@ const ProtectedRoute = () => {
       return;
     }
     
+    console.log("Auth state loaded, user:", !!user, "profile:", !!profile);
+    
     // If there's no user and we haven't attempted redirect yet
     if (!user && !redirectAttempted) {
       console.log("No authenticated user, redirecting to auth");
@@ -56,11 +58,12 @@ const ProtectedRoute = () => {
     }
   }, [user, profile, originalProfile, isImpersonating, loading, location.pathname, navigate]);
   
-  // Show loading state
+  // Enhanced loading state with timeout to prevent infinite loading
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Loading authentication state...</p>
       </div>
     );
   }
