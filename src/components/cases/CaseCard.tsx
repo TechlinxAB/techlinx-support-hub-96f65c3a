@@ -2,11 +2,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Case, CaseCategory, Company, User, useAppContext } from '@/context/AppContext';
-import { cn } from '@/lib/utils';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { useAppContext, Case } from '@/context/AppContext';
+import { Star, AlertTriangle, Clock, CheckCircle, HelpCircle } from 'lucide-react';
+import { useStarredCases } from '@/hooks/useStarredCases';
 
 interface CaseCardProps {
   caseItem: Case;
@@ -14,86 +15,98 @@ interface CaseCardProps {
 
 const CaseCard = ({ caseItem }: CaseCardProps) => {
   const navigate = useNavigate();
-  const { companies, users, categories } = useAppContext();
+  const { users, companies } = useAppContext();
+  const { starredCases, toggleStar } = useStarredCases();
   
-  const company = companies.find((c) => c.id === caseItem.companyId);
-  const user = users.find((u) => u.id === caseItem.userId);
-  const category = categories.find((c) => c.id === caseItem.categoryId);
-  const assignedTo = caseItem.assignedToId 
-    ? users.find((u) => u.id === caseItem.assignedToId) 
-    : undefined;
-    
-  const handleClick = () => {
-    navigate(`/cases/${caseItem.id}`);
-  };
+  // Find the user name
+  const user = users.find(u => u.id === caseItem.userId);
   
-  const getStatusBadgeClass = () => {
-    switch (caseItem.status) {
-      case 'new': return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
-      case 'ongoing': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-      case 'resolved': return 'bg-green-100 text-green-800 hover:bg-green-200';
-      case 'completed': return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
-      default: return '';
+  // Find the company name
+  const company = companies.find(c => c.id === caseItem.companyId);
+  
+  // Status badge color
+  const getBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'new':
+        return <Badge className="bg-green-500">New</Badge>;
+      case 'ongoing':
+        return <Badge className="bg-blue-500">Ongoing</Badge>;
+      case 'resolved':
+        return <Badge className="bg-yellow-500">Awaiting Confirmation</Badge>;
+      case 'completed':
+        return <Badge variant="outline" className="border-green-500 text-green-700">Completed</Badge>;
+      default:
+        return <Badge>Unknown</Badge>;
     }
   };
   
-  const getPriorityBadgeClass = () => {
-    switch (caseItem.priority) {
-      case 'low': return 'bg-green-100 text-green-800 hover:bg-green-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-      case 'high': return 'bg-red-100 text-red-800 hover:bg-red-200';
-      default: return '';
+  // Status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'new':
+        return <AlertTriangle className="h-5 w-5 text-green-500" />;
+      case 'ongoing':
+        return <Clock className="h-5 w-5 text-blue-500" />;
+      case 'resolved':
+        return <CheckCircle className="h-5 w-5 text-yellow-500" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      default:
+        return <HelpCircle className="h-5 w-5" />;
     }
   };
   
-  // Get initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
-  };
-
-  const userInitials = user?.name ? getInitials(user.name) : "?";
+  // Format the date to a relative string (e.g., "2 days ago")
+  const formattedDate = caseItem.updatedAt
+    ? formatDistanceToNow(new Date(caseItem.updatedAt), { addSuffix: true })
+    : '';
+  
+  // Check if this case is starred
+  const isStarred = starredCases.includes(caseItem.id);
   
   return (
-    <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow border-2 border-primary/10 hover:border-primary/30"
-      onClick={handleClick}
-    >
+    <Card>
       <CardHeader className="pb-2">
-        <div className="flex justify-between">
-          <h3 className="text-md font-semibold">{caseItem.title}</h3>
-          <Badge className={cn(getStatusBadgeClass())}>
-            {caseItem.status}
-          </Badge>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              {getStatusIcon(caseItem.status)}
+              {getBadgeVariant(caseItem.status)}
+              {caseItem.priority === 'high' && (
+                <Badge variant="destructive">High Priority</Badge>
+              )}
+            </div>
+            <CardTitle className="text-lg">{caseItem.title}</CardTitle>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 w-8 p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleStar(caseItem.id);
+            }}
+          >
+            <Star className={`h-5 w-5 ${isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+          </Button>
         </div>
       </CardHeader>
-      <CardContent className="pb-2">
-        <p className="text-sm text-muted-foreground line-clamp-2">{caseItem.description}</p>
+      <CardContent className="pb-4">
+        <p className="line-clamp-2 text-muted-foreground">
+          {caseItem.description}
+        </p>
       </CardContent>
-      <CardFooter className="pt-0">
-        <div className="w-full flex flex-col gap-2">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-5 w-5">
-                <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
-              </Avatar>
-              <span>{user?.name || 'Unknown User'}</span>
-            </div>
-            <span>{company?.name || 'Unknown Company'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <Badge variant="outline" className={cn(getPriorityBadgeClass())}>
-              {caseItem.priority}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(caseItem.updatedAt), { addSuffix: true })}
-            </span>
-          </div>
+      <CardFooter className="pt-0 flex justify-between items-center">
+        <div className="text-sm text-muted-foreground">
+          {user?.name} • {company?.name} • {formattedDate}
         </div>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => navigate(`/cases/${caseItem.id}`)}
+        >
+          View Case
+        </Button>
       </CardFooter>
     </Card>
   );

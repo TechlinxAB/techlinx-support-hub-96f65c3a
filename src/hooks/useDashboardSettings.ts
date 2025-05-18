@@ -1,7 +1,8 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardSettings, CompanySettingsRow } from '@/types/dashboardTypes';
+import { useAuth } from '@/context/AuthContext';
 
 const defaultSettings: DashboardSettings = {
   showWelcome: true,
@@ -17,32 +18,89 @@ export const useDashboardSettings = (companyId: string | undefined) => {
   const [settings, setSettings] = useState<DashboardSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const fetchAttemptsRef = useRef(0);
+  const maxAttempts = 3;
+  const { authState } = useAuth();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Only fetch if auth is fully established and user is authenticated
+  const isAuthReady = authState === 'AUTHENTICATED' || authState === 'IMPERSONATING';
 
   useEffect(() => {
-    if (!companyId) {
+    // Reset state when companyId changes or auth state changes
+    setSettings(defaultSettings);
+    setLoading(true);
+    setError(null);
+    fetchAttemptsRef.current = 0;
+    
+    // Abort any in-flight request when unmounting or when dependencies change
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Skip fetch if authentication is not ready or user is not authenticated
+    if (!isAuthReady) {
+      console.log("Skipping dashboard settings fetch - auth not ready:", authState);
+      setLoading(false);
+      return;
+    }
+    
+    // Skip fetch if companyId is invalid
+    if (!companyId || companyId === "undefined" || companyId === "null") {
+      console.log("Skipping dashboard settings fetch - invalid companyId:", companyId);
       setLoading(false);
       return;
     }
     
     const fetchSettings = async () => {
+      if (fetchAttemptsRef.current >= maxAttempts) {
+        console.log(`Max fetch attempts (${maxAttempts}) reached for company settings`);
+        setLoading(false);
+        return;
+      }
+      
+      fetchAttemptsRef.current += 1;
       setLoading(true);
-      setError(null);
       
       try {
-        // Use maybeSingle instead of single to handle the case where no settings exist
-        const { data, error: settingsError } = await supabase
+        console.log(`Fetching company settings for companyId: ${companyId}`);
+        
+        // Create a new AbortController for this request
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+        
+        // Fix: Remove the options from maybeSingle() and use abortSignal on the query builder
+        const query = supabase
           .from('company_settings')
           .select('*')
           .eq('company_id', companyId)
-          .maybeSingle();
+          .abortSignal(signal);
+          
+        // Then call maybeSingle without arguments
+        const { data, error: settingsError } = await query.maybeSingle();
         
         if (settingsError) {
+          // Check if request was aborted
+          if (settingsError.message === 'The operation was aborted' || 
+              settingsError.message?.includes('abort')) {
+            console.log('Settings fetch aborted');
+            return;
+          }
+          
           console.error('Error fetching company settings:', settingsError);
           setError(settingsError instanceof Error ? settingsError : new Error(String(settingsError)));
-          return;
+          
+          // If we get a 401/403, don't retry - this will prevent auth loops
+          if (settingsError.code === '401' || settingsError.code === '403') {
+            console.log('Authorization error fetching settings, using defaults');
+            setLoading(false);
+            return;
+          }
         }
         
         if (data) {
+          console.log('Company settings found, applying to dashboard');
           // Type assertion for the data returned from Supabase
           const settingsRow = data as unknown as CompanySettingsRow;
           setSettings({
@@ -56,18 +114,39 @@ export const useDashboardSettings = (companyId: string | undefined) => {
           });
         } else {
           // If no settings found, use defaults
+          console.log('No company settings found, using defaults');
           setSettings(defaultSettings);
         }
       } catch (err) {
-        console.error('Error in fetching dashboard settings:', err);
+        // Check if the error is due to the request being aborted
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          console.log('Settings fetch aborted');
+          return;
+        }
+        
+        console.error('Exception in fetching dashboard settings:', err);
         setError(err instanceof Error ? err : new Error(String(err)));
+        // Still maintain the default settings
       } finally {
         setLoading(false);
       }
     };
     
-    fetchSettings();
-  }, [companyId]);
+    // Add a small delay before fetching settings to ensure auth is stable
+    const timeoutId = setTimeout(() => {
+      if (isAuthReady) {
+        fetchSettings();
+      }
+    }, 500);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, [companyId, isAuthReady, authState]);
 
   return { settings, loading, error };
 };

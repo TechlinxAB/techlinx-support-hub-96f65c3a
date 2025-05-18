@@ -20,9 +20,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Filter, RefreshCw } from 'lucide-react';
+import { Filter, RefreshCw, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useStarredCases } from '@/hooks/useStarredCases';
+import { useAuth } from '@/context/AuthContext';
 
 interface CaseListProps {
   title?: string;
@@ -30,6 +32,7 @@ interface CaseListProps {
   limit?: number;
   statusFilter?: CaseStatus | 'all';
   searchQuery?: string;
+  watchlistFilter?: boolean;
 }
 
 const CaseList = ({ 
@@ -37,10 +40,13 @@ const CaseList = ({
   showFilters = true, 
   limit, 
   statusFilter = 'all',
-  searchQuery = ''
+  searchQuery = '',
+  watchlistFilter = false
 }: CaseListProps) => {
   const navigate = useNavigate();
   const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
+  const { profile, isImpersonating } = useAuth();
+  const { starredCases, toggleStar } = useStarredCases();
   
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
@@ -54,10 +60,13 @@ const CaseList = ({
     setRefreshing(false);
   };
   
-  // Filter cases based on user role
-  let filteredCases = currentUser?.role === 'consultant' 
-    ? cases 
-    : cases.filter(c => c.userId === currentUser?.id);
+  // Filter cases based on user role and impersonation state
+  let filteredCases = cases;
+  
+  // If user is not a consultant OR is impersonating a non-consultant user
+  if (profile?.role !== 'consultant' || isImpersonating && profile?.role !== 'consultant') {
+    filteredCases = cases.filter(c => c.userId === profile?.id);
+  }
   
   // Apply search filter (either from props or local state)
   const effectiveSearchQuery = searchQuery || localSearchQuery;
@@ -67,6 +76,11 @@ const CaseList = ({
       c.title.toLowerCase().includes(query) || 
       c.description.toLowerCase().includes(query)
     );
+  }
+  
+  // Apply watchlist filter
+  if (watchlistFilter) {
+    filteredCases = filteredCases.filter(c => starredCases.includes(c.id));
   }
   
   // Apply status filter
@@ -208,35 +222,54 @@ const CaseList = ({
                 <TableHead>User</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead className="w-[50px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredCases.map((caseItem) => {
-                const user = currentUser?.role === 'consultant'
+                const user = profile?.role === 'consultant' && !isImpersonating
                   ? companies.find(c => c.id === caseItem.userId)?.name
                   : null;
                 const company = companies.find(c => c.id === caseItem.companyId)?.name;
+                const isStarred = starredCases.includes(caseItem.id);
                 
                 return (
                   <TableRow 
                     key={caseItem.id}
-                    onClick={() => navigate(`/cases/${caseItem.id}`)}
                     className="cursor-pointer hover:bg-muted"
                   >
-                    <TableCell className="font-medium">{caseItem.title}</TableCell>
-                    <TableCell>
+                    <TableCell 
+                      className="font-medium"
+                      onClick={() => navigate(`/cases/${caseItem.id}`)}
+                    >
+                      {caseItem.title}
+                    </TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <Badge variant="outline" className={cn("status-badge", getStatusBadgeClass(caseItem.status))}>
                         {caseItem.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass(caseItem.priority))}>
                         {caseItem.priority}
                       </Badge>
                     </TableCell>
-                    <TableCell>{user || currentUser?.name}</TableCell>
-                    <TableCell>{company}</TableCell>
-                    <TableCell>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{user || currentUser?.name}</TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{company}</TableCell>
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleStar(caseItem.id);
+                        }}
+                      >
+                        <Star className={`h-5 w-5 ${isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}

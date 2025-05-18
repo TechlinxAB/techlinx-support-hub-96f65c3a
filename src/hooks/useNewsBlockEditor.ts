@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
@@ -25,13 +24,14 @@ export const useNewsBlockEditor = (
   // Track manual save in progress
   const manualSaveInProgress = useRef(false);
   const lastAutoSaveAttempt = useRef<number>(0);
-  const AUTO_SAVE_THROTTLE = 5000; // Increased to 5 seconds between auto-save attempts
+  const AUTO_SAVE_THROTTLE = 8000; // Increased to 8 seconds between auto-save attempts
   
   // Track if we've shown an error toast for the current operation
   const errorToastShown = useRef(false);
+  const toastIdRef = useRef<string | number | null>(null);
 
   // Get the save function from our optimized hook
-  const { saving, debouncedSave, saveNewsBlock, isSaving } = useOptimizedNewsBlockSave();
+  const { saving, debouncedSave, saveNewsBlock, isSaving, cancelPendingSave } = useOptimizedNewsBlockSave();
 
   // Selected block
   const selectedBlock = blocks.find(block => block.id === selectedBlockId);
@@ -72,7 +72,15 @@ export const useNewsBlockEditor = (
           ]
         };
       case 'image':
-        return { url: '', alt: 'Image description', caption: '' };
+        return { 
+          url: '', 
+          alt: 'Image description', 
+          caption: '',
+          width: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          aspectRatio: '16/9'
+        };
       case 'notice':
         return { 
           type: 'info', 
@@ -84,8 +92,29 @@ export const useNewsBlockEditor = (
     }
   };
 
+  // Clear pending saves when switching blocks or unmounting
+  const clearPendingSaves = () => {
+    if (selectedBlockId) {
+      cancelPendingSave(selectedBlockId);
+    }
+    
+    // Clear any active toasts
+    if (toastIdRef.current) {
+      toast.dismiss(toastIdRef.current);
+      toastIdRef.current = null;
+    }
+  };
+
+  // Clean up pending operations when component unmounts
+  useEffect(() => {
+    return () => clearPendingSaves();
+  }, []);
+
   // Initialize edited block data when selection changes
   useEffect(() => {
+    // Clear pending saves from previous block
+    clearPendingSaves();
+    
     if (selectedBlock && selectedBlockId !== initialSelectedBlockId) {
       // Initialize with default content based on block type if content is undefined
       const defaultContent = getDefaultContent(selectedBlock.type);
@@ -186,6 +215,9 @@ export const useNewsBlockEditor = (
     if (!selectedBlockId || !selectedBlock || !hasUnsavedChanges) return;
     if (manualSaveInProgress.current) return;
     
+    // Clear any previous pending auto-saves
+    cancelPendingSave(selectedBlockId);
+    
     manualSaveInProgress.current = true;
     setLocalSaving(true);
     errorToastShown.current = false;
@@ -200,6 +232,7 @@ export const useNewsBlockEditor = (
     }
     
     try {
+      // Save without relying on the toastIdRef
       await saveNewsBlock(
         selectedBlockId, 
         {
@@ -207,15 +240,18 @@ export const useNewsBlockEditor = (
           content: editedBlockData.content
         }, 
         {
-          showToast: true,
+          showToast: true, // Let the save function handle toast management
           onStart: () => {
             setLocalSaving(true);
+            console.log("Save operation started");
           },
           onSuccess: () => {
             setHasUnsavedChanges(false);
             options?.onSaveSuccess?.();
+            console.log("Save operation completed successfully");
           },
           onError: (error) => {
+            console.error("Save operation failed:", error);
             options?.onSaveError?.(error);
           }
         }
@@ -225,8 +261,10 @@ export const useNewsBlockEditor = (
       
       // Only show the error toast if we haven't shown one already
       if (!errorToastShown.current) {
-        toast("Could not save changes", { 
-          description: "Please try again"
+        toast({
+          title: "Could not save changes", 
+          description: "Please try again",
+          variant: "destructive"
         });
         errorToastShown.current = true;
       }
@@ -259,13 +297,18 @@ export const useNewsBlockEditor = (
         });
       }
       
+      console.log("Auto-save scheduled...");
+      
+      // Cancel any previous pending auto-saves
+      cancelPendingSave(selectedBlockId);
+      
       const cleanup = debouncedSave(
         selectedBlockId, 
         {
           title: editedBlockData.title,
           content: editedBlockData.content
         },
-        3000, // Increased debounce time to reduce save frequency
+        4000, // Increased debounce time to reduce save frequency
         {
           showToast: false, // Don't show toast for auto-saves
           onStart: () => {
@@ -281,8 +324,9 @@ export const useNewsBlockEditor = (
             
             // Only show an error toast once per auto-save operation
             if (!errorToastShown.current) {
-              toast("Auto-save failed", {
-                description: error.message || "Changes will be saved when connection is restored",
+              toast({
+                title: "Auto-save failed", 
+                description: "Changes will be saved when connection is restored",
                 variant: "destructive"
               });
               errorToastShown.current = true;
@@ -295,7 +339,7 @@ export const useNewsBlockEditor = (
       
       return cleanup;
     }
-  }, [editedBlockData, hasUnsavedChanges, selectedBlockId, debouncedSave, options]);
+  }, [editedBlockData, hasUnsavedChanges, selectedBlockId, debouncedSave, options, cancelPendingSave]);
 
   return {
     selectedBlockId,
@@ -309,6 +353,7 @@ export const useNewsBlockEditor = (
     handleFormChange,
     handleNestedContentChange,
     saveCurrentBlock,
-    getDefaultContent
+    getDefaultContent,
+    clearPendingSaves
   };
 };
