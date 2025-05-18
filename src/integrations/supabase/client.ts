@@ -57,6 +57,9 @@ const createFallbackStorage = () => {
   };
 };
 
+// Storage key used by Supabase SDK
+const STORAGE_KEY = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
+
 // Create and export the supabase client with proper typing
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
@@ -102,6 +105,32 @@ export const resetAuthState = async () => {
   } catch (error) {
     console.error('Error resetting auth state:', error);
     return { success: false, error };
+  }
+};
+
+// Enhanced signOut function that ensures local storage is cleared
+export const forceSignOut = async () => {
+  try {
+    // Attempt normal signout first
+    await supabase.auth.signOut();
+    return { success: true };
+  } catch (error) {
+    console.error('Error during normal signout, forcing local cleanup:', error);
+    
+    try {
+      // Force remove the token from storage directly
+      localStorage.removeItem(STORAGE_KEY);
+      
+      // Also try the storage from the client
+      const storage = createFallbackStorage();
+      storage.removeItem(STORAGE_KEY);
+      
+      // Report success even though the server call failed
+      return { success: true, wasForced: true };
+    } catch (cleanupError) {
+      console.error('Failed to force clean up auth state:', cleanupError);
+      return { success: false, error: cleanupError };
+    }
   }
 };
 

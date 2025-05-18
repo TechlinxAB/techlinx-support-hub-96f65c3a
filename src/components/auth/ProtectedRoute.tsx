@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { forceSignOut } from '@/integrations/supabase/client'; 
 
 const ProtectedRoute = () => {
   const { user, profile, loading, isImpersonating, originalProfile, resetAuth } = useAuth();
@@ -13,6 +14,7 @@ const ProtectedRoute = () => {
   const [redirectAttempted, setRedirectAttempted] = useState(false);
   const [authResetAttempted, setAuthResetAttempted] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [navigationCount, setNavigationCount] = useState(0);
   
   // Set a loading timeout to prevent infinite loading states
   useEffect(() => {
@@ -26,8 +28,20 @@ const ProtectedRoute = () => {
     
     return undefined;
   }, [loading]);
+
+  // Handle navigation loops - detect if we're looping too much
+  useEffect(() => {
+    // Reset the counter if we stay on the same route for a bit
+    const resetCountTimer = setTimeout(() => {
+      if (navigationCount > 0) {
+        setNavigationCount(0);
+      }
+    }, 5000);
+
+    return () => clearTimeout(resetCountTimer);
+  }, [navigationCount]);
   
-  // Handle authentication redirects
+  // Handle authentication redirects with loop detection
   useEffect(() => {
     // Skip auth check if we're already on the auth page
     if (location.pathname === '/auth') {
@@ -38,6 +52,26 @@ const ProtectedRoute = () => {
     // Wait until auth state is fully loaded
     if (loading && !loadingTimeout) {
       console.log("Auth state is still loading...");
+      return;
+    }
+
+    // Increment navigation count to detect potential loops
+    setNavigationCount(prev => prev + 1);
+    
+    // If we've redirected too many times, something is wrong
+    if (navigationCount > 5) {
+      console.error("Too many navigation attempts detected. Possible redirect loop.");
+      toast.error("Navigation loop detected", {
+        description: "Attempting to recover by resetting authentication state"
+      });
+      
+      // Force sign out and reset auth state when a loop is detected
+      forceSignOut().then(() => {
+        window.location.href = '/auth';
+      }).catch(err => {
+        console.error("Critical error during force sign out:", err);
+      });
+      
       return;
     }
     
@@ -57,7 +91,7 @@ const ProtectedRoute = () => {
         setRedirectAttempted(false);
       }
     }
-  }, [user, profile, loading, loadingTimeout, navigate, location.pathname, redirectAttempted]);
+  }, [user, profile, loading, loadingTimeout, navigate, location.pathname, redirectAttempted, navigationCount]);
   
   // Check if the path requires a consultant role
   useEffect(() => {
@@ -84,7 +118,22 @@ const ProtectedRoute = () => {
   // Function to handle auth reset if user is stuck
   const handleResetAuth = async () => {
     setAuthResetAttempted(true);
-    await resetAuth();
+    
+    try {
+      // Try the forced signout first as it's more reliable
+      await forceSignOut();
+      
+      // Then do the full reset
+      await resetAuth();
+    } catch (error) {
+      console.error("Critical error during auth reset:", error);
+      toast.error("Failed to reset auth state. Please try refreshing your browser.");
+      
+      // Last resort: direct the user to refresh
+      setTimeout(() => {
+        window.location.href = '/auth';
+      }, 1500);
+    }
   };
   
   // Enhanced loading state with timeout to prevent infinite loading

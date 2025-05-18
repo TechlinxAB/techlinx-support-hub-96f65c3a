@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { supabase, resetAuthState } from '@/integrations/supabase/client';
+import { supabase, resetAuthState, forceSignOut } from '@/integrations/supabase/client';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -128,10 +129,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Sign out
+  // Sign out - Enhanced with fallbacks
   const signOut = async () => {
     try {
+      console.log('Attempting to sign out');
+      
+      // First try the normal sign out
       await supabase.auth.signOut();
+      
+      // Reset local state regardless of the API call result
       setUser(null);
       setSession(null);
       setProfile(null);
@@ -139,8 +145,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setOriginalProfile(null);
       setImpersonatedProfile(null);
       setProfileLoaded(false);
+      
+      console.log('Sign out completed and state reset');
     } catch (err) {
-      console.error('Error signing out:', err);
+      console.error('Error during normal sign out:', err);
+      
+      // Even if the normal signout fails, reset state and use the force method
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setIsImpersonating(false);
+      setOriginalProfile(null);
+      setImpersonatedProfile(null);
+      setProfileLoaded(false);
+      
+      try {
+        // Last resort: force sign out that directly cleans localStorage
+        const result = await forceSignOut();
+        if (result.success) {
+          console.log('Forced sign out succeeded after normal sign out failed');
+        } else {
+          throw new Error('Both normal and forced sign out failed');
+        }
+      } catch (forceErr) {
+        console.error('Critical error: Even forced sign out failed:', forceErr);
+        throw forceErr;
+      }
     }
   };
 
