@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -17,12 +17,7 @@ const AuthPage = () => {
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { status, resetAuthState } = useAuth();
-  
-  // Refs to prevent redirect loops
-  const isRedirecting = useRef<boolean>(false);
-  const lastRedirect = useRef<number>(0);
-  const redirectAttempts = useRef<number>(0);
+  const { status } = useAuth();
   
   // Get return URL from query params
   const getReturnUrl = () => {
@@ -30,67 +25,14 @@ const AuthPage = () => {
     return returnUrl ? decodeURIComponent(returnUrl) : '/';
   };
   
-  // Redirect authenticated users away from login page - with better controls
+  // Redirect authenticated users away from login page
   useEffect(() => {
-    // Prevent excessive redirects
-    if (redirectAttempts.current > 5) {
-      console.error("Too many redirect attempts from auth page. Stopping redirect cycle.");
-      // Emergency reset of auth state if we're in a loop
-      resetAuthState();
-      return;
-    }
-    
-    // Skip if loading or already redirecting
-    if (status === 'LOADING' || isRedirecting.current) {
-      return;
-    }
-    
-    // Add cooldown between redirect attempts
-    const now = Date.now();
-    if (now - lastRedirect.current < 3000) {
-      return;
-    }
-    
-    // Only redirect if authenticated
     if (status === 'AUTHENTICATED') {
       console.log("User authenticated, redirecting away from auth page");
-      isRedirecting.current = true;
-      lastRedirect.current = now;
-      redirectAttempts.current += 1;
-      
       const returnUrl = getReturnUrl();
       navigate(returnUrl, { replace: true });
-      
-      // Reset redirect flag after a delay
-      setTimeout(() => {
-        isRedirecting.current = false;
-      }, 2000);
     }
-  }, [status, navigate, resetAuthState]);
-  
-  // Reset redirect attempts when component unmounts
-  useEffect(() => {
-    return () => {
-      redirectAttempts.current = 0;
-    };
-  }, []);
-  
-  // Handle errors more explicitly
-  const handleError = (error: any) => {
-    console.error("Sign in error:", error);
-    
-    // Specific error handling for common issues
-    if (error.message?.includes('Email not confirmed')) {
-      setErrorMessage("Please confirm your email address before signing in.");
-      toast.error("Please confirm your email before signing in");
-    } else if (error.message?.includes('Invalid login credentials')) {
-      setErrorMessage("Invalid email or password");
-      toast.error("Invalid email or password");
-    } else {
-      setErrorMessage(error.message || "Failed to sign in");
-      toast.error(error.message || "Failed to sign in");
-    }
-  };
+  }, [status, navigate]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,9 +49,6 @@ const AuthPage = () => {
     try {
       console.log(`Attempting to sign in with email: ${email}`);
       
-      // Add a small delay to prevent race conditions
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -124,20 +63,23 @@ const AuthPage = () => {
       setEmail('');
       setPassword('');
       
-      // Reset redirect attempts on successful login
-      redirectAttempts.current = 0;
-      
-      // Auth state change will handle redirect automatically
+      // Redirect will be handled by the effect
     } catch (error: any) {
-      handleError(error);
+      console.error("Sign in error:", error);
+      
+      if (error.message?.includes('Email not confirmed')) {
+        setErrorMessage("Please confirm your email address before signing in.");
+        toast.error("Please confirm your email before signing in");
+      } else if (error.message?.includes('Invalid login credentials')) {
+        setErrorMessage("Invalid email or password");
+        toast.error("Invalid email or password");
+      } else {
+        setErrorMessage(error.message || "Failed to sign in");
+        toast.error(error.message || "Failed to sign in");
+      }
     } finally {
       setLoading(false);
     }
-  };
-  
-  const handleResetAuthState = () => {
-    resetAuthState();
-    toast.info("Authentication state reset");
   };
   
   return (
@@ -165,7 +107,7 @@ const AuthPage = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={loading || status === 'LOADING'}
+                disabled={loading}
               />
             </div>
             
@@ -180,19 +122,15 @@ const AuthPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={loading || status === 'LOADING'}
+                disabled={loading}
               />
             </div>
           </CardContent>
           
           <CardFooter className="flex flex-col space-y-3">
             <Button type="submit" className="w-full" disabled={loading || status === 'LOADING'}>
-              {(loading || status === 'LOADING') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
-            </Button>
-            
-            <Button type="button" variant="outline" className="w-full" onClick={handleResetAuthState}>
-              Reset Auth State
             </Button>
           </CardFooter>
         </form>

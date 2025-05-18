@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { status, user } = useAuth();
+  const { status } = useAuth();
   
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -37,7 +37,6 @@ const Index = () => {
         );
       
       case 'UNAUTHENTICATED':
-      case 'ERROR':
       default:
         return (
           <div className="pt-4">

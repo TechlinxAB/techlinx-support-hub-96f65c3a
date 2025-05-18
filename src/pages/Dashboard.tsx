@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
@@ -12,37 +12,16 @@ const Dashboard = () => {
   const { profile, user, status } = useAuth();
   const { loadStarredCases } = useStarredCases();
   
-  // Refs to prevent duplicate loading
-  const loadingStarted = useRef(false);
-  const loadingComplete = useRef(false);
-  
-  // Load starred cases on component mount when authenticated
+  // Load starred cases when authenticated
   useEffect(() => {
-    // Skip if already loading or complete
-    if (loadingStarted.current) return;
-    
-    // Only proceed if fully authenticated and user exists
+    // Only proceed if user is authenticated
     if (status === 'AUTHENTICATED' && user) {
-      // Mark loading as started
-      loadingStarted.current = true;
-      
       console.log("Dashboard: Loading starred cases for authenticated user");
-      
-      // Add a small delay to avoid potential race conditions
-      const timer = setTimeout(() => {
-        try {
-          loadStarredCases();
-          loadingComplete.current = true;
-        } catch (error) {
-          console.error("Error loading starred cases:", error);
-        }
-      }, 300);
-      
-      return () => clearTimeout(timer);
+      loadStarredCases();
     }
   }, [loadStarredCases, user, status]);
   
-  // Show a loading state if authenticated but profile is not available yet
+  // Show loading while waiting for profile data
   if (status === 'AUTHENTICATED' && !profile) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
@@ -54,7 +33,7 @@ const Dashboard = () => {
     );
   }
   
-  // Show loading if we're still in the initial loading state
+  // Show loading during initial auth check
   if (status === 'LOADING') {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
@@ -66,8 +45,7 @@ const Dashboard = () => {
     );
   }
   
-  // If not authenticated, this should never render due to ProtectedRoute,
-  // but adding a safety check anyway
+  // Safety check to prevent rendering without auth
   if (status !== 'AUTHENTICATED') {
     return null;
   }
