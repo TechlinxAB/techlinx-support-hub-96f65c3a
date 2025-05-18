@@ -13,7 +13,10 @@ export const isConsultant = async (): Promise<boolean> => {
     // Get the current session
     const { data: { session } } = await supabase.auth.getSession();
     
-    if (!session) return false;
+    if (!session) {
+      console.log("No session found in isConsultant check");
+      return false;
+    }
     
     // Query the profiles table to check if the user has a consultant role
     const { data, error } = await supabase
@@ -43,11 +46,17 @@ export const hasCompanyAccess = async (companyId: string): Promise<boolean> => {
     // Get the current session
     const { data: { session } } = await supabase.auth.getSession();
     
-    if (!session) return false;
+    if (!session) {
+      console.log("No session found in hasCompanyAccess check");
+      return false;
+    }
     
     // First, check if the user is a consultant (consultants have access to all companies)
     const isUserConsultant = await isConsultant();
-    if (isUserConsultant) return true;
+    if (isUserConsultant) {
+      console.log("User is a consultant, granting access");
+      return true;
+    }
     
     // If not a consultant, check if the user belongs to the company
     const { data, error } = await supabase
@@ -61,7 +70,10 @@ export const hasCompanyAccess = async (companyId: string): Promise<boolean> => {
       return false;
     }
     
-    return data?.company_id === companyId;
+    const hasAccess = data?.company_id === companyId;
+    console.log(`User company access check: user's company=${data?.company_id}, requested company=${companyId}, access granted: ${hasAccess}`);
+    
+    return hasAccess;
   } catch (err) {
     console.error('Error in hasCompanyAccess check:', err);
     return false;

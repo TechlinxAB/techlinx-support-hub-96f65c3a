@@ -49,9 +49,6 @@ const createFallbackStorage = () => {
   };
 };
 
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
-
 // Create and export the supabase client with proper typing
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
@@ -61,30 +58,14 @@ export const supabase = createClient<Database>(
       storage: createFallbackStorage(),
       persistSession: true,
       autoRefreshToken: true,
-      // Reduce debug level to avoid console noise
-      debug: true // Enable debug temporarily to troubleshoot auth issues
+      debug: false // Disable debug for production
     },
     global: {
+      // NEVER use credentials: 'include' with fetch as it causes CORS issues
+      // Instead properly pass authentication via headers
       headers: {
         'apikey': SUPABASE_PUBLISHABLE_KEY,
         'Content-Type': 'application/json'
-      },
-      // Update fetch parameters for CORS and authentication
-      fetch: (url, options = {}) => {
-        // Properly type the options object to include headers property
-        const fetchOptions = options as { headers?: Record<string, string> };
-        const headers = fetchOptions.headers || {};
-        
-        return fetch(url, {
-          ...options,
-          credentials: 'include', // Include credentials in the request
-          headers: {
-            ...headers,
-            'apikey': SUPABASE_PUBLISHABLE_KEY,
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        });
       }
     }
   }
