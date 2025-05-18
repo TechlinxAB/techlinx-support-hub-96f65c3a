@@ -157,10 +157,18 @@ const CompanyDashboardBuilderPage = () => {
     }
   };
   
-  // Modified function to directly use Supabase to save block with proper headers
+  // Modified function to directly use Supabase to save block with proper headers and authentication
   const handleSaveBlock = async () => {
     try {
       const toastId = toast.loading("Saving dashboard block...");
+      
+      // Get the current session to ensure we're authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("You must be logged in to save dashboard blocks", { id: toastId });
+        return;
+      }
       
       // Extract the block title and showTitle from formData
       const blockTitle = formData.blockTitle || `New ${selectedBlockType}`;
@@ -174,6 +182,9 @@ const CompanyDashboardBuilderPage = () => {
         ...contentData,
         showTitle: showTitle
       };
+      
+      console.log("Current user ID:", session.user.id);
+      console.log("Using profile ID:", profile?.id || "No profile ID available");
       
       if (editingBlock) {
         // Update existing block
@@ -189,6 +200,8 @@ const CompanyDashboardBuilderPage = () => {
         
         if (error) {
           console.error("Supabase update error details:", error);
+          console.error("Error code:", error.code);
+          console.error("Error message:", error.message);
           throw error;
         }
         
@@ -200,6 +213,12 @@ const CompanyDashboardBuilderPage = () => {
           ? Math.max(...sortedBlocks.map(b => b.position)) + 1
           : 0;
         
+        // Make sure we're using the authenticated user ID
+        const userId = session.user.id;
+        
+        console.log("Creating new block with company ID:", companyId);
+        console.log("Creating new block with user ID:", userId);
+        
         // Make sure we're sending the correct data structure to match the table schema
         const { error, data } = await supabase
           .from('dashboard_blocks')
@@ -209,7 +228,7 @@ const CompanyDashboardBuilderPage = () => {
             content: finalContentData,
             type: selectedBlockType,
             position: maxPosition,
-            created_by: currentUser?.id || profile?.id || 'unknown'
+            created_by: userId // Use the authenticated user's ID
           })
           .select();
         
