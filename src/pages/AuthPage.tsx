@@ -17,7 +17,7 @@ const AuthPage = () => {
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { status, debug } = useAuth();
+  const { status } = useAuth();
   const redirectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   
   // Get return URL from query params or default to home
@@ -130,16 +130,9 @@ const AuthPage = () => {
                 disabled={loading}
               />
             </div>
-            
-            {/* Add debug info for development purposes */}
-            <div className="text-xs text-muted-foreground border-t border-border pt-2 space-y-1">
-              <div>Auth Status: {status}</div>
-              <div>Last Event: {debug.lastEvent || 'none'} {debug.lastEventTime ? `at ${debug.lastEventTime.toLocaleTimeString()}` : ''}</div>
-              <div>Session Check: {debug.sessionCheck ? 'Completed' : 'Pending'}</div>
-            </div>
           </CardContent>
           
-          <CardFooter className="flex flex-col space-y-3">
+          <CardFooter>
             <Button 
               type="submit" 
               className="w-full" 
@@ -150,12 +143,6 @@ const AuthPage = () => {
             </Button>
           </CardFooter>
         </form>
-        
-        <CardFooter className="flex flex-col space-y-2 border-t border-border pt-4">
-          <p className="text-sm text-muted-foreground text-center">
-            New users must be created by an administrator through the User Management page.
-          </p>
-        </CardFooter>
       </Card>
     </div>
   );
