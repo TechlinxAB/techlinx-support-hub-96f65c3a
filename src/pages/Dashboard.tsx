@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
@@ -12,9 +12,14 @@ const Dashboard = () => {
   const { loadStarredCases } = useStarredCases();
   
   // Load starred cases on component mount when authenticated
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
-      loadStarredCases();
+      // Add a small delay to avoid potential race conditions
+      const timer = setTimeout(() => {
+        loadStarredCases();
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [loadStarredCases, user]);
   

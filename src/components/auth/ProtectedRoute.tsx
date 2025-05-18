@@ -1,24 +1,21 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Simple static state to prevent multiple redirects
-const REDIRECT_STATE = {
-  redirecting: false,
-  lastRedirectTime: 0,
-  redirectCooldown: 5000, // Much longer cooldown to prevent any chance of loops
-  toastShown: false
-};
 
 const ProtectedRoute = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Main auth protection logic
+  // Refs for tracking redirect state
+  const isRedirecting = useRef(false);
+  const toastShown = useRef(false);
+  const lastAttempt = useRef(0);
+  
+  // Main auth protection logic - simplified to rely on AuthContext
   useEffect(() => {
     // Skip if still loading auth state
     if (loading) return;
@@ -26,24 +23,21 @@ const ProtectedRoute = () => {
     // Skip if we're already at the auth page
     if (location.pathname === '/auth') return;
     
-    // Skip if already redirecting
-    if (REDIRECT_STATE.redirecting) return;
+    // Skip if already redirecting or recently tried
+    if (isRedirecting.current) return;
+    if (Date.now() - lastAttempt.current < 3000) return;
     
     // Not authenticated - redirect to auth
     if (!user) {
-      // Apply long cooldown to prevent rapid redirects
-      const now = Date.now();
-      if (now - REDIRECT_STATE.lastRedirectTime < REDIRECT_STATE.redirectCooldown) return;
-      
-      REDIRECT_STATE.lastRedirectTime = now;
-      REDIRECT_STATE.redirecting = true;
+      lastAttempt.current = Date.now();
+      isRedirecting.current = true;
       
       console.log("No authenticated user, redirecting to auth");
       
-      // Show toast only once 
-      if (!REDIRECT_STATE.toastShown) {
+      // Show toast only once per session
+      if (!toastShown.current) {
         toast.error("Please sign in to continue");
-        REDIRECT_STATE.toastShown = true;
+        toastShown.current = true;
       }
       
       // Navigate to auth
@@ -51,11 +45,11 @@ const ProtectedRoute = () => {
       
       // Reset redirect flag after a delay
       setTimeout(() => {
-        REDIRECT_STATE.redirecting = false;
+        isRedirecting.current = false;
       }, 1000);
     } else {
       // Reset toast shown flag when authenticated
-      REDIRECT_STATE.toastShown = false;
+      toastShown.current = false;
     }
   }, [user, loading, location.pathname, navigate]);
   

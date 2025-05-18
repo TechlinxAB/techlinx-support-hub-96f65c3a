@@ -6,6 +6,39 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhb2VhYmh0YnlueWZ6eWZ6b2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQzNzksImV4cCI6MjA2MjEwMDM3OX0.hqJiwG2IQindO2LVBg4Rhn42FvcuZGAAzr8qDMhFBTQ";
 
+// Define a stable storage mechanism that works across contexts
+const getStorageProvider = () => {
+  if (typeof window === 'undefined') {
+    return undefined; // No storage in SSR context
+  }
+  
+  // Use localStorage with a fallback mechanism
+  return {
+    getItem: (key: string) => {
+      try {
+        return window.localStorage.getItem(key);
+      } catch (error) {
+        console.error('Error accessing localStorage:', error);
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch (error) {
+        console.error('Error writing to localStorage:', error);
+      }
+    },
+    removeItem: (key: string) => {
+      try {
+        window.localStorage.removeItem(key);
+      } catch (error) {
+        console.error('Error removing from localStorage:', error);
+      }
+    }
+  };
+};
+
 // Create and export the supabase client with proper typing
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
@@ -13,15 +46,14 @@ export const supabase = createClient<Database>(
   {
     auth: {
       persistSession: true,
-      // Use localStorage for session persistence
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      storage: getStorageProvider(),
       autoRefreshToken: true,
-      detectSessionInUrl: false, // Disable auto URL detection to prevent redirects
+      detectSessionInUrl: false,
     }
   }
 );
 
-// Only cache the session state if needed by another utility
+// Simplified session checking with better error handling
 export const hasValidSession = async () => {
   try {
     const { data, error } = await supabase.auth.getSession();
@@ -31,15 +63,14 @@ export const hasValidSession = async () => {
       return false;
     }
     
-    const isValid = !!data?.session;
-    return isValid;
+    return !!data?.session;
   } catch (err) {
     console.error("Failed to check session:", err);
     return false;
   }
 };
 
-// Helper to check if auth is ready
+// Helper to check if auth is ready - more reliable now
 export const isAuthReady = () => {
-  return typeof window !== 'undefined' && window.localStorage;
+  return typeof window !== 'undefined';
 };

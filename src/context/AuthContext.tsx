@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useEffect, useContext, ReactNode, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useRef, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -8,38 +8,58 @@ import { toast } from 'sonner';
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  profile: any | null;
+  profile: any | null; 
   loading: boolean;
   signOut: () => Promise<void>;
 }
 
-// Create the context with undefined as default
+// Create the context with default undefined
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Static auth state tracker - kept outside of component to prevent re-renders
-const AUTH_STATE = {
-  initialized: false,
-  initializing: false,
-  lastAuthAction: 0,
-  debounceTime: 5000, // Much longer debounce to prevent any rapid auth state changes
+// Auth state constants to prevent rapid state changes
+const AUTH_CONFIG = {
+  debounceTime: 2000,        // Time to wait between processing auth state changes
+  profileCacheTime: 60000,   // Cache profile data for 1 minute
+  maxRetryAttempts: 3,       // Max retries for profile fetch
+  retryDelay: 1000,          // Time between retries
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Main state
+  // Core state
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   
-  // Refs for cleanup and state tracking
-  const isMounted = useRef(true);
-  const authListenerUnsubscribe = useRef<(() => void) | null>(null);
-  const profileFetchAttempt = useRef<Record<string, boolean>>({});
+  // Refs for tracking state across renders
+  const isMounted = useRef<boolean>(true);
+  const authInitialized = useRef<boolean>(false);
+  const lastAuthAction = useRef<number>(0);
+  const authSubscription = useRef<{ unsubscribe: () => void } | null>(null);
+  const profileCache = useRef<Record<string, {data: any, timestamp: number}>>({});
+  const profileFetchAttempts = useRef<Record<string, number>>({});
   
-  // Fetch user profile - now simplified
-  const fetchUserProfile = async (userId: string) => {
-    if (profileFetchAttempt.current[userId]) return;
-    profileFetchAttempt.current[userId] = true;
+  // Profile fetching with caching and retry logic
+  const fetchUserProfile = useCallback(async (userId: string) => {
+    // Skip if component unmounted
+    if (!isMounted.current) return;
+    
+    // Check cache first
+    const cache = profileCache.current[userId];
+    if (cache && (Date.now() - cache.timestamp) < AUTH_CONFIG.profileCacheTime) {
+      console.log("Using cached profile for user:", userId);
+      setProfile(cache.data);
+      return;
+    }
+    
+    // Track fetch attempts
+    const attempts = profileFetchAttempts.current[userId] || 0;
+    if (attempts >= AUTH_CONFIG.maxRetryAttempts) {
+      console.warn(`Max profile fetch attempts reached for user ${userId}`);
+      return;
+    }
+    
+    profileFetchAttempts.current[userId] = attempts + 1;
     
     try {
       console.log("Fetching profile for user:", userId);
@@ -51,36 +71,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle();
       
       if (error) {
-        console.error("Error fetching user profile:", error.message);
+        console.error("Error fetching profile:", error.message);
+        
+        // Retry with exponential backoff
+        const retryDelay = AUTH_CONFIG.retryDelay * Math.pow(2, attempts);
+        setTimeout(() => {
+          if (isMounted.current) fetchUserProfile(userId);
+        }, retryDelay);
+        
         return;
       }
       
       if (data && isMounted.current) {
         console.log("Profile data retrieved successfully");
         setProfile(data);
+        
+        // Update cache
+        profileCache.current[userId] = {
+          data,
+          timestamp: Date.now()
+        };
+        
+        // Reset attempts counter on success
+        profileFetchAttempts.current[userId] = 0;
       }
     } catch (error: any) {
       console.error('Error fetching user profile:', error.message);
     }
-  };
+  }, []);
   
-  // Set user info with proper debouncing
-  const updateAuthState = (newSession: Session | null) => {
+  // Safe state updater with debouncing
+  const updateAuthState = useCallback((newSession: Session | null) => {
     if (!isMounted.current) return;
     
     const now = Date.now();
-    if (now - AUTH_STATE.lastAuthAction < AUTH_STATE.debounceTime) {
-      return; // Skip if too soon after last update
+    if (now - lastAuthAction.current < AUTH_CONFIG.debounceTime) {
+      console.log("Debouncing auth state update");
+      return;
     }
-    
-    AUTH_STATE.lastAuthAction = now;
+    lastAuthAction.current = now;
     
     if (newSession?.user) {
       console.log("Setting authenticated user state:", newSession.user.id);
       setSession(newSession);
       setUser(newSession.user);
       
-      // Fetch profile with a slight delay to avoid auth deadlocks
+      // Fetch profile with slight delay to avoid auth deadlocks
       setTimeout(() => {
         if (isMounted.current && newSession.user) {
           fetchUserProfile(newSession.user.id);
@@ -92,35 +128,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setProfile(null);
     }
-  };
+  }, [fetchUserProfile]);
   
-  // Initialize authentication once only
+  // Initialize auth once - critical for preventing loops
   useEffect(() => {
-    // Set mounted flag
     isMounted.current = true;
     
-    const initAuth = async () => {
-      // Prevent multiple initializations
-      if (AUTH_STATE.initializing || AUTH_STATE.initialized) {
+    const initializeAuth = async () => {
+      // Only initialize once
+      if (authInitialized.current) {
+        console.log("Auth already initialized, skipping");
         return;
       }
       
-      AUTH_STATE.initializing = true;
       console.log("Initializing auth state");
+      authInitialized.current = true;
       
       try {
-        // First set up the auth change listener
-        const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
+        // First set up auth listener to catch any changes
+        const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
           if (!isMounted.current) return;
           
           console.log(`Auth state changed: ${event} for user ${newSession?.user?.id || 'null'}`);
           
           if (event === 'SIGNED_OUT') {
-            // Handle sign out
             setSession(null);
             setUser(null);
             setProfile(null);
-            profileFetchAttempt.current = {};
+            profileCache.current = {};
+            profileFetchAttempts.current = {};
             return;
           }
           
@@ -128,10 +164,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           updateAuthState(newSession);
         });
         
-        // Store unsubscribe function
-        authListenerUnsubscribe.current = authListener.subscription.unsubscribe;
+        // Store subscription for cleanup
+        authSubscription.current = listener.subscription;
         
-        // Check for existing session
+        // Now check for existing session AFTER setting up listener
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -151,66 +187,67 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(null);
         setUser(null);
       } finally {
+        // Always finish loading state once auth is initialized
         if (isMounted.current) {
           setLoading(false);
-          AUTH_STATE.initializing = false;
-          AUTH_STATE.initialized = true;
         }
       }
     };
     
-    initAuth();
+    // Start auth initialization
+    initializeAuth();
     
-    // Cleanup on unmount
+    // Cleanup
     return () => {
       isMounted.current = false;
       
-      if (authListenerUnsubscribe.current) {
+      // Unsubscribe from auth changes
+      if (authSubscription.current) {
         console.log("Cleaning up auth subscription");
-        authListenerUnsubscribe.current();
-        authListenerUnsubscribe.current = null;
+        authSubscription.current.unsubscribe();
+        authSubscription.current = null;
       }
     };
-  }, []);
+  }, [updateAuthState]);
   
-  // Improved sign out function
-  const signOut = async () => {
+  // Sign out function with improved error handling
+  const signOut = useCallback(async () => {
     try {
       console.log("Attempting to sign out user");
       
       // Prevent rapid signout requests
       const now = Date.now();
-      if (now - AUTH_STATE.lastAuthAction < AUTH_STATE.debounceTime) {
+      if (now - lastAuthAction.current < AUTH_CONFIG.debounceTime) {
+        console.log("Debouncing sign out request");
         return;
       }
-      AUTH_STATE.lastAuthAction = now;
+      lastAuthAction.current = now;
       
-      // Clear profile fetch tracking
-      profileFetchAttempt.current = {};
-      
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error("Supabase signOut error:", error.message);
-        toast.error("Error signing out: " + error.message);
-        return;
-      }
-      
-      // Clear local state
+      // Clear local state first for faster UI feedback
       setSession(null);
       setUser(null);
       setProfile(null);
+      profileCache.current = {};
+      profileFetchAttempts.current = {};
+      
+      // Then sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error("Sign out error:", error.message);
+        toast.error("Error signing out: " + error.message);
+        return;
+      }
       
       toast.success("Signed out successfully");
     } catch (error: any) {
       console.error('Error in signOut function:', error.message);
       toast.error("Error signing out: " + (error.message || "Unknown error"));
     }
-  };
+  }, []);
   
   // Context value
-  const value = {
+  const value: AuthContextType = {
     session,
     user,
     profile,
