@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Define user profile type
 export type UserProfile = {
@@ -31,7 +31,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: any | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
-  // Added properties that were missing
+  // Required properties for existing components
   isImpersonating: boolean;
   impersonatedProfile: ImpersonatedProfile | null;
   startImpersonation?: (userId: string) => Promise<void>;
@@ -69,6 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Simple derived state
   const isAuthenticated = !!session && !!user;
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Function to fetch user profile
   const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -103,6 +104,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Initialize auth state with clean approach
   useEffect(() => {
+    console.log('AuthProvider initialized');
     setAuthState('RESTORING_SESSION');
     setLoading(true);
     
@@ -160,7 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setLoading(false);
           
           // If on protected route, redirect to auth
-          if (window.location.pathname !== '/auth') {
+          if (location.pathname !== '/auth') {
             navigate('/auth');
           }
           return;
@@ -179,7 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
           
           // If on auth page, redirect to main
-          if (window.location.pathname === '/auth') {
+          if (location.pathname === '/auth') {
             navigate('/');
           }
         }
@@ -198,7 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   // Sign in with email and password - simple implementation
   const signIn = async (email: string, password: string) => {

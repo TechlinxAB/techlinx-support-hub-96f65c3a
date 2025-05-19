@@ -61,14 +61,14 @@ const InitApp = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <AppProvider>
-        <TooltipProvider>
-          <ModalManager>
-            <Toaster />
-            <ModalReset />
-            <InitApp />
-            <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppProvider>
+          <TooltipProvider>
+            <ModalManager>
+              <Toaster />
+              <ModalReset />
+              <InitApp />
               <Routes>
                 {/* Public route - accessible without authentication */}
                 <Route path="/auth" element={<AuthPage />} />
@@ -95,11 +95,11 @@ const App = () => (
                   </Route>
                 </Route>
               </Routes>
-            </BrowserRouter>
-          </ModalManager>
-        </TooltipProvider>
-      </AppProvider>
-    </AuthProvider>
+            </ModalManager>
+          </TooltipProvider>
+        </AppProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 
