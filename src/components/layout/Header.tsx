@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell } from 'lucide-react';
+import { Menu, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LogoutButton from '@/components/auth/LogoutButton';
 import { useAuth } from '@/context/AuthContext';
@@ -15,10 +15,6 @@ const Header: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const { toggleSidebar } = useSidebar();
   const navigate = useNavigate();
-  
-  const handleSearchClick = () => {
-    NavigationService.navigate('/search');
-  };
   
   return (
     <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-10 w-full">
@@ -35,20 +31,11 @@ const Header: React.FC = () => {
               <span className="sr-only">Toggle sidebar</span>
             </Button>
             
-            <h1 className="text-xl font-bold text-gray-800 hidden md:block">
-              {currentUser?.name || "Techlinx Dashboard"}
-            </h1>
+            {/* Removed the name display that was here */}
           </div>
           
           <div className="flex items-center space-x-4">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={handleSearchClick}
-              aria-label="Search"
-            >
-              <Search className="h-5 w-5" />
-            </Button>
+            {/* Removed search icon button that was here */}
             
             <Button 
               variant="ghost" 
