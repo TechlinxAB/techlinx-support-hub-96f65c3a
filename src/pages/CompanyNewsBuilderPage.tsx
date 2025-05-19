@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -291,7 +290,7 @@ const CompanyNewsBuilderPage = () => {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // Fix: call refetchCompanyNewsBlocks without any arguments - this is the line causing the error
+      // Fixed: call refetchCompanyNewsBlocks without any arguments
       await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
