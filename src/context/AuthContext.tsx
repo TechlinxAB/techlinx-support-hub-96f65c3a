@@ -12,12 +12,11 @@ import {
   STORAGE_KEY,
   validateTokenIntegrity,
   isPauseRecoveryRequired,
-  markPauseRecoveryRequired,
-  resetAuthLoopState
+  markPauseRecoveryRequired
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-import { probeSupabaseService, testSessionWithRetries } from '@/utils/authRecovery';
+import { probeSupabaseService, testSessionWithRetries, resetAuthLoopState } from '@/utils/authRecovery';
 
 // Define user profile type
 export type UserProfile = {
@@ -246,7 +245,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     // Set up auth listener with improved error handling
-    let authSubscription: { subscription: { unsubscribe: () => void } } | null = null;
+    let authSubscription: { data: { subscription: { unsubscribe: () => void } } } | null = null;
     
     try {
       // Set up auth listener
@@ -393,8 +392,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     return () => {
       // Clean up subscription
-      if (authSubscription?.subscription?.unsubscribe) {
-        authSubscription.subscription.unsubscribe();
+      if (authSubscription?.data?.subscription?.unsubscribe) {
+        authSubscription.data.subscription.unsubscribe();
       }
     };
   }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState]);
