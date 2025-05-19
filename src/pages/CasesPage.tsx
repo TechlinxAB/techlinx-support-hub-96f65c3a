@@ -175,8 +175,8 @@ const CasesPage = () => {
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
                       <Star className="h-4 w-4" />}
                   </Button>
-                  {/* Only consultants can delete cases or users can delete their own cases */}
-                  {(profile?.role === 'consultant' || caseItem.userId === profile?.id) && (
+                  {/* Only consultants can delete cases */}
+                  {profile?.role === 'consultant' && (
                     <Button 
                       variant="ghost" 
                       size="sm"

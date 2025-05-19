@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
@@ -323,8 +324,8 @@ const CaseList = ({
                         >
                           <Star className={`h-5 w-5 ${isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
                         </Button>
-                        {/* Only show delete button for consultants or the case owner */}
-                        {(profile?.role === 'consultant' || caseItem.userId === profile?.id) && (
+                        {/* Only consultants can delete cases */}
+                        {profile?.role === 'consultant' && (
                           <Button 
                             variant="ghost" 
                             size="sm" 

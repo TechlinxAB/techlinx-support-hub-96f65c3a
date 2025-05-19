@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
@@ -302,7 +303,7 @@ const SearchPage = () => {
                 const user = users.find(u => u.id === caseItem.userId);
                 const company = companies.find(c => c.id === caseItem.companyId);
                 const category = categories.find(c => c.id === caseItem.categoryId);
-                const canDelete = profile?.role === 'consultant' || caseItem.userId === profile?.id;
+                const canDelete = profile?.role === 'consultant';
                 
                 return (
                   <Card 
