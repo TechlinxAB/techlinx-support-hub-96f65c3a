@@ -27,12 +27,13 @@ const AUTH_VERSION_KEY = 'auth-token-version';
 const AUTH_LAST_SUCCESS_KEY = 'last-successful-auth';
 const AUTH_INIT_COUNT_KEY = 'auth-init-count';
 const AUTH_LAST_INIT_KEY = 'auth-last-init';
-const CURRENT_AUTH_VERSION = '1.0.4'; // Incremented for our new auth recovery system
+const CURRENT_AUTH_VERSION = '1.0.5'; // Incremented for auth loop fix
 
 // New pause recovery keys
 const PAUSE_DETECTED_KEY = 'pause-detected-timestamp';
 const PAUSE_RECOVERY_ATTEMPTS_KEY = 'pause-recovery-attempts';
 const PAUSE_RECOVERY_REQUIRED_KEY = 'pause_recovery_required';
+const PAUSE_RECOVERY_SUCCESS_KEY = 'pause_recovery_success';
 
 /**
  * Check if the current auth version matches the stored version
@@ -52,6 +53,7 @@ export function recordSuccessfulAuth(): void {
   localStorage.removeItem(PAUSE_DETECTED_KEY);
   localStorage.removeItem(PAUSE_RECOVERY_ATTEMPTS_KEY);
   localStorage.removeItem(PAUSE_RECOVERY_REQUIRED_KEY);
+  localStorage.setItem(PAUSE_RECOVERY_SUCCESS_KEY, 'true');
   resetAuthErrorCount();
 }
 
@@ -61,6 +63,7 @@ export function recordSuccessfulAuth(): void {
  */
 export function markPauseRecoveryRequired(): void {
   localStorage.setItem(PAUSE_RECOVERY_REQUIRED_KEY, 'true');
+  localStorage.removeItem(PAUSE_RECOVERY_SUCCESS_KEY);
   console.log('🚨 Marked pause recovery as required');
 }
 
@@ -76,6 +79,14 @@ export function isPauseRecoveryRequired(): boolean {
  */
 export function clearPauseRecoveryRequired(): void {
   localStorage.removeItem(PAUSE_RECOVERY_REQUIRED_KEY);
+  localStorage.setItem(PAUSE_RECOVERY_SUCCESS_KEY, 'true');
+}
+
+/**
+ * Check if pause recovery was successful
+ */
+export function wasPauseRecoverySuccessful(): boolean {
+  return localStorage.getItem(PAUSE_RECOVERY_SUCCESS_KEY) === 'true';
 }
 
 /**
@@ -87,14 +98,15 @@ export function trackAuthInitialization(): number {
   const now = Date.now();
   const timeSinceLast = now - lastInit;
   
-  // If less than 1 second between inits, that's suspicious
-  if (lastInit > 0 && timeSinceLast < 1000) {
+  // Increased threshold to 500ms to reduce false positives
+  // If less than 500ms between inits, that's suspicious
+  if (lastInit > 0 && timeSinceLast < 500) {
     const initCount = parseInt(localStorage.getItem(AUTH_INIT_COUNT_KEY) || '0', 10) + 1;
     localStorage.setItem(AUTH_INIT_COUNT_KEY, initCount.toString());
     localStorage.setItem(AUTH_LAST_INIT_KEY, now.toString());
     
     // If too many rapid initializations, activate circuit breaker
-    if (initCount > 5) {
+    if (initCount > 10) { // Increased from 5 to 10
       activateCircuitBreaker(2, 'Too many rapid auth initializations');
       return initCount;
     }
@@ -244,7 +256,12 @@ export async function clearAuthState(): Promise<boolean> {
     console.log('Clearing auth state...');
     
     // Sign out from Supabase
-    await supabase.auth.signOut({ scope: 'global' });
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+      console.log('Supabase signOut successful');
+    } catch (error) {
+      console.warn('Error during Supabase signOut - continuing with cleanup:', error);
+    }
     
     // Reset error counter and circuit breaker
     resetAuthErrorCount();
@@ -260,6 +277,9 @@ export async function clearAuthState(): Promise<boolean> {
     clearPauseRecoveryRequired();
     localStorage.removeItem(PAUSE_DETECTED_KEY);
     localStorage.removeItem(PAUSE_RECOVERY_ATTEMPTS_KEY);
+    
+    // Clear any auth loop detection state
+    sessionStorage.removeItem('authAttempts');
     
     console.log('Auth state cleared successfully');
     return true;

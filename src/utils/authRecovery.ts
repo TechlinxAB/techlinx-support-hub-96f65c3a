@@ -1,3 +1,4 @@
+
 import { supabase, STORAGE_KEY, isPauseRecoveryRequired, clearPauseRecoveryRequired, markPauseRecoveryRequired, validateTokenIntegrity } from "@/integrations/supabase/client";
 
 /**
@@ -24,8 +25,16 @@ export const detectAuthLoops = (): boolean => {
     // Store updated attempts
     sessionStorage.setItem('authAttempts', JSON.stringify(recentAttempts));
     
-    // If there are more than 5 attempts in the last minute, it's probably a loop
-    return recentAttempts.length > 5;
+    // Modified: Only detect loop if there are more than 10 attempts in the last minute
+    // This is more lenient than the previous 5 attempts threshold
+    const isLoop = recentAttempts.length > 10;
+    
+    // If a loop is detected, log it for debugging
+    if (isLoop) {
+      console.warn(`Auth loop detected: ${recentAttempts.length} attempts in the last minute`);
+    }
+    
+    return isLoop;
   } catch (error) {
     console.error('Error detecting auth loops:', error);
     return false;
@@ -61,6 +70,7 @@ export const probeSupabaseService = async (): Promise<boolean> => {
       clearPauseRecoveryRequired();
       clearPauseDetected();
       resetRecoveryAttempts();
+      resetAuthLoopState(); // Add this new function call to reset loop detection state
       return true;
     }
     
@@ -68,6 +78,16 @@ export const probeSupabaseService = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Supabase service probe failed:', error);
     return false;
+  }
+};
+
+// New function to reset auth loop state
+export const resetAuthLoopState = (): void => {
+  try {
+    sessionStorage.removeItem('authAttempts');
+    console.log('Auth loop detection state has been reset');
+  } catch (error) {
+    console.error('Error resetting auth loop state:', error);
   }
 };
 
@@ -223,6 +243,7 @@ export const performFullAuthRecovery = async (): Promise<void> => {
     if (isServiceAvailable) {
       clearPauseRecoveryRequired();
       clearPauseDetected();
+      resetAuthLoopState(); // Reset loop detection state
     }
     
     // Start with service reset
@@ -332,6 +353,7 @@ export const initPauseUnpauseDetection = (): void => {
             console.log('Auto-probe after pause: Supabase is available, clearing pause flags');
             clearPauseDetected();
             clearPauseRecoveryRequired();
+            resetAuthLoopState(); // Reset loop detection state
           } else {
             console.warn('Auto-probe after pause: Supabase still unavailable');
           }
@@ -372,6 +394,7 @@ export const initPauseUnpauseDetection = (): void => {
             console.log('Auto-probe after focus return: Supabase is available, clearing pause flags');
             clearPauseDetected();
             clearPauseRecoveryRequired();
+            resetAuthLoopState(); // Reset loop detection state
           } else {
             console.warn('Auto-probe after focus return: Supabase still unavailable');
           }
@@ -395,6 +418,7 @@ export const initPauseUnpauseDetection = (): void => {
         // If service is available, clear any lingering pause flags
         clearPauseRecoveryRequired();
         clearPauseDetected();
+        resetAuthLoopState(); // Reset loop detection state
       }
     } catch (error) {
       console.error('Error during initial Supabase service probe:', error);
@@ -411,6 +435,7 @@ export const initPauseUnpauseDetection = (): void => {
           console.log('Recurring probe: Supabase is available, clearing pause flags');
           clearPauseDetected();
           clearPauseRecoveryRequired();
+          resetAuthLoopState(); // Reset loop detection state
           clearInterval(probeInterval);
         }
       } else {
@@ -545,7 +570,9 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
     try {
       // Progressive backoff delay - 0ms, 1000ms, 3000ms
       if (attempts > 0) {
-        await new Promise(resolve => setTimeout(resolve, attempts === 1 ? 1000 : 3000));
+        const backoffMs = attempts === 1 ? 1000 : 3000;
+        console.log(`Backing off for ${backoffMs}ms before retry`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
       }
       
       console.log(`Testing session validity, attempt ${attempts + 1}/${maxRetries}`);
@@ -584,6 +611,7 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
       // If we get a valid session, clear any pause recovery flags
       clearPauseRecoveryRequired();
       clearPauseDetected();
+      resetAuthLoopState(); // Reset loop detection state
       return { valid: true, session: data.session };
     } catch (error) {
       lastError = error;

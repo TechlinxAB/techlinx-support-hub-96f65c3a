@@ -17,7 +17,8 @@ import {
   clearPauseDetected,
   hasTooManyRecoveryAttempts,
   resetRecoveryAttempts,
-  testSessionWithRetries
+  testSessionWithRetries,
+  resetAuthLoopState
 } from '@/utils/authRecovery';
 import { 
   supabase, 
@@ -49,11 +50,36 @@ const ProtectedRoute = () => {
   // Check if we need to use force bypass mode (completely skip auth checks)
   const bypassActive = isForceBypassActive();
   
-  // Check for circuit breaker and auth loop issues
+  // Check for circuit breaker and auth loop issues - with delay and throttling
   const circuitBreakerInfo = isCircuitBreakerActive();
-  const authLoopDetected = detectAuthLoops();
+  const [authLoopDetected, setAuthLoopDetected] = useState(false);
   const pauseDetected = wasPauseDetected();
   const pauseRecoveryRequired = isPauseRecoveryRequired();
+  
+  // Check for auth loops with throttling to prevent false positives
+  useEffect(() => {
+    if (loading) return;
+    
+    const loopCheck = () => {
+      const isLoop = detectAuthLoops();
+      if (isLoop) {
+        console.warn("Authentication loop detected - taking mitigation actions");
+        // Clear the pause recovery flags if loops are detected
+        clearPauseRecoveryRequired();
+        clearPauseDetected();
+      }
+      setAuthLoopDetected(isLoop);
+    };
+    
+    // Only check for loops after 1.5 seconds to allow initial auth processes to complete
+    const timer = setTimeout(loopCheck, 1500);
+    return () => clearTimeout(timer);
+  }, [loading]);
+  
+  // Reset auth loop detection on navigation changes
+  useEffect(() => {
+    resetAuthLoopState();
+  }, [location.pathname]);
   
   // Initialize pause/unpause detection on first render
   useEffect(() => {
@@ -90,6 +116,7 @@ const ProtectedRoute = () => {
             // Clear the pause detected flag after using it
             clearPauseDetected();
             clearPauseRecoveryRequired();
+            resetAuthLoopState();
           }
         });
       }
@@ -182,6 +209,7 @@ const ProtectedRoute = () => {
   const handleNavigateToAuth = () => {
     setRedirecting(true);
     resetCircuitBreaker();
+    resetAuthLoopState();
     // Add a cache-busting parameter
     window.location.href = '/auth?redirect=' + encodeURIComponent(location.pathname) + '&t=' + Date.now();
   };
@@ -190,6 +218,7 @@ const ProtectedRoute = () => {
   const handleForceDashboard = () => {
     setRedirecting(true);
     resetCircuitBreaker();
+    resetAuthLoopState();
     // Add a cache-busting parameter with special force flag
     window.location.href = '/?force=' + Date.now();
   };
@@ -197,6 +226,7 @@ const ProtectedRoute = () => {
   // Handle force bypass activation
   const handleForceBypass = () => {
     setForceBypass();
+    resetAuthLoopState();
     setForceTimeout(true);
     window.location.reload();
   };
@@ -257,7 +287,8 @@ const ProtectedRoute = () => {
             <AlertTitle>Authentication Error</AlertTitle>
             <AlertDescription>
               {authError || circuitBreakerInfo.reason || sessionTestResult.error || 
-                "There was a problem with authentication. This might be due to a stale session."}
+                (authLoopDetected ? "Authentication loop detected. The system will reset to resolve this issue." : 
+                "There was a problem with authentication. This might be due to a stale session.")}
               
               {circuitBreakerInfo.active && circuitBreakerInfo.remainingSeconds && (
                 <p className="mt-2 text-sm">
@@ -269,7 +300,8 @@ const ProtectedRoute = () => {
               
               {authLoopDetected && (
                 <p className="mt-2 text-sm">
-                  Authentication loop detected. The system is attempting to authenticate too frequently.
+                  The system detected multiple authentication attempts in rapid succession.
+                  This is usually caused by a stale session or token. Click "Reset Authentication" below to fix this.
                 </p>
               )}
               
@@ -288,6 +320,7 @@ const ProtectedRoute = () => {
               className="w-full"
             >
               {isRecovering ? "Resetting..." : "Reset Authentication"}
+              {isRecovering && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
             </Button>
             
             <Button 
