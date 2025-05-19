@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
@@ -20,11 +19,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Filter, RefreshCw, Star } from 'lucide-react';
+import { Filter, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CaseListProps {
   title?: string;
@@ -53,11 +64,53 @@ const CaseList = ({
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetchCases();
     setRefreshing(false);
+  };
+  
+  // Handle delete button click
+  const handleDeleteClick = (e: React.MouseEvent, caseId: string) => {
+    e.stopPropagation();
+    setCaseToDelete(caseId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Handle case deletion
+  const handleDeleteCase = async () => {
+    if (!caseToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('cases')
+        .delete()
+        .eq('id', caseToDelete);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Remove from starred cases if it was starred
+      if (starredCases.includes(caseToDelete)) {
+        toggleStar(caseToDelete);
+      }
+
+      await refetchCases();
+      toast.success("Case deleted successfully");
+    } catch (error) {
+      console.error('Error deleting case:', error);
+      toast.error("Failed to delete case");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setCaseToDelete(null);
+    }
   };
   
   // Filter cases based on user role and impersonation state
@@ -222,7 +275,7 @@ const CaseList = ({
                 <TableHead>User</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead className="w-[50px]">Actions</TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -258,17 +311,30 @@ const CaseList = ({
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{company}</TableCell>
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleStar(caseItem.id);
-                        }}
-                      >
-                        <Star className={`h-5 w-5 ${isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                      </Button>
+                      <div className="flex space-x-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleStar(caseItem.id);
+                          }}
+                        >
+                          <Star className={`h-5 w-5 ${isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                        </Button>
+                        {/* Only show delete button for consultants or the case owner */}
+                        {(profile?.role === 'consultant' || caseItem.userId === profile?.id) && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => handleDeleteClick(e, caseItem.id)}
+                          >
+                            <Trash2 className="h-5 w-5 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -277,6 +343,28 @@ const CaseList = ({
           </Table>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Case</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this case? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteCase}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

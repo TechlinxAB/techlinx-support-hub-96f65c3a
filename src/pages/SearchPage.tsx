@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Search, Calendar } from 'lucide-react';
+import { Search, Calendar, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
@@ -21,9 +20,21 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { CasePriority, CaseStatus } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const SearchPage = () => {
-  const { cases, users, companies, categories } = useAppContext();
+  const { cases, users, companies, categories, refetchCases } = useAppContext();
   const { profile, isImpersonating } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +47,11 @@ const SearchPage = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [date, setDate] = React.useState<Date>();
+  
+  // Delete functionality
+  const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const handleSearch = () => {
     setIsSearched(true);
@@ -91,6 +107,45 @@ const SearchPage = () => {
     }
     
     setSearchResults(results);
+  };
+  
+  // Handle delete button click
+  const handleDeleteClick = (e: React.MouseEvent, caseId: string) => {
+    e.stopPropagation();
+    setCaseToDelete(caseId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Handle case deletion
+  const handleDeleteCase = async () => {
+    if (!caseToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('cases')
+        .delete()
+        .eq('id', caseToDelete);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update results by removing the deleted case
+      setSearchResults(prevResults => 
+        prevResults.filter(c => c.id !== caseToDelete)
+      );
+
+      await refetchCases();
+      toast.success("Case deleted successfully");
+    } catch (error) {
+      console.error('Error deleting case:', error);
+      toast.error("Failed to delete case");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setCaseToDelete(null);
+    }
   };
   
   return (
@@ -247,36 +302,50 @@ const SearchPage = () => {
                 const user = users.find(u => u.id === caseItem.userId);
                 const company = companies.find(c => c.id === caseItem.companyId);
                 const category = categories.find(c => c.id === caseItem.categoryId);
+                const canDelete = profile?.role === 'consultant' || caseItem.userId === profile?.id;
                 
                 return (
                   <Card 
                     key={caseItem.id}
                     className="cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => navigate(`/cases/${caseItem.id}`)}
                   >
                     <CardHeader className="py-3">
                       <div className="flex justify-between">
-                        <div>
+                        <div className="flex-1" onClick={() => navigate(`/cases/${caseItem.id}`)}>
                           <h3 className="font-semibold">{caseItem.title}</h3>
                           {category && (
                             <p className="text-xs text-muted-foreground">{category.name}</p>
                           )}
                         </div>
-                        <Badge 
-                          variant="outline" 
-                          className={cn(
-                            "status-badge",
-                            caseItem.status === 'new' ? 'status-new' :
-                            caseItem.status === 'ongoing' ? 'status-ongoing' :
-                            caseItem.status === 'resolved' ? 'status-resolved' :
-                            'status-completed'
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "status-badge",
+                              caseItem.status === 'new' ? 'status-new' :
+                              caseItem.status === 'ongoing' ? 'status-ongoing' :
+                              caseItem.status === 'resolved' ? 'status-resolved' :
+                              'status-completed'
+                            )}
+                            onClick={() => navigate(`/cases/${caseItem.id}`)}
+                          >
+                            {caseItem.status}
+                          </Badge>
+                          
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => handleDeleteClick(e, caseItem.id)}
+                              className="ml-2"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
                           )}
-                        >
-                          {caseItem.status}
-                        </Badge>
+                        </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="py-2">
+                    <CardContent className="py-2" onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <p className="text-sm text-muted-foreground line-clamp-2">{caseItem.description}</p>
                       <div className="flex justify-between items-center mt-3 text-xs text-muted-foreground">
                         <div className="flex items-center gap-2">
@@ -309,6 +378,28 @@ const SearchPage = () => {
           )}
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Case</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this case? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteCase}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
