@@ -39,10 +39,6 @@ const InitApp = () => {
     // Initialize pause/unpause detection at the app root level
     initPauseUnpauseDetection();
     
-    // Ensure white background during loading
-    document.body.style.backgroundColor = 'white';
-    document.documentElement.style.backgroundColor = 'white';
-    
     // Add loading class to body initially
     document.body.classList.add('loading');
     
@@ -65,7 +61,7 @@ const InitApp = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <div className="bg-white w-full h-full" style={{ position: 'relative', backgroundColor: 'white !important' }}>
+      <div className="bg-white w-full h-full" style={{ position: 'relative' }}>
         <AuthProvider>
           <AppProvider>
             <TooltipProvider>
@@ -73,7 +69,7 @@ const App = () => (
                 <Toaster />
                 <ModalReset />
                 <InitApp />
-                <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
+                <div className="bg-white w-full h-full"> {/* Extra white wrapper */}
                   <AppRoutes />
                 </div>
               </ModalManager>

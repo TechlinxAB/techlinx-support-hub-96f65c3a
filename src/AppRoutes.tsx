@@ -38,40 +38,14 @@ const AppRoutes = () => {
     NavigationService.setNavigateFunction(navigate);
   }, [navigate]);
 
-  // Add class to body during route changes
-  React.useEffect(() => {
-    // Add loading class on route change
-    document.body.classList.add('loading');
-    document.body.style.backgroundColor = 'white';
-    
-    // Remove loading class after a delay
-    const timer = setTimeout(() => {
-      document.body.classList.remove('loading');
-    }, 500);
-    
-    return () => {
-      clearTimeout(timer);
-      document.body.classList.remove('loading');
-    };
-  }, [location.pathname]);
-
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen" style={{ backgroundColor: 'white !important' }}> 
+      <div className="flex min-h-screen" style={{ backgroundColor: 'white' }}> {/* Explicit white background */}
         {/* Persistent Sidebar - COMPLETELY outside of animation context */}
         <PersistentSidebar />
 
         {/* Main content wrapper with explicit white background */}
-        <div className="w-full h-full flex-1" style={{ backgroundColor: 'white !important', position: 'relative', zIndex: 1 }}> 
-          <div className="loading-overlay" style={{ 
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'white',
-            zIndex: 9999,
-            display: 'none'
-          }}>
-            <div className="spinner"></div>
-          </div>
+        <div className="w-full h-full bg-white flex-1" style={{ backgroundColor: 'white', position: 'relative', zIndex: 1 }}> 
           <Routes location={location}>
             {/* Auth route - doesn't use the main layout */}
             <Route path="/auth" element={<AuthPage />} />
@@ -79,7 +53,7 @@ const AppRoutes = () => {
             {/* All protected routes */}
             <Route path="/*" element={
               <ProtectedRoute>
-                <div className="w-full h-full bg-white" style={{ backgroundColor: 'white !important' }}> 
+                <div className="w-full h-full bg-white"> {/* Extra white wrapper */}
                   <Layout />
                 </div>
               </ProtectedRoute>
