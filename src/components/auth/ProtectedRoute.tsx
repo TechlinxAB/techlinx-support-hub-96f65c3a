@@ -1,9 +1,13 @@
 
 import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
-const ProtectedRoute = () => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -22,7 +26,7 @@ const ProtectedRoute = () => {
   }
   
   // If authenticated, render the protected content
-  return <Outlet />;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

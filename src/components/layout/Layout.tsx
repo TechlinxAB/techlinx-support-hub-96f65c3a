@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -17,7 +17,11 @@ import {
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
 
-const Layout = () => {
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+const Layout = ({ children }: LayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const [forceShow, setForceShow] = useState(false);
@@ -207,7 +211,7 @@ const Layout = () => {
             </Button>
           </div>
           <main className="flex-1 overflow-y-auto p-4">
-            <Outlet />
+            {children}
           </main>
         </div>
       </div>
@@ -255,7 +259,7 @@ const Layout = () => {
         <main className="flex-1 overflow-y-auto p-4">
           <AnimatePresence mode="wait" initial={false}>
             <PageTransition key={location.pathname}>
-              <Outlet />
+              {children}
             </PageTransition>
           </AnimatePresence>
         </main>

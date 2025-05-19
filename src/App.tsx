@@ -59,39 +59,48 @@ const InitApp = () => {
   return null;
 };
 
-// Routes Component - The Layout component is now a wrapper outside the routes system
-// This ensures that Layout (with the sidebar) is persistent while only inner content changes
+// MainContent component - This contains all the routes that should be inside the layout
+const MainContent = () => {
+  return (
+    <Routes>
+      <Route index element={<Dashboard />} />
+      <Route path="cases" element={<CasesPage />} />
+      <Route path="cases/new" element={<NewCasePage />} />
+      <Route path="cases/:id" element={<CaseDetailPage />} />
+      <Route path="companies" element={<CompaniesPage />} />
+      <Route path="companies/:id" element={<CompaniesPage />} />
+      <Route path="company/:id/settings" element={<CompanySettingsPage />} />
+      <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+      <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+      <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
+      <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
+      <Route path="users" element={<UserManagementPage />} />
+      <Route path="company-management" element={<CompanyManagementPage />} />
+      <Route path="settings" element={<SettingsPage />} />
+      <Route path="search" element={<SearchPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
+// AppRoutes Component - This component handles the top-level routes
 const AppRoutes = () => {
   return (
     <Routes>
       {/* Public route - accessible without authentication */}
       <Route path="/auth" element={<AuthPage />} />
       
-      {/* All protected routes are nested inside the Layout component */}
+      {/* All protected routes wrapped in a single ProtectedRoute */}
       <Route 
+        path="/*" 
         element={
           <ProtectedRoute>
-            <Layout />
+            <Layout>
+              <MainContent />
+            </Layout>
           </ProtectedRoute>
         }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="cases" element={<CasesPage />} />
-        <Route path="cases/new" element={<NewCasePage />} />
-        <Route path="cases/:id" element={<CaseDetailPage />} />
-        <Route path="companies" element={<CompaniesPage />} />
-        <Route path="companies/:id" element={<CompaniesPage />} />
-        <Route path="company/:id/settings" element={<CompanySettingsPage />} />
-        <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-        <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-        <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
-        <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-        <Route path="users" element={<UserManagementPage />} />
-        <Route path="company-management" element={<CompanyManagementPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="search" element={<SearchPage />} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
+      />
     </Routes>
   );
 };
