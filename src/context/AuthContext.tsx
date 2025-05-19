@@ -17,6 +17,11 @@ export type UserProfile = {
   phone?: string | null;
 };
 
+// Impersonated profile interface for admin functionality
+export interface ImpersonatedProfile extends UserProfile {
+  originalUserId?: string;
+}
+
 // Define auth context type with all necessary properties
 type AuthContextType = {
   user: User | null;
@@ -26,6 +31,12 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: any | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
+  // Added properties that were missing
+  isImpersonating: boolean;
+  impersonatedProfile: ImpersonatedProfile | null;
+  startImpersonation?: (userId: string) => Promise<void>;
+  endImpersonation: () => Promise<void>;
+  authState: 'INITIAL_SESSION' | 'RESTORING_SESSION' | 'AUTHENTICATED' | 'SIGNED_OUT';
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -51,7 +62,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authInitialized, setAuthInitialized] = useState(false);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedProfile, setImpersonatedProfile] = useState<ImpersonatedProfile | null>(null);
+  const [authState, setAuthState] = useState<'INITIAL_SESSION' | 'RESTORING_SESSION' | 'AUTHENTICATED' | 'SIGNED_OUT'>('INITIAL_SESSION');
   
   // Simple derived state
   const isAuthenticated = !!session && !!user;
@@ -90,9 +103,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Initialize auth state with clean approach
   useEffect(() => {
-    if (authInitialized) return;
-    
-    console.log('Initializing AuthContext');
+    setAuthState('RESTORING_SESSION');
     setLoading(true);
     
     // Set up auth listener
@@ -104,6 +115,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentSession?.user || null);
       
       if (currentSession?.user) {
+        setAuthState('AUTHENTICATED');
+        
         // Use setTimeout to avoid potential conflicts with Supabase client
         setTimeout(async () => {
           try {
@@ -123,6 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }, 0);
       } else {
+        setAuthState('SIGNED_OUT');
         setProfile(null);
         setLoading(false);
       }
@@ -135,12 +149,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (error) {
           console.error('Error getting session:', error);
+          setAuthState('SIGNED_OUT');
           setLoading(false);
           return;
         }
         
         if (!existingSession) {
           console.log('No existing session found');
+          setAuthState('SIGNED_OUT');
           setLoading(false);
           
           // If on protected route, redirect to auth
@@ -153,6 +169,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // We have a session, update state
         setSession(existingSession);
         setUser(existingSession.user);
+        setAuthState('AUTHENTICATED');
         
         // Try to fetch profile
         if (existingSession.user) {
@@ -170,18 +187,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
       } catch (err) {
         console.error('Error in session init:', err);
+        setAuthState('SIGNED_OUT');
         setLoading(false);
       }
     };
     
     initSession();
-    setAuthInitialized(true);
     
     // Clean up subscription
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate, authInitialized]);
+  }, [navigate]);
 
   // Sign in with email and password - simple implementation
   const signIn = async (email: string, password: string) => {
@@ -206,6 +223,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data?.session) {
         setSession(data.session);
         setUser(data.session.user);
+        setAuthState('AUTHENTICATED');
         
         // Try to fetch profile
         if (data.session.user) {
@@ -242,6 +260,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(null);
       setUser(null);
       setProfile(null);
+      setAuthState('SIGNED_OUT');
       
       toast.success("You have been signed out");
       
@@ -257,6 +276,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Stub impersonation methods to satisfy TypeScript
+  const startImpersonation = async (userId: string) => {
+    toast.info("Impersonation is not implemented yet");
+    console.log("Attempted to impersonate user with ID:", userId);
+  };
+
+  const endImpersonation = async () => {
+    setIsImpersonating(false);
+    setImpersonatedProfile(null);
+    toast.info("Impersonation session ended");
+  };
+
   // Create auth context value
   const value = {
     user,
@@ -265,7 +296,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     signIn,
     signOut,
-    isAuthenticated
+    isAuthenticated,
+    isImpersonating,
+    impersonatedProfile,
+    startImpersonation,
+    endImpersonation,
+    authState
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

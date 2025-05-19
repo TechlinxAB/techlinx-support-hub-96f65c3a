@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import { Loader, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { 
@@ -41,7 +40,7 @@ const Layout = () => {
     // Set a timeout to force show content after 3 seconds
     const timer = setTimeout(() => {
       setForceShow(true);
-    }, 5000); // Increased from 3s to 5s for more reliability
+    }, 5000); // 5s for reliability
     
     // Check if we're returning from a pause state
     if (wasPauseDetected()) {
@@ -55,7 +54,7 @@ const Layout = () => {
       setTimeout(() => {
         clearPauseDetected();
         setIsPauseRecovery(false);
-      }, 10000);
+      }, 5000);
     }
     
     return () => {

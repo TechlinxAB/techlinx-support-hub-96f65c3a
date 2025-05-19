@@ -15,3 +15,19 @@ export const supabase = createClient(
 );
 
 export const STORAGE_KEY = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
+
+// Function to clear authentication state from storage
+export const clearAuthState = async () => {
+  try {
+    // Sign out with Supabase
+    await supabase.auth.signOut({ scope: 'global' });
+    
+    // Clear auth token from local storage
+    localStorage.removeItem(STORAGE_KEY);
+    console.log('Auth state cleared successfully');
+    return true;
+  } catch (error) {
+    console.error('Error clearing auth state:', error);
+    return false;
+  }
+};
