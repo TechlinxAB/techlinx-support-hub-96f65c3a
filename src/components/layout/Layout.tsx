@@ -33,11 +33,10 @@ const Layout = () => {
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
 
+  // Force white background during loading
   useEffect(() => {
-    // Set a timeout to force show content after 5 seconds
-    const timer = setTimeout(() => {
-      setForceShow(true);
-    }, 5000);
+    document.body.style.backgroundColor = 'white';
+    document.documentElement.style.backgroundColor = 'white';
     
     // Check if we're returning from a pause state
     if (wasPauseDetected()) {
@@ -53,6 +52,11 @@ const Layout = () => {
         setIsPauseRecovery(false);
       }, 5000);
     }
+    
+    // Set a timeout to force show content after 5 seconds
+    const timer = setTimeout(() => {
+      setForceShow(true);
+    }, 5000);
     
     return () => {
       clearTimeout(timer);
@@ -85,7 +89,7 @@ const Layout = () => {
     return (
       <div 
         className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
-        style={{ backgroundColor: 'white' }}
+        style={{ backgroundColor: 'white !important' }}
       >
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="mb-4 text-gray-700">Loading application...</p>
@@ -134,7 +138,7 @@ const Layout = () => {
     return (
       <div 
         className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
-        style={{ backgroundColor: 'white' }}
+        style={{ backgroundColor: 'white !important' }}
       >
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
         <div className="flex gap-2">
@@ -163,13 +167,13 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
+    <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white !important' }}>
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
         style={{ 
           marginLeft: contentMarginLeft,
-          backgroundColor: 'white', // Explicit style
+          backgroundColor: 'white !important', 
           position: 'relative',
           zIndex: 1
         }}
@@ -195,10 +199,10 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
-          <div className="bg-white w-full h-full"> {/* Additional wrapper */}
+        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white !important' }}>
+          <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
             <AnimatePresence mode="wait">
-              <div className="bg-white w-full h-full"> {/* Additional wrapper inside AnimatePresence */}
+              <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
                 <PageTransition key={location.pathname}>
                   <Container>
                     <Outlet />

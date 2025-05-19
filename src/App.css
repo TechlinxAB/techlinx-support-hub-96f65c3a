@@ -63,6 +63,7 @@ html, body, #root, #__next, .root-container {
 /* Main layout styles */
 .flex-1 {
   flex: 1 1 0%;
+  background-color: white !important;
 }
 
 /* Container styling for consistent layout */
@@ -73,6 +74,7 @@ html, body, #root, #__next, .root-container {
   margin-right: auto;
   padding-left: 1rem;
   padding-right: 1rem;
+  background-color: white !important;
 }
 
 @media (min-width: 640px) {
@@ -89,69 +91,168 @@ html, body, #root, #__next, .root-container {
   }
 }
 
-/* COMPREHENSIVE WHITE BACKGROUND FIXES - HIGH SPECIFICITY RULES */
+/* CRITICAL FIX: Force white background everywhere except sidebar */
+html, body {
+  background-color: white !important;
+}
 
-/* Target ALL elements that could potentially show green during transitions */
-.route-content,
-.main-content,
-.content-area,
-[class*="transition"],
-[class*="animate"],
-[class*="motion-"],
+#root {
+  background-color: white !important;
+}
+
+/* Completely isolate the sidebar's green color */
+.sidebar-container {
+  isolation: isolate !important;
+  position: fixed !important;
+  z-index: 40 !important;
+}
+
+/* CRITICAL FIX: Force white background for all page content */
+main, .main-content, 
+[role="main"], 
 .layout-container,
 .app-container,
-[data-motion],
-[data-framer-motion],
+.page-container,
+.outlet-container,
+.content-container,
+.bg-background,
+.bg-muted,
 div[style*="transform"],
-div[style*="opacity"],
 div[style*="transition"],
-main > div,
-main > *,
-.flex-1,
-[role="main"],
-[data-radix-aspect-ratio-wrapper],
-html body #root main,
-main div {
-  background-color: white !important;
-}
-
-/* Extra rules to prevent any green flashing */
-.sidebar-container + div,
-.sidebar-container ~ div {
-  background-color: white !important;
-}
-
-main, 
-.main-content,
-[role="main"],
-[data-content="true"] {
-  background-color: white !important;
-}
-
-/* Critical framer motion targeting */
-[data-framer-component-type],
-[data-framer],
-[data-motion],
+div[style*="animation"],
 .framer-motion,
-.motion-div,
-[style*="animation"],
-.animated,
+.motion-div {
+  background-color: white !important;
+}
+
+/* Prevent green background during loading */
+body.loading::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-color: white !important;
+  z-index: 999;
+}
+
+/* Force higher z-index for white overlays */
+.loading-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background-color: white !important;
+  z-index: 9999 !important;
+}
+
+/* CRITICAL FIX: Handle transition states */
+* {
+  background-color: transparent; /* Default to transparent */
+}
+
+/* Only explicit backgrounds for containers */
+.bg-white, 
+.white-background, 
+main, 
+#root > div, 
+#root > div > div {
+  background-color: white !important;
+}
+
+/* Extra specificity to target sidebar only */
+div.sidebar-container {
+  background-color: transparent !important; /* Let sidebar define its own bg */
+}
+
+/* Target absolute overlays that should be white */
+div[style*="position: fixed"],
+div[style*="position: absolute"],
+[class*="overlay"],
+[class*="modal"],
+[class*="popup"],
+[class*="dialog"] {
+  background-color: white !important;
+}
+
+/* Target route transitions specifically */
+[data-motion="true"],
+[data-framer-motion],
+.framer-motion {
+  background-color: white !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* NEW LOADING CLASS */
+.loading-wrapper {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white !important;
+  z-index: 9999;
+}
+
+/* NEW: Add explicit spinner styling */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-left-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Ensure layout wrapper has white bg */
+.layout-wrapper {
+  background-color: white !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* Ensure any Framer Motion transitions have white background */
+.AnimatePresence > div,
+div:has(> .outlet),
+div:has([data-motion]),
+div[style*="opacity"],
 div[style*="transform"] {
   background-color: white !important;
-  z-index: 1;
-  position: relative;
 }
 
-/* Fix for animations */
-* {
-  transform-style: flat;
-  backface-visibility: hidden;
+/* Override for auth loading screen */
+.loading-auth-screen {
+  background-color: white !important;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Override any transitions that might show green */
-*[class*="transition"],
-*[style*="transition"],
-*[style*="transform"] {
+/* Critical fix for page transitions */
+.page-transition {
+  background-color: white !important; 
+}
+
+/* Force white background on body class */
+.loading {
+  background-color: white !important;
+}
+
+/* Add override for sidebar background to ensure it doesn't leak */
+.bg-sidebar {
+  isolation: isolate !important;
+  position: relative !important;
+  z-index: 40 !important;
+}
+
+/* Ensure main content always has higher stack order than sidebar */
+.flex-1, main {
+  z-index: 1 !important;
+  position: relative !important;
   background-color: white !important;
 }
 
@@ -171,124 +272,4 @@ div[style*="transform"] {
 .dark .custom-toast {
   background-color: hsl(224 71% 4%) !important;
   border-color: hsl(216 34% 17%) !important;
-}
-
-/* New layout fixes */
-.sidebar-container {
-  position: relative;
-  z-index: 40;
-}
-
-/* Ensure proper width for all content containers */
-.container-full {
-  width: 100%;
-}
-
-/* Make sure header and content align perfectly */
-header .container,
-main .container {
-  max-width: 72rem; /* Matches max-w-screen-xl */
-}
-
-/* Add specific fixes for loading states and layout containers */
-.loading-container,
-.auth-container,
-.error-container,
-.not-found-container {
-  background-color: white !important;
-}
-
-/* Ensuring all transitions have white backgrounds */
-.layout-transition > div,
-.page-transition > div,
-[data-transition-container] > div,
-div[style*="position: relative"] > div,
-.AnimatePresence > div,
-[data-motion] > div {
-  background-color: white !important;
-}
-
-/* Ensure any loading screens or spinners have white backgrounds */
-div:has(.animate-spin),
-div:has(svg[class*="animate-"]),
-div:has(.loader),
-.loading-wrapper {
-  background-color: white !important;
-}
-
-/* Fix for framer-motion AnimatePresence container and children */
-div:has([initial]),
-div:has([animate]),
-div:has([exit]),
-div:has([transition]) {
-  background-color: white !important;
-}
-
-/* Force white background during transitions */
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: white;
-  z-index: -1;
-}
-
-/* Force white background for flex-1 divs which are often main content areas */
-.flex-1, div.flex-1 {
-  background-color: white !important;
-}
-
-/* Ensure outlet containers have white bg */
-div:has(> .outlet) {
-  background-color: white !important;
-}
-
-/* NEW FIXES FOR LOADING STATE */
-/* Fix specifically for the PersistentSidebar */
-.sidebar-container {
-  z-index: 40; /* Lower than loading overlay */
-}
-
-/* Global loading overlay */
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: white !important;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Ensure the sidebar NEVER shows through during loading */
-body.loading::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-color: white;
-  z-index: 100;
-}
-
-/* Fix for Framer Motion initial/animate states */
-[data-motion="true"],
-.framer-motion-container,
-[data-framer-component-type],
-.AnimatePresence > div {
-  background-color: white !important;
-  position: relative;
-  z-index: 1;
-}
-
-/* Fix for any potential layout issues with the sidebar and main content */
-#root > div {
-  background-color: white !important;
-  position: relative;
-}
-
-/* The sidebar has a specific color that needs to be contained */
-.sidebar-container {
-  isolation: isolate;
 }
