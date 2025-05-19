@@ -1,23 +1,25 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Beaker, Layout, Newspaper, FileText, Users, Settings, Star } from 'lucide-react';
+import { AlertCircle, Beaker, Layout, Newspaper, FileText, Users, Settings, Star, RefreshCw } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
-import { TECHLINX_NAME, ensureTechlinxCompanyExists } from '@/utils/techlinxTestCompany';
+import { TECHLINX_NAME, ensureTechlinxCompanyExists, clearTechlinxCache } from '@/utils/techlinxTestCompany';
 import { toast } from 'sonner';
 
 const TechlinxTestZone: React.FC = () => {
-  const { companies } = useAppContext();
+  const { companies, refetchCompanies } = useAppContext();
   const navigate = useNavigate();
   const [techlinxId, setTechlinxId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   
-  // Find Techlinx company ID using either local state or API if needed
+  // Find Techlinx company ID using either local state, context or API if needed
   useEffect(() => {
     // First try to find in the app context
     const techlinx = companies.find(company => company.name === TECHLINX_NAME);
@@ -49,6 +51,7 @@ const TechlinxTestZone: React.FC = () => {
         const company = await ensureTechlinxCompanyExists();
         setTechlinxId(company.id);
         setHasError(false);
+        refetchCompanies(); // Refresh companies list in context
       } catch (error) {
         console.error("Failed to ensure Techlinx exists:", error);
         setHasError(true);
@@ -61,7 +64,7 @@ const TechlinxTestZone: React.FC = () => {
     };
     
     fetchTechlinx();
-  }, [companies]);
+  }, [companies, isLoading, refetchCompanies]);
 
   // Force direct URL navigation for dashboard builder
   const handleDashboardNavigation = (companyId: string) => {
@@ -86,7 +89,23 @@ const TechlinxTestZone: React.FC = () => {
     }
   };
 
-  if (isLoading) {
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    // Clear any cached data to ensure fresh fetch
+    clearTechlinxCache();
+    // Refetch companies to update the context
+    await refetchCompanies();
+    setHasError(false);
+    setIsLoading(true);
+    
+    // Slight delay to allow UI to update
+    setTimeout(() => {
+      setIsLoading(false);
+      setIsRetrying(false);
+    }, 1000);
+  };
+
+  if (isLoading || isRetrying) {
     return (
       <Card className="mb-6">
         <CardHeader>
@@ -99,8 +118,11 @@ const TechlinxTestZone: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            The Techlinx test company is being created. Please wait a moment.
+          <div className="flex items-center justify-center p-6">
+            <RefreshCw className="h-6 w-6 animate-spin text-purple-500" />
+          </div>
+          <p className="text-center text-muted-foreground">
+            {isRetrying ? "Retrying connection..." : "The Techlinx test company is being created. Please wait a moment."}
           </p>
         </CardContent>
       </Card>
@@ -129,23 +151,29 @@ const TechlinxTestZone: React.FC = () => {
               <li>Database connection problems</li>
               <li>Service maintenance</li>
             </ul>
-            <Button 
-              onClick={() => {
-                setHasError(false);
-                setIsLoading(true);
-                // Clear session storage
-                sessionStorage.removeItem('techlinx_company');
-                sessionStorage.removeItem('techlinx_content_checked');
-                // Retry in 1 second
-                setTimeout(() => {
-                  window.location.reload();
-                }, 1000);
-              }}
-              variant="outline"
-              className="mt-2"
-            >
-              Try Again
-            </Button>
+            <div className="flex gap-2 pt-2">
+              <Button 
+                onClick={handleRetry}
+                variant="outline"
+                className="mt-2"
+                disabled={isRetrying}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRetrying ? 'animate-spin' : ''}`} />
+                Try Again
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  clearTechlinxCache();
+                  setHasError(false);
+                  toast.info("Cache cleared");
+                }}
+                variant="outline"
+                className="mt-2"
+              >
+                Clear Cache
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

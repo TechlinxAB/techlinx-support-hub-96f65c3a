@@ -1,7 +1,10 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { UserProfile } from './AuthContext';
 import { BlockType } from '@/types/dashboard';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Define missing types
 export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
@@ -107,7 +110,7 @@ type AppContextType = {
   currentUser: UserProfile | null;
   
   // Cases
-  cases: Case[] | null;
+  cases: Case[];
   loadingCases: boolean;
   refetchCases: (caseId?: string) => Promise<Case[]>;
   updateCase: (caseId: string, data: Partial<Case>) => Promise<Case | null>;
@@ -164,7 +167,7 @@ const AppContext = createContext<AppContextType>({
   language: 'en',
   setLanguage: () => {},
   currentUser: null,
-  cases: null,
+  cases: [],
   loadingCases: false,
   refetchCases: async () => [],
   updateCase: async () => null,
@@ -206,7 +209,7 @@ const AppContext = createContext<AppContextType>({
 export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const [language, setLanguage] = useState<Language>('en');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [cases, setCases] = useState<Case[] | null>(null);
+  const [cases, setCases] = useState<Case[]>([]);
   const [loadingCases, setLoadingCases] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -223,122 +226,829 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   // Get auth data SAFELY by accessing it only after loading is complete
   const { user, profile, loading } = useAuth();
 
-  // Mock functions for refetching and updating data
+  // Implementation for refetching cases
   const refetchCases = async (caseId?: string): Promise<Case[]> => {
-    // Mock implementation
-    return cases || [];
+    setLoadingCases(true);
+    try {
+      let query = supabase
+        .from('cases')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      
+      if (caseId) {
+        query = query.eq('id', caseId);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error("Error fetching cases:", error);
+        toast.error("Failed to load cases");
+        return cases;
+      }
+      
+      if (data) {
+        const formattedCases = data.map(item => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          status: item.status as CaseStatus,
+          priority: item.priority as CasePriority,
+          userId: item.user_id,
+          companyId: item.company_id,
+          categoryId: item.category_id,
+          assignedToId: item.assigned_to_id,
+          createdAt: new Date(item.created_at),
+          updatedAt: new Date(item.updated_at)
+        }));
+        
+        setCases(formattedCases);
+        return formattedCases;
+      }
+      
+      return cases;
+    } catch (error) {
+      console.error("Error in refetchCases:", error);
+      toast.error("Failed to load cases");
+      return cases;
+    } finally {
+      setLoadingCases(false);
+    }
   };
   
+  // Implementation for updating a case
   const updateCase = async (caseId: string, data: Partial<Case>): Promise<Case | null> => {
-    // Mock implementation
-    return null;
+    try {
+      // Convert from camelCase to snake_case for Supabase
+      const supabaseData: any = {};
+      if (data.title) supabaseData.title = data.title;
+      if (data.description) supabaseData.description = data.description;
+      if (data.status) supabaseData.status = data.status;
+      if (data.priority) supabaseData.priority = data.priority;
+      if (data.userId) supabaseData.user_id = data.userId;
+      if (data.companyId) supabaseData.company_id = data.companyId;
+      if (data.categoryId) supabaseData.category_id = data.categoryId;
+      if (data.assignedToId) supabaseData.assigned_to_id = data.assignedToId;
+      
+      supabaseData.updated_at = new Date().toISOString();
+      
+      const { data: responseData, error } = await supabase
+        .from('cases')
+        .update(supabaseData)
+        .eq('id', caseId)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error updating case:", error);
+        toast.error("Failed to update case");
+        return null;
+      }
+      
+      if (responseData) {
+        await refetchCases();
+        
+        return {
+          id: responseData.id,
+          title: responseData.title,
+          description: responseData.description,
+          status: responseData.status as CaseStatus,
+          priority: responseData.priority as CasePriority,
+          userId: responseData.user_id,
+          companyId: responseData.company_id,
+          categoryId: responseData.category_id,
+          assignedToId: responseData.assigned_to_id,
+          createdAt: new Date(responseData.created_at),
+          updatedAt: new Date(responseData.updated_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in updateCase:", error);
+      toast.error("Failed to update case");
+      return null;
+    }
   };
   
+  // Implementation for adding a company
   const addCompany = async (data: Partial<Company>): Promise<Company | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('companies')
+        .insert({
+          name: data.name,
+          logo: data.logo
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating company:", error);
+        toast.error("Failed to create company");
+        return null;
+      }
+      
+      if (responseData) {
+        await refetchCompanies();
+        return {
+          id: responseData.id,
+          name: responseData.name,
+          logo: responseData.logo,
+          createdAt: new Date(responseData.created_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in addCompany:", error);
+      toast.error("Failed to create company");
+      return null;
+    }
   };
   
+  // Implementation for updating a company
   const updateCompany = async (id: string, data: Partial<Company>): Promise<Company | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('companies')
+        .update({
+          name: data.name,
+          logo: data.logo
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error updating company:", error);
+        toast.error("Failed to update company");
+        return null;
+      }
+      
+      if (responseData) {
+        await refetchCompanies();
+        return {
+          id: responseData.id,
+          name: responseData.name,
+          logo: responseData.logo,
+          createdAt: new Date(responseData.created_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in updateCompany:", error);
+      toast.error("Failed to update company");
+      return null;
+    }
   };
   
+  // Implementation for deleting a company
   const deleteCompany = async (id: string): Promise<boolean> => {
-    // Mock implementation
-    return false;
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error deleting company:", error);
+        toast.error("Failed to delete company");
+        return false;
+      }
+      
+      await refetchCompanies();
+      return true;
+    } catch (error) {
+      console.error("Error in deleteCompany:", error);
+      toast.error("Failed to delete company");
+      return false;
+    }
   };
   
+  // Implementation for fetching all companies
   const refetchCompanies = async (): Promise<Company[]> => {
-    // Mock implementation
-    return companies;
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error("Error fetching companies:", error);
+        toast.error("Failed to load companies");
+        return companies;
+      }
+      
+      if (data) {
+        const formattedCompanies = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          logo: item.logo,
+          createdAt: new Date(item.created_at)
+        }));
+        
+        setCompanies(formattedCompanies);
+        return formattedCompanies;
+      }
+      
+      return companies;
+    } catch (error) {
+      console.error("Error in refetchCompanies:", error);
+      toast.error("Failed to load companies");
+      return companies;
+    }
   };
   
+  // Implementation for refetching replies
   const refetchReplies = async (caseId: string): Promise<Reply[]> => {
-    // Mock implementation
-    return [];
+    setLoadingReplies(true);
+    try {
+      const { data, error } = await supabase
+        .from('replies')
+        .select('*')
+        .eq('case_id', caseId)
+        .order('created_at');
+      
+      if (error) {
+        console.error("Error fetching replies:", error);
+        return replies;
+      }
+      
+      if (data) {
+        const formattedReplies = data.map(item => ({
+          id: item.id,
+          caseId: item.case_id,
+          userId: item.user_id,
+          content: item.content,
+          isInternal: item.is_internal,
+          createdAt: new Date(item.created_at)
+        }));
+        
+        setReplies(formattedReplies);
+        return formattedReplies;
+      }
+      
+      return replies;
+    } catch (error) {
+      console.error("Error in refetchReplies:", error);
+      return replies;
+    } finally {
+      setLoadingReplies(false);
+    }
   };
   
+  // Implementation for refetching notes
   const refetchNotes = async (caseId: string): Promise<Note[]> => {
-    // Mock implementation
-    return [];
+    setLoadingNotes(true);
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('case_id', caseId)
+        .order('created_at');
+      
+      if (error) {
+        console.error("Error fetching notes:", error);
+        return notes;
+      }
+      
+      if (data) {
+        const formattedNotes = data.map(item => ({
+          id: item.id,
+          caseId: item.case_id,
+          userId: item.user_id,
+          content: item.content,
+          createdAt: new Date(item.created_at)
+        }));
+        
+        setNotes(formattedNotes);
+        return formattedNotes;
+      }
+      
+      return notes;
+    } catch (error) {
+      console.error("Error in refetchNotes:", error);
+      return notes;
+    } finally {
+      setLoadingNotes(false);
+    }
   };
   
+  // Implementation for adding a reply
   const addReply = async (data: Partial<Reply>): Promise<Reply | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('replies')
+        .insert({
+          case_id: data.caseId,
+          user_id: data.userId,
+          content: data.content,
+          is_internal: data.isInternal
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error adding reply:", error);
+        toast.error("Failed to add reply");
+        return null;
+      }
+      
+      if (responseData && data.caseId) {
+        await refetchReplies(data.caseId);
+        
+        return {
+          id: responseData.id,
+          caseId: responseData.case_id,
+          userId: responseData.user_id,
+          content: responseData.content,
+          isInternal: responseData.is_internal,
+          createdAt: new Date(responseData.created_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in addReply:", error);
+      toast.error("Failed to add reply");
+      return null;
+    }
   };
   
+  // Implementation for adding a note
   const addNote = async (data: Partial<Note>): Promise<Note | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('notes')
+        .insert({
+          case_id: data.caseId,
+          user_id: data.userId,
+          content: data.content
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error adding note:", error);
+        toast.error("Failed to add note");
+        return null;
+      }
+      
+      if (responseData && data.caseId) {
+        await refetchNotes(data.caseId);
+        
+        return {
+          id: responseData.id,
+          caseId: responseData.case_id,
+          userId: responseData.user_id,
+          content: responseData.content,
+          createdAt: new Date(responseData.created_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in addNote:", error);
+      toast.error("Failed to add note");
+      return null;
+    }
   };
   
+  // Implementation for deleting a reply
   const deleteReply = async (id: string): Promise<boolean> => {
-    // Mock implementation
-    return false;
+    try {
+      const { error } = await supabase
+        .from('replies')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error deleting reply:", error);
+        toast.error("Failed to delete reply");
+        return false;
+      }
+      
+      // Update the state by filtering out the deleted reply
+      setReplies(prev => prev.filter(reply => reply.id !== id));
+      return true;
+    } catch (error) {
+      console.error("Error in deleteReply:", error);
+      toast.error("Failed to delete reply");
+      return false;
+    }
   };
   
+  // Implementation for fetching attachments
   const refetchAttachments = async (caseId: string): Promise<Attachment[]> => {
-    // Mock implementation
-    return [];
+    setLoadingAttachments(true);
+    try {
+      const { data, error } = await supabase
+        .from('case_attachments')
+        .select('*')
+        .eq('case_id', caseId)
+        .order('created_at');
+      
+      if (error) {
+        console.error("Error fetching attachments:", error);
+        return caseAttachments;
+      }
+      
+      if (data) {
+        const formattedAttachments = data.map(item => ({
+          id: item.id,
+          caseId: item.case_id,
+          replyId: item.reply_id,
+          fileName: item.file_name,
+          filePath: item.file_path,
+          contentType: item.content_type,
+          size: item.size,
+          createdBy: item.created_by,
+          createdAt: new Date(item.created_at)
+        }));
+        
+        setCaseAttachments(formattedAttachments);
+        return formattedAttachments;
+      }
+      
+      return caseAttachments;
+    } catch (error) {
+      console.error("Error in refetchAttachments:", error);
+      return caseAttachments;
+    } finally {
+      setLoadingAttachments(false);
+    }
   };
   
+  // Implementation for adding an attachment
   const uploadAttachment = async (data: Partial<Attachment>): Promise<Attachment | null> => {
-    // Mock implementation
+    // This would involve both storage and database operations
+    // For now, we'll return null as this would need a more complex implementation
     return null;
   };
   
+  // Implementation for fetching dashboard blocks
   const refetchDashboardBlocks = async (companyId: string): Promise<DashboardBlock[]> => {
-    // Mock implementation
-    return [];
+    setLoadingDashboardBlocks(true);
+    try {
+      const { data, error } = await supabase
+        .from('dashboard_blocks')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('position');
+      
+      if (error) {
+        console.error("Error fetching dashboard blocks:", error);
+        return dashboardBlocks;
+      }
+      
+      if (data) {
+        const formattedBlocks = data.map(item => ({
+          id: item.id,
+          companyId: item.company_id,
+          title: item.title,
+          type: item.type as BlockType,
+          content: item.content,
+          position: item.position,
+          parentId: item.parent_id,
+          showTitle: true, // Default value
+          createdBy: item.created_by,
+          createdAt: new Date(item.created_at),
+          updatedAt: new Date(item.updated_at)
+        }));
+        
+        setDashboardBlocks(formattedBlocks);
+        return formattedBlocks;
+      }
+      
+      return dashboardBlocks;
+    } catch (error) {
+      console.error("Error in refetchDashboardBlocks:", error);
+      return dashboardBlocks;
+    } finally {
+      setLoadingDashboardBlocks(false);
+    }
   };
   
+  // Implementation for adding a dashboard block
   const addDashboardBlock = async (data: Partial<DashboardBlock>): Promise<DashboardBlock | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('dashboard_blocks')
+        .insert({
+          company_id: data.companyId,
+          title: data.title,
+          type: data.type,
+          content: data.content,
+          position: data.position,
+          parent_id: data.parentId,
+          created_by: data.createdBy
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error adding dashboard block:", error);
+        toast.error("Failed to add dashboard block");
+        return null;
+      }
+      
+      if (responseData && data.companyId) {
+        await refetchDashboardBlocks(data.companyId);
+        
+        return {
+          id: responseData.id,
+          companyId: responseData.company_id,
+          title: responseData.title,
+          type: responseData.type as BlockType,
+          content: responseData.content,
+          position: responseData.position,
+          parentId: responseData.parent_id,
+          showTitle: true, // Default value
+          createdBy: responseData.created_by,
+          createdAt: new Date(responseData.created_at),
+          updatedAt: new Date(responseData.updated_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in addDashboardBlock:", error);
+      toast.error("Failed to add dashboard block");
+      return null;
+    }
   };
   
+  // Implementation for updating a dashboard block
   const updateDashboardBlock = async (id: string, data: Partial<DashboardBlock>): Promise<DashboardBlock | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const updateData: any = {};
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.content !== undefined) updateData.content = data.content;
+      if (data.position !== undefined) updateData.position = data.position;
+      if (data.parentId !== undefined) updateData.parent_id = data.parentId;
+      
+      const { data: responseData, error } = await supabase
+        .from('dashboard_blocks')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error updating dashboard block:", error);
+        toast.error("Failed to update dashboard block");
+        return null;
+      }
+      
+      if (responseData && responseData.company_id) {
+        await refetchDashboardBlocks(responseData.company_id);
+        
+        return {
+          id: responseData.id,
+          companyId: responseData.company_id,
+          title: responseData.title,
+          type: responseData.type as BlockType,
+          content: responseData.content,
+          position: responseData.position,
+          parentId: responseData.parent_id,
+          showTitle: true, // Default value
+          createdBy: responseData.created_by,
+          createdAt: new Date(responseData.created_at),
+          updatedAt: new Date(responseData.updated_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in updateDashboardBlock:", error);
+      toast.error("Failed to update dashboard block");
+      return null;
+    }
   };
   
+  // Implementation for deleting a dashboard block
   const deleteDashboardBlock = async (id: string): Promise<boolean> => {
-    // Mock implementation
-    return false;
+    try {
+      // First, get the block to know which company to refetch after deletion
+      const { data: blockData, error: fetchError } = await supabase
+        .from('dashboard_blocks')
+        .select('company_id')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) {
+        console.error("Error fetching dashboard block before deletion:", fetchError);
+        toast.error("Failed to delete dashboard block");
+        return false;
+      }
+      
+      const { error: deleteError } = await supabase
+        .from('dashboard_blocks')
+        .delete()
+        .eq('id', id);
+      
+      if (deleteError) {
+        console.error("Error deleting dashboard block:", deleteError);
+        toast.error("Failed to delete dashboard block");
+        return false;
+      }
+      
+      if (blockData) {
+        await refetchDashboardBlocks(blockData.company_id);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error in deleteDashboardBlock:", error);
+      toast.error("Failed to delete dashboard block");
+      return false;
+    }
   };
   
+  // Implementation for adding a case
   const addCase = async (data: Partial<Case>): Promise<Case | null> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('cases')
+        .insert({
+          title: data.title,
+          description: data.description,
+          status: data.status,
+          priority: data.priority,
+          user_id: data.userId,
+          company_id: data.companyId,
+          category_id: data.categoryId,
+          assigned_to_id: data.assignedToId
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating case:", error);
+        toast.error("Failed to create case");
+        return null;
+      }
+      
+      if (responseData) {
+        await refetchCases();
+        
+        return {
+          id: responseData.id,
+          title: responseData.title,
+          description: responseData.description,
+          status: responseData.status as CaseStatus,
+          priority: responseData.priority as CasePriority,
+          userId: responseData.user_id,
+          companyId: responseData.company_id,
+          categoryId: responseData.category_id,
+          assignedToId: responseData.assigned_to_id,
+          createdAt: new Date(responseData.created_at),
+          updatedAt: new Date(responseData.updated_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in addCase:", error);
+      toast.error("Failed to create case");
+      return null;
+    }
   };
   
+  // Implementation for fetching users
   const refetchUsers = async (): Promise<User[]> => {
-    // Mock implementation
-    return users;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error("Error fetching users:", error);
+        toast.error("Failed to load users");
+        return users;
+      }
+      
+      if (data) {
+        const formattedUsers = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          email: item.email,
+          role: item.role,
+          phone: item.phone,
+          companyId: item.company_id,
+          preferredLanguage: item.preferred_language
+        }));
+        
+        setUsers(formattedUsers);
+        return formattedUsers;
+      }
+      
+      return users;
+    } catch (error) {
+      console.error("Error in refetchUsers:", error);
+      toast.error("Failed to load users");
+      return users;
+    }
   };
   
+  // Company News blocks - Placeholder implementations
   const addCompanyNewsBlock = async (data: any): Promise<any> => {
-    // Mock implementation
-    return null;
+    try {
+      const { data: responseData, error } = await supabase
+        .from('company_news_blocks')
+        .insert({
+          company_id: data.companyId,
+          title: data.title,
+          type: data.type,
+          content: data.content,
+          position: data.position,
+          parent_id: data.parentId,
+          created_by: data.createdBy,
+          is_published: data.isPublished || false
+        })
+        .select();
+      
+      if (error) {
+        console.error("Error creating news block:", error);
+        return null;
+      }
+      
+      return responseData ? responseData[0] : null;
+    } catch (error) {
+      console.error("Error in addCompanyNewsBlock:", error);
+      return null;
+    }
   };
   
   const updateCompanyNewsBlock = async (id: string, data: any): Promise<any> => {
-    // Mock implementation
-    return null;
+    try {
+      const updateData: any = {};
+      
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.content !== undefined) updateData.content = data.content;
+      if (data.position !== undefined) updateData.position = data.position;
+      if (data.isPublished !== undefined) updateData.is_published = data.isPublished;
+      
+      const { data: responseData, error } = await supabase
+        .from('company_news_blocks')
+        .update(updateData)
+        .eq('id', id)
+        .select();
+      
+      if (error) {
+        console.error("Error updating news block:", error);
+        return null;
+      }
+      
+      return responseData ? responseData[0] : null;
+    } catch (error) {
+      console.error("Error in updateCompanyNewsBlock:", error);
+      return null;
+    }
   };
   
   const deleteCompanyNewsBlock = async (id: string): Promise<boolean> => {
-    // Mock implementation
-    return false;
+    try {
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error deleting news block:", error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error in deleteCompanyNewsBlock:", error);
+      return false;
+    }
   };
   
   const publishCompanyNewsBlock = async (id: string): Promise<boolean> => {
-    // Mock implementation
-    return false;
+    try {
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .update({ is_published: true })
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error publishing news block:", error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error in publishCompanyNewsBlock:", error);
+      return false;
+    }
   };
 
+  // Load data when app initializes and user is authenticated
   useEffect(() => {
     if (loading) return;
     if (!user || !profile) return;
@@ -346,72 +1056,42 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     // Now safe to use user/profile
     setCurrentUser(profile);
     
-    // Initialize some mock data for development
-    // Initialize categories
-    const mockCategories = [
-      { id: 'cat1', name: 'IT Support', createdAt: new Date() },
-      { id: 'cat2', name: 'HR', createdAt: new Date() },
-      { id: 'cat3', name: 'Facilities', createdAt: new Date() }
-    ];
-    setCategories(mockCategories);
+    // Load data from Supabase once authenticated
+    const loadInitialData = async () => {
+      try {
+        // Load companies
+        await refetchCompanies();
+        
+        // Load categories
+        const { data: categoryData, error: categoryError } = await supabase
+          .from('categories')
+          .select('*');
+        
+        if (categoryError) {
+          console.error("Error loading categories:", categoryError);
+        } else if (categoryData) {
+          const formattedCategories = categoryData.map(item => ({
+            id: item.id,
+            name: item.name,
+            createdAt: new Date(item.created_at)
+          }));
+          
+          setCategories(formattedCategories);
+        }
+        
+        // Load users (profiles)
+        await refetchUsers();
+        
+        // Load cases
+        await refetchCases();
+        
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+        toast.error("Failed to load some app data");
+      }
+    };
     
-    // Initialize users
-    const mockUsers = [
-      { id: profile.id, name: profile.name || 'Current User', email: profile.email, role: profile.role },
-      { id: 'user2', name: 'Jane Smith', email: 'jane@example.com', role: 'user' },
-      { id: 'user3', name: 'John Consultant', email: 'john@example.com', role: 'consultant' }
-    ];
-    setUsers(mockUsers);
-    
-    // Initialize companies
-    const mockCompanies = [
-      { id: 'comp1', name: 'Acme Inc', createdAt: new Date() },
-      { id: 'comp2', name: 'Tech Solutions', createdAt: new Date() },
-      { id: 'comp3', name: 'Global Corp', createdAt: new Date() }
-    ];
-    setCompanies(mockCompanies);
-    
-    // Simulate fetching cases
-    const mockCases = [
-      {
-        id: '1',
-        title: 'Cannot access email',
-        description: 'User is unable to access their email account after password reset',
-        status: 'ongoing' as CaseStatus,
-        priority: 'high' as CasePriority,
-        userId: profile.id,
-        companyId: 'comp1',
-        categoryId: 'cat1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: '2',
-        title: 'Need software installation',
-        description: 'Request for installation of design software on new laptop',
-        status: 'new' as CaseStatus,
-        priority: 'medium' as CasePriority,
-        userId: profile.id,
-        companyId: 'comp1',
-        categoryId: 'cat1',
-        createdAt: new Date(Date.now() - 86400000),
-        updatedAt: new Date(Date.now() - 86400000),
-      },
-      {
-        id: '3',
-        title: 'Password reset',
-        description: 'User needs password reset for account system',
-        status: 'resolved' as CaseStatus,
-        priority: 'low' as CasePriority,
-        userId: profile.id,
-        companyId: 'comp2',
-        categoryId: 'cat1',
-        createdAt: new Date(Date.now() - 172800000),
-        updatedAt: new Date(Date.now() - 172800000),
-      },
-    ];
-    
-    setCases(mockCases);
+    loadInitialData();
   }, [loading, user, profile]);
 
   // Fix context value definition to include all required properties
@@ -451,10 +1131,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     addDashboardBlock,
     updateDashboardBlock,
     deleteDashboardBlock,
-    addCompanyNewsBlock: async (data: any) => null,
-    updateCompanyNewsBlock: async (id: string, data: any) => null,
-    deleteCompanyNewsBlock: async (id: string) => false,
-    publishCompanyNewsBlock: async (id: string) => false,
+    addCompanyNewsBlock,
+    updateCompanyNewsBlock,
+    deleteCompanyNewsBlock,
+    publishCompanyNewsBlock,
   };
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
