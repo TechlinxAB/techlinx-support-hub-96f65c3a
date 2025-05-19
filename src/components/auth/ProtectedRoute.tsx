@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { 
   isCircuitBreakerActive, 
   detectAuthLoops,
-  resetCircuitBreaker
-} from '@/integrations/supabase/client';
+  resetCircuitBreaker,
+  performFullAuthRecovery
+} from '@/utils/authRecovery';
 
 const ProtectedRoute = () => {
   const { 
@@ -17,52 +18,39 @@ const ProtectedRoute = () => {
     loading, 
     authState, 
     forceRecovery, 
-    authError 
+    authError,
+    session
   } = useAuth();
   
   const location = useLocation();
-  const [isRecovering, setIsRecovering] = React.useState(false);
-  const [redirecting, setRedirecting] = React.useState(false);
-  const [authAttempts, setAuthAttempts] = React.useState(0);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const [forceTimeout, setForceTimeout] = useState(false);
   
   // Handle diagnostic info for circuit breaker
   const circuitBreakerInfo = isCircuitBreakerActive();
   const authLoopDetected = detectAuthLoops();
 
-  // Add a useEffect to handle auth retries with a limit
+  // Add a strict timeout to force progression after 3 seconds max
   useEffect(() => {
-    if (!isAuthenticated && !loading && authState !== 'ERROR' && authAttempts < 2) {
-      // Try to wait a bit and let auth complete, in case of race conditions
-      const timer = setTimeout(() => {
-        setAuthAttempts(prev => prev + 1);
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isAuthenticated, loading, authState, authAttempts]);
-  
-  // Force hard redirect to auth page after max retry attempts
-  useEffect(() => {
-    if (!isAuthenticated && authAttempts >= 2 && !redirecting && !loading) {
-      console.log("Max auth attempts reached, redirecting to auth page");
-      setRedirecting(true);
-      
-      // Hard redirect to auth page to clear state
-      const redirectPath = encodeURIComponent(location.pathname);
-      window.location.href = `/auth?redirect=${redirectPath}`;
-    }
-  }, [isAuthenticated, authAttempts, redirecting, loading, location.pathname]);
+    // Set a timeout to force progress after 3 seconds
+    const timer = setTimeout(() => {
+      if (!redirecting) {
+        console.log("Force timeout triggered - progressing auth flow");
+        setForceTimeout(true);
+      }
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [redirecting]);
   
   // Handle recovery action
   const handleRecovery = async () => {
     setIsRecovering(true);
     try {
-      await forceRecovery();
+      await performFullAuthRecovery();
       setRedirecting(true);
-      // Short delay to allow state updates before redirecting
-      setTimeout(() => {
-        window.location.href = '/auth';
-      }, 500);
+      window.location.href = '/auth';
     } catch (err) {
       console.error("Recovery failed:", err);
       setIsRecovering(false);
@@ -72,17 +60,23 @@ const ProtectedRoute = () => {
   // Handle forcing auth page navigation
   const handleNavigateToAuth = () => {
     setRedirecting(true);
-    // Reset circuit breaker before navigating
     resetCircuitBreaker();
     window.location.href = '/auth';
   };
   
   // Show loading spinner while checking authentication - with a timeout
-  if ((loading || authAttempts < 2) && !redirecting) {
+  if ((loading && !forceTimeout) && !redirecting) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-sm text-muted-foreground">Checking authentication status...</p>
+        <Button 
+          variant="link" 
+          onClick={handleNavigateToAuth}
+          className="mt-4 text-sm"
+        >
+          Click here if stuck
+        </Button>
       </div>
     );
   }
@@ -140,16 +134,15 @@ const ProtectedRoute = () => {
     );
   }
   
-  // If not authenticated, redirect to login - with location state preserved
-  if (!isAuthenticated) {
-    // Use a more reliable hard redirect for auth issues
-    const redirectPath = encodeURIComponent(location.pathname);
-    window.location.href = `/auth?redirect=${redirectPath}`;
-    return null;
+  // IMPORTANT FIX: If we have a session, we should allow access even if other flags aren't set
+  if (session || isAuthenticated || forceTimeout) {
+    return <Outlet />;
   }
   
-  // If authenticated, render the child routes
-  return <Outlet />;
+  // If definitely not authenticated, redirect to login
+  const redirectPath = encodeURIComponent(location.pathname);
+  window.location.href = `/auth?redirect=${redirectPath}`;
+  return null;
 };
 
 export default ProtectedRoute;

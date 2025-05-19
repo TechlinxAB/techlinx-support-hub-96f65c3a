@@ -20,7 +20,22 @@ export const performFullAuthRecovery = async (): Promise<boolean> => {
     // Step 2: Clear all auth state (tokens, sessions, etc.)
     await clearAuthState();
     
-    // Step 3: Force page reload if needed
+    // Step 3: Clear any session cookies and local storage directly
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Clear cookies
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c
+          .replace(/^ +/, '')
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+    } catch (e) {
+      console.error("Failed to clear storage directly:", e);
+    }
+    
+    // Step 4: Force page reload if needed
     if (window.location.pathname !== '/auth') {
       window.location.href = '/auth';
       return true;
@@ -31,10 +46,11 @@ export const performFullAuthRecovery = async (): Promise<boolean> => {
   } catch (error) {
     console.error('❌ Authentication recovery failed:', error);
     
-    // Last resort - try to clear storage directly
+    // Last resort - try to clear storage directly again
     try {
       localStorage.clear();
       sessionStorage.clear();
+      window.location.href = '/auth';
       return true;
     } catch (e) {
       // Nothing else we can do
@@ -105,3 +121,4 @@ export const emergencyAuthReset = (): void => {
     alert("Emergency reset failed. Please clear your browser data manually and reload.");
   }
 };
+

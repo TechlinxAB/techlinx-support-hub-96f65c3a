@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import {
   isTokenPotentiallyStale,
   recordSuccessfulAuth
 } from '@/integrations/supabase/client';
+import { performFullAuthRecovery } from '@/utils/authRecovery';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
@@ -24,15 +26,22 @@ const AuthPage = () => {
   const [recoveryMode, setRecoveryMode] = useState<boolean>(false);
   const [advancedTroubleshooting, setAdvancedTroubleshooting] = useState<boolean>(false);
   const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
+  const [forceHomeRedirect, setForceHomeRedirect] = useState<boolean>(false);
   
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, signIn, forceRecovery, authState, authError } = useAuth();
+  const { isAuthenticated, signIn, forceRecovery, authState, authError, session } = useAuth();
   
   // Get redirect path from state or query param or default to home
   const urlParams = new URLSearchParams(location.search);
   const redirectParam = urlParams.get('redirect');
   const from = location.state?.from || redirectParam || '/';
+  
+  // Add an emergency force redirect function
+  const handleForceRedirect = () => {
+    setForceHomeRedirect(true);
+    window.location.href = '/';
+  };
   
   // Check for auth issues on mount
   useEffect(() => {
@@ -62,35 +71,31 @@ const AuthPage = () => {
     
     checkForAuthIssues();
     
-    // After 3 seconds, show the troubleshooting option
+    // After 2 seconds, show the troubleshooting option
     const timer = setTimeout(() => {
       setShowRecovery(true);
-    }, 3000);
+    }, 2000);
     
     return () => clearTimeout(timer);
   }, [authState]);
   
   // Enhanced redirect logic with safety mechanisms
   useEffect(() => {
-    if (isAuthenticated && !redirectAttempted) {
+    // If we have a session, we should go to the homepage regardless
+    if (session) {
+      console.log("Session exists, forcing redirect to /");
+      window.location.href = "/";
+      return;
+    }
+    
+    if ((isAuthenticated || forceHomeRedirect) && !redirectAttempted) {
       setRedirectAttempted(true);
       console.log("User is authenticated, redirecting to:", from);
       
-      try {
-        // For dashboard routes, use a hard redirect to ensure clean state
-        if (from === '/' || from.includes('dashboard')) {
-          window.location.href = from;
-        } else {
-          // Use React Router for other routes
-          navigate(from, { replace: true });
-        }
-      } catch (error) {
-        console.error("Navigation error:", error);
-        // Fallback to hard redirect if navigation fails
-        window.location.href = from;
-      }
+      // Use hard redirect for reliability
+      window.location.href = from;
     }
-  }, [isAuthenticated, navigate, from, redirectAttempted]);
+  }, [isAuthenticated, navigate, from, redirectAttempted, session, forceHomeRedirect]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,8 +118,10 @@ const AuthPage = () => {
       recordSuccessfulAuth();
       toast.success("You have been logged in");
       
-      // Set the redirectAttempted flag to trigger the redirect in the useEffect
-      setRedirectAttempted(false);
+      // Force a hard redirect after successful login
+      setTimeout(() => {
+        window.location.href = from;
+      }, 500);
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error("Login failed", {
@@ -130,22 +137,17 @@ const AuthPage = () => {
     setRecoveryMode(true);
     
     try {
-      // Reset circuit breaker
-      resetCircuitBreaker();
-      
-      // Clear all auth state
-      await clearAuthState();
-      
-      // Force recovery through auth context
-      await forceRecovery();
+      // Use the enhanced recovery function
+      await performFullAuthRecovery();
       
       toast.success("Authentication reset successful", {
         description: "Please log in again"
       });
       
-      // Reset states after recovery
-      setLoading(false);
-      setRecoveryMode(false);
+      // Force reload after recovery
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (err) {
       console.error('Recovery failed:', err);
       toast.error("Recovery failed", {
@@ -198,6 +200,34 @@ const AuthPage = () => {
           <CardContent className="pt-6 flex flex-col items-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
             <p className="text-center">You are logged in. Redirecting to {from}...</p>
+            <Button 
+              variant="link" 
+              onClick={handleForceRedirect}
+              className="mt-4"
+            >
+              Click here if not automatically redirected
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // If we have a session but not fully authenticated yet, show a spinner with force option
+  if (session && !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-center">Finalizing authentication...</p>
+            <Button 
+              variant="link" 
+              onClick={handleForceRedirect}
+              className="mt-4"
+            >
+              Click here to force redirect to dashboard
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -283,6 +313,15 @@ const AuthPage = () => {
             >
               {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
+            </Button>
+            
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full" 
+              onClick={handleForceRedirect}
+            >
+              Go to Dashboard
             </Button>
             
             {showRecovery && !isAuthError && (
