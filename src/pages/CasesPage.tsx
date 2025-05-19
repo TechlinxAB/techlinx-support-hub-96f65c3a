@@ -35,6 +35,14 @@ const CasesPage = () => {
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Track if initial data has been loaded
+  useEffect(() => {
+    if (!loadingCases && cases && !initialDataLoaded) {
+      setInitialDataLoaded(true);
+    }
+  }, [loadingCases, cases, initialDataLoaded]);
 
   // Check if we're being directed to watchlist filter
   useEffect(() => {
@@ -238,7 +246,7 @@ const CasesPage = () => {
           </TabsTrigger>
         </TabsList>
         
-        {loadingCases ? (
+        {(loadingCases && !initialDataLoaded) ? (
           <div className="flex items-center justify-center p-12">
             <Loader className="h-8 w-8 animate-spin text-primary" />
           </div>
