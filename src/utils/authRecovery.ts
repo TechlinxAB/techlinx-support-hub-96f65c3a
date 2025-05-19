@@ -1,4 +1,3 @@
-
 import { supabase, STORAGE_KEY, validateTokenIntegrity } from "@/integrations/supabase/client";
 
 /**
@@ -741,22 +740,28 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
   };
 };
 
-// Fix missing function: Add the required clearPauseRecoveryRequired function
+/**
+ * Fix missing function: Add the required clearPauseRecoveryRequired function
+ * Clear the pause recovery flag
+ */
 export const clearPauseRecoveryRequired = (): void => {
   localStorage.removeItem("pause_recovery_active");
   console.log('Pause recovery flag cleared');
 };
 
-// Fix missing function: Add the markPauseRecoveryRequired function 
+/**
+ * Fix missing function: Add the markPauseRecoveryRequired function 
+ * Set the pause recovery flag
+ */
 export const markPauseRecoveryRequired = (): void => {
   localStorage.setItem("pause_recovery_active", "true");
   console.log('Pause recovery flag set');
 };
 
-// Fix missing function: Check if pause recovery is required
+/**
+ * Fix missing function: Check if pause recovery is required
+ * @returns true if pause recovery is required
+ */
 export const isPauseRecoveryRequired = (): boolean => {
   return localStorage.getItem("pause_recovery_active") === "true";
 };
-
-// Re-export these functions from supabase/client.ts so that modules importing from authRecovery can use them
-// export { isPauseRecoveryRequired, clearPauseRecoveryRequired, markPauseRecoveryRequired } from "@/integrations/supabase/client";

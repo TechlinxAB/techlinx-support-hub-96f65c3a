@@ -396,8 +396,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       });
 
-      // Mark auth as initialized after setting up the listener
-      setAuthInitialized(true);
+      // Run session restore immediately after setting up listener
+      (async () => {
+        await restoreSession();
+        setAuthInitialized(true);
+      })();
       
     } catch (error) {
       console.error('Failed to set up auth listener:', error);
@@ -406,7 +409,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
     
-    // Enhanced session check with retry logic and improved token validation
+    // Enhanced session check with immediate execution, no delay
     const checkSession = async () => {
       // Skip if already done or we already have a session
       if (sessionCheckDone || session) return;
@@ -442,10 +445,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     };
     
-    // Only try to check session once auth is initialized
-    if (authInitialized) {
-      // Defer session check slightly to avoid race conditions
-      setTimeout(checkSession, 1000); // Increased to 1000ms for more reliability
+    // Only try to check session once auth is initialized and not already done
+    if (authInitialized && !sessionCheckDone && !sessionRestoreAttempted) {
+      // Execute immediately with no delay to avoid race condition
+      checkSession();
     }
     
     return () => {
@@ -456,16 +459,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState, sessionRestoreAttempted, authInitialized]);
 
-  // Add an effect to run session check once auth is initialized
+  // Add an effect to run session check once auth is initialized that runs immediately
   useEffect(() => {
     if (!authInitialized) return;
     
-    // Only check session if we don't already have one
+    // Only check session if we don't already have one and haven't checked yet
     if (!session && !sessionRestoreAttempted && !sessionCheckDone) {
-      // Defer to next tick to avoid race conditions
-      setTimeout(async () => {
-        console.log("Auth initialized, checking for existing session");
-        
+      console.log("Auth initialized, checking for existing session immediately");
+      
+      const checkForExistingSession = async () => {
         try {
           // First check if Supabase is responding
           const isAvailable = await probeSupabaseService();
@@ -505,7 +507,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setLoading(false);
           setSessionCheckDone(true);
         }
-      }, 0);
+      };
+      
+      // Execute immediately instead of with setTimeout
+      checkForExistingSession();
     }
   }, [authInitialized, session, sessionRestoreAttempted, sessionCheckDone]);
 

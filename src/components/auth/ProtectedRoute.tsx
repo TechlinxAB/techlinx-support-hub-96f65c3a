@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -59,7 +58,7 @@ const ProtectedRoute = () => {
   const pauseDetected = wasPauseDetected();
   const pauseRecoveryRequired = isPauseRecoveryRequired();
   
-  // Check for auth loops with throttling to prevent false positives
+  // Modified: Wait longer before checking for auth loops
   useEffect(() => {
     if (loading) return;
     
@@ -74,9 +73,8 @@ const ProtectedRoute = () => {
       setAuthLoopDetected(isLoop);
     };
     
-    // Only check for loops after 2 seconds to allow initial auth processes to complete
-    // Increased from 1.5s to 2s for more stability
-    const timer = setTimeout(loopCheck, 2000);
+    // Increased from 2s to 3s for more stability and to ensure auth process completes
+    const timer = setTimeout(loopCheck, 3000);
     return () => clearTimeout(timer);
   }, [loading]);
   
@@ -138,7 +136,7 @@ const ProtectedRoute = () => {
   
   // Add a longer timeout to force progression after 8 seconds max
   useEffect(() => {
-    // Set a timeout to force progress after 10 seconds (up from 8)
+    // Set a timeout to force progress after 12 seconds (up from 10)
     const timer = setTimeout(() => {
       if (!redirecting && !authCheckComplete) {
         console.log("Force timeout triggered - progressing auth flow");
@@ -151,7 +149,7 @@ const ProtectedRoute = () => {
           handleNavigateToAuth();
         }
       }
-    }, 10000);
+    }, 12000);
     
     return () => clearTimeout(timer);
   }, [redirecting, authCheckComplete, session, location.pathname]);
@@ -166,7 +164,7 @@ const ProtectedRoute = () => {
     const rawTokenInStorage = localStorage.getItem(STORAGE_KEY);
     const isSessionValid = session?.user && rawTokenInStorage;
     
-    // If we don't have a valid session or token, stay on auth page
+    // Only proceed with routing decisions when auth check is complete
     if (!isSessionValid && !bypassActive) {
       console.warn('Invalid session or missing token. Routing to /auth.');
       if (location.pathname !== '/auth' && !redirectStarted) {
@@ -271,13 +269,49 @@ const ProtectedRoute = () => {
     window.location.reload();
   };
   
+  // Add manual hard reset option
+  const handleHardReset = async () => {
+    try {
+      console.log("Performing hard auth reset");
+      setRedirecting(true);
+      
+      // Clear all auth state
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      // Clear important storage items but preserve theme
+      const theme = localStorage.getItem('theme');
+      const colorMode = localStorage.getItem('color-mode');
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Restore theme settings
+      if (theme) localStorage.setItem('theme', theme);
+      if (colorMode) localStorage.setItem('color-mode', colorMode);
+      
+      // Reset all recovery and detection flags
+      resetAuthLoopState();
+      resetCircuitBreaker();
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+      resetRecoveryAttempts();
+      
+      // Add a cache-busting parameter
+      window.location.href = '/auth?reset=' + Date.now();
+    } catch (err) {
+      console.error("Hard reset failed:", err);
+      // Force reload as last resort
+      window.location.reload();
+    }
+  };
+  
   // If force bypass is active, skip all checks and render the outlet
   if (bypassActive) {
     console.log("🔓 Force bypass active - skipping auth checks");
     return <Outlet />;
   }
   
-  // Show loading spinner while checking authentication - with increased timeout
+  // Don't show anything until auth check is complete or timeout forces progress
   if ((loading && !forceTimeout) && !redirecting && !authCheckComplete) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -290,7 +324,7 @@ const ProtectedRoute = () => {
           </p>
         )}
         
-        <div className="flex gap-2 mt-4">
+        <div className="flex flex-col gap-2 mt-4">
           <Button 
             variant="link" 
             onClick={handleNavigateToAuth}
@@ -311,6 +345,14 @@ const ProtectedRoute = () => {
             className="text-sm text-amber-500"
           >
             Bypass auth checks
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleHardReset}
+            className="mt-2"
+          >
+            Hard Reset Login
           </Button>
         </div>
       </div>
@@ -380,6 +422,14 @@ const ProtectedRoute = () => {
               Force Access Anyway (1 hr)
             </Button>
             
+            <Button
+              variant="destructive"
+              onClick={handleHardReset}
+              className="w-full mt-2"
+            >
+              Hard Reset Login
+            </Button>
+            
             <p className="text-xs text-muted-foreground text-center mt-4">
               If problems persist, try clearing your browser cache and cookies.
             </p>
@@ -393,6 +443,17 @@ const ProtectedRoute = () => {
   const rawTokenInStorage = localStorage.getItem(STORAGE_KEY);
   const isSessionValid = session?.user && rawTokenInStorage;
   
+  // Wait until authCheckComplete is true before rendering the outlet
+  if (!authCheckComplete && !forceTimeout) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Finalizing authentication...</p>
+      </div>
+    );
+  }
+  
+  // If we have a valid session or force timeout, render the outlet
   if (isSessionValid || forceTimeout || (isPauseRecovery && session)) {
     return <Outlet />;
   }
