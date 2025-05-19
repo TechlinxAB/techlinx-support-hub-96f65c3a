@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, validateTokenIntegrity } from "@/integrations/supabase/client";
@@ -24,7 +23,10 @@ import {
   emergencyAuthReset,
   testSessionWithRetries,
   isPauseRecoveryRequired,
-  clearPauseRecoveryRequired
+  clearPauseRecoveryRequired,
+  probeSupabaseService,
+  clearPauseDetected,
+  resetAuthRecovery
 } from '@/utils/authRecovery';
 
 /**
@@ -62,6 +64,8 @@ const AuthPage = () => {
   const [forceHomeRedirect, setForceHomeRedirect] = useState<boolean>(false);
   const [serviceStatus, setServiceStatus] = useState<'checking' | 'available' | 'unavailable' | 'recovering'>('checking');
   const [sessionValid, setSessionValid] = useState<boolean | null>(null);
+  const [pauseRecoveryNeeded, setPauseRecoveryNeeded] = useState<boolean>(false);
+  const [probeAttempts, setProbeAttempts] = useState<number>(0);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -71,6 +75,45 @@ const AuthPage = () => {
   const urlParams = new URLSearchParams(location.search);
   const redirectParam = urlParams.get('redirect');
   const from = location.state?.from || redirectParam || '/';
+  
+  // Force clear pause recovery flags if we're on auth page
+  useEffect(() => {
+    const checkSupabaseService = async () => {
+      setServiceStatus('checking');
+      
+      // Try to probe Supabase service
+      const isAvailable = await probeSupabaseService();
+      
+      if (isAvailable) {
+        console.log('Supabase service is available, clearing pause recovery flags');
+        clearPauseRecoveryRequired();
+        clearPauseDetected();
+        setServiceStatus('available');
+        setPauseRecoveryNeeded(false);
+        setRecoveryMode(false);
+      } else {
+        // If service is not available, keep trying
+        setServiceStatus('unavailable');
+        setProbeAttempts(prev => prev + 1);
+        setPauseRecoveryNeeded(true);
+        
+        // Only show recovery UI after multiple failed attempts
+        if (probeAttempts >= 2) {
+          setShowRecovery(true);
+        }
+        
+        // Set up a retry after 3 seconds
+        setTimeout(() => {
+          if (serviceStatus !== 'available') {
+            checkSupabaseService();
+          }
+        }, 3000);
+      }
+    };
+    
+    // Initial check
+    checkSupabaseService();
+  }, []);
   
   // Add a diagnostics run on page load
   useEffect(() => {
@@ -84,7 +127,18 @@ const AuthPage = () => {
           setServiceStatus('recovering');
           setShowRecovery(true);
           setAdvancedTroubleshooting(true);
-          clearPauseRecoveryRequired(); // Clear it once we're on auth page
+          setPauseRecoveryNeeded(true);
+          
+          // Try to probe if Supabase is actually available
+          const isAvailable = await probeSupabaseService();
+          if (isAvailable) {
+            console.log('Supabase service is actually available despite pause flag, clearing flags');
+            clearPauseRecoveryRequired();
+            clearPauseDetected();
+            setServiceStatus('available');
+            setPauseRecoveryNeeded(false);
+            setRecoveryMode(false);
+          }
         }
         
         // Check if we have a valid token in storage
@@ -98,6 +152,9 @@ const AuthPage = () => {
         if (result.valid) {
           console.log("✅ Session test: VALID");
           setServiceStatus('available');
+          clearPauseRecoveryRequired();
+          clearPauseDetected();
+          setPauseRecoveryNeeded(false);
           
           // If we get here with a valid session AND token, but no authState,
           // something is wrong - trigger recovery
@@ -109,11 +166,32 @@ const AuthPage = () => {
           console.warn("❌ Session test: INVALID", result.error);
           setServiceStatus('unavailable');
           setShowRecovery(true);
+          
+          // Try to probe if service is actually available despite session failures
+          const isAvailable = await probeSupabaseService();
+          if (isAvailable) {
+            setServiceStatus('available');
+            clearPauseRecoveryRequired();
+            clearPauseDetected();
+            setPauseRecoveryNeeded(false);
+          }
         }
       } catch (error) {
         console.error("Error during diagnostics:", error);
         setServiceStatus('unavailable');
         setShowRecovery(true);
+        
+        // Retry after failure
+        setTimeout(() => {
+          probeSupabaseService().then(available => {
+            if (available) {
+              setServiceStatus('available');
+              clearPauseRecoveryRequired();
+              clearPauseDetected();
+              setPauseRecoveryNeeded(false);
+            }
+          });
+        }, 3000);
       }
     };
     
@@ -124,6 +202,10 @@ const AuthPage = () => {
   // Add an emergency force redirect function
   const handleForceRedirect = () => {
     setForceHomeRedirect(true);
+    // Clear any pause recovery flags before redirecting
+    clearPauseRecoveryRequired();
+    clearPauseDetected();
+    resetAuthRecovery();
     window.location.href = '/?force=' + Date.now();
   };
   
@@ -184,6 +266,29 @@ const AuthPage = () => {
     }
   }, [isAuthenticated, navigate, from, redirectAttempted, session, forceHomeRedirect]);
   
+  // Manual retry handler
+  const handleRetryConnection = async () => {
+    setServiceStatus('checking');
+    
+    try {
+      const isAvailable = await probeSupabaseService();
+      if (isAvailable) {
+        console.log('Retry successful - Supabase service is available');
+        clearPauseRecoveryRequired();
+        clearPauseDetected();
+        setServiceStatus('available');
+        setPauseRecoveryNeeded(false);
+        setRecoveryMode(false);
+      } else {
+        console.log('Retry failed - Supabase service still unavailable');
+        setServiceStatus('unavailable');
+      }
+    } catch (error) {
+      console.error('Error during manual retry:', error);
+      setServiceStatus('unavailable');
+    }
+  };
+  
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -194,9 +299,24 @@ const AuthPage = () => {
     
     // Reset circuit breaker before sign in attempt
     resetCircuitBreaker();
+    clearPauseRecoveryRequired();
+    clearPauseDetected();
     setLoading(true);
     
     try {
+      // Always probe service first to ensure it's available
+      const isAvailable = await probeSupabaseService();
+      if (!isAvailable) {
+        toast.error("Login service is currently unavailable", {
+          description: "The service might be starting up. Please try again in a moment."
+        });
+        setServiceStatus('unavailable');
+        setPauseRecoveryNeeded(true);
+        setLoading(false);
+        return;
+      }
+      
+      // Proceed with login if service is available
       const { error } = await signIn(email, password);
       
       if (error) throw error;
@@ -204,6 +324,8 @@ const AuthPage = () => {
       // Mark successful authentication
       recordSuccessfulAuth();
       toast.success("You have been logged in");
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
       
       // Force a hard redirect after successful login with cache busting
       setTimeout(() => {
@@ -311,37 +433,72 @@ const AuthPage = () => {
   
   // Show service status indicator when needed
   const renderServiceStatusIndicator = () => {
-    if (serviceStatus === 'checking') return null;
+    if (serviceStatus === 'checking') {
+      return (
+        <div className="mb-4 p-2 rounded border bg-blue-50 border-blue-200 text-blue-700">
+          <div className="flex items-center">
+            <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse mr-2"></div>
+            <span className="text-sm font-medium">Checking Supabase service status...</span>
+          </div>
+        </div>
+      );
+    }
     
-    return (
-      <div className={`mb-4 p-2 rounded border ${
-        serviceStatus === 'available' ? 'bg-green-50 border-green-200 text-green-700' :
-        serviceStatus === 'recovering' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-        'bg-red-50 border-red-200 text-red-700'
-      }`}>
-        <div className="flex items-center">
-          {serviceStatus === 'available' ? (
-            <>
-              <div className="h-2 w-2 rounded-full bg-green-500 mr-2"></div>
-              <span className="text-sm font-medium">Supabase service is operational</span>
-            </>
-          ) : serviceStatus === 'recovering' ? (
-            <>
+    if (serviceStatus === 'available') {
+      return (
+        <div className="mb-4 p-2 rounded border bg-green-50 border-green-200 text-green-700">
+          <div className="flex items-center">
+            <div className="h-2 w-2 rounded-full bg-green-500 mr-2"></div>
+            <span className="text-sm font-medium">Supabase service is operational</span>
+          </div>
+        </div>
+      );
+    }
+    
+    if (serviceStatus === 'recovering') {
+      return (
+        <div className="mb-4 p-2 rounded border bg-amber-50 border-amber-200 text-amber-700">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center">
               <div className="h-2 w-2 rounded-full bg-amber-500 mr-2"></div>
               <span className="text-sm font-medium">Recovery in progress</span>
-            </>
-          ) : (
-            <>
-              <div className="h-2 w-2 rounded-full bg-red-500 mr-2"></div>
-              <span className="text-sm font-medium">Supabase service may be restarting</span>
-            </>
-          )}
-        </div>
-        {serviceStatus !== 'available' && (
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRetryConnection} 
+              className="text-xs px-2 py-1 h-auto"
+            >
+              Check Again
+            </Button>
+          </div>
           <p className="text-xs mt-1">
             Service may be recovering from pause. Automatic reconnection in progress.
           </p>
-        )}
+        </div>
+      );
+    }
+    
+    // Unavailable status
+    return (
+      <div className="mb-4 p-2 rounded border bg-red-50 border-red-200 text-red-700">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center">
+            <div className="h-2 w-2 rounded-full bg-red-500 mr-2"></div>
+            <span className="text-sm font-medium">Supabase service may be restarting</span>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRetryConnection} 
+            className="text-xs px-2 py-1 h-auto"
+          >
+            Retry
+          </Button>
+        </div>
+        <p className="text-xs mt-1">
+          Service may be recovering from pause. Click "Retry" to check again.
+        </p>
       </div>
     );
   };
@@ -375,7 +532,7 @@ const AuthPage = () => {
             </Alert>
           )}
           
-          {(isAuthError || circuitBreakerInfo.active || serviceStatus === 'recovering') && (
+          {(isAuthError || circuitBreakerInfo.active || serviceStatus === 'recovering' || pauseRecoveryNeeded) && (
             <Button 
               onClick={handleRecovery} 
               variant="secondary"
@@ -424,7 +581,9 @@ const AuthPage = () => {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={loading || recoveryMode || (circuitBreakerInfo.active && !advancedTroubleshooting) || serviceStatus === 'unavailable'}
+                disabled={loading || recoveryMode || serviceStatus === 'checking' || 
+                  ((circuitBreakerInfo.active && !advancedTroubleshooting) || 
+                  (serviceStatus === 'unavailable' && pauseRecoveryNeeded))}
               >
                 {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign In
@@ -456,7 +615,7 @@ const AuthPage = () => {
                 </Button>
               )}
               
-              {advancedTroubleshooting && (
+              {(advancedTroubleshooting || serviceStatus === 'unavailable') && (
                 <Button
                   type="button"
                   variant="destructive"
@@ -469,7 +628,7 @@ const AuthPage = () => {
                 </Button>
               )}
               
-              {!advancedTroubleshooting && showRecovery && (
+              {!advancedTroubleshooting && showRecovery && serviceStatus !== 'unavailable' && (
                 <Button
                   type="button"
                   variant="link"

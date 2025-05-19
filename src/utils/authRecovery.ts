@@ -51,6 +51,17 @@ export const probeSupabaseService = async (): Promise<boolean> => {
     if (responseTime > 2000) {
       console.log('Supabase service seems to be waking up from pause');
       markPauseRecoveryRequired();
+      return false;
+    }
+    
+    // If we got here with no error, Supabase is available
+    // Automatically clear the pause recovery flag
+    if (!error) {
+      console.log('Supabase probe successful - service is available. Clearing pause recovery flag.');
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+      resetRecoveryAttempts();
+      return true;
     }
     
     return !error;
@@ -208,6 +219,12 @@ export const performFullAuthRecovery = async (): Promise<void> => {
     const isServiceAvailable = await probeSupabaseService();
     console.log(`Supabase service availability: ${isServiceAvailable ? 'OK' : 'NOT RESPONDING'}`);
     
+    // If service is available, clear pause recovery flags
+    if (isServiceAvailable) {
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+    }
+    
     // Start with service reset
     try {
       // Sign out from Supabase to clear any stale sessions
@@ -225,7 +242,7 @@ export const performFullAuthRecovery = async (): Promise<void> => {
     
     // Clear auth-related storage items
     localStorage.removeItem('auth-token-version');
-    localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+    localStorage.removeItem(STORAGE_KEY);
     
     // Clear session storage items
     sessionStorage.removeItem('authAttempts');
@@ -307,6 +324,18 @@ export const initPauseUnpauseDetection = (): void => {
         } else {
           console.log(`App was in background for ${Math.round(timeDiff / 1000)}s, marking as paused`);
         }
+        
+        // Schedule an automatic probe after returning from pause/background
+        setTimeout(async () => {
+          const isAvailable = await probeSupabaseService();
+          if (isAvailable) {
+            console.log('Auto-probe after pause: Supabase is available, clearing pause flags');
+            clearPauseDetected();
+            clearPauseRecoveryRequired();
+          } else {
+            console.warn('Auto-probe after pause: Supabase still unavailable');
+          }
+        }, 1000);
       }
       
       wasHidden = false;
@@ -335,6 +364,18 @@ export const initPauseUnpauseDetection = (): void => {
         } else {
           console.log(`App was unfocused for ${Math.round(timeDiff / 1000)}s, marking as paused`);
         }
+        
+        // Schedule an automatic probe after returning from focus loss
+        setTimeout(async () => {
+          const isAvailable = await probeSupabaseService();
+          if (isAvailable) {
+            console.log('Auto-probe after focus return: Supabase is available, clearing pause flags');
+            clearPauseDetected();
+            clearPauseRecoveryRequired();
+          } else {
+            console.warn('Auto-probe after focus return: Supabase still unavailable');
+          }
+        }, 1000);
       }
       
       wasHidden = false;
@@ -350,11 +391,36 @@ export const initPauseUnpauseDetection = (): void => {
       if (!isServiceAvailable) {
         console.warn('Supabase service not responding on initial check - may be in paused state');
         markPauseRecoveryRequired();
+      } else {
+        // If service is available, clear any lingering pause flags
+        clearPauseRecoveryRequired();
+        clearPauseDetected();
       }
     } catch (error) {
       console.error('Error during initial Supabase service probe:', error);
     }
   }, 1000);
+  
+  // Set up periodic probe to check if Supabase is back after pause
+  if (isPauseRecoveryRequired() || wasPauseDetected()) {
+    console.log('Setting up recurring probe for Supabase availability check');
+    const probeInterval = setInterval(async () => {
+      if (isPauseRecoveryRequired() || wasPauseDetected()) {
+        const isAvailable = await probeSupabaseService();
+        if (isAvailable) {
+          console.log('Recurring probe: Supabase is available, clearing pause flags');
+          clearPauseDetected();
+          clearPauseRecoveryRequired();
+          clearInterval(probeInterval);
+        }
+      } else {
+        clearInterval(probeInterval);
+      }
+    }, 5000); // Check every 5 seconds
+    
+    // Clean up interval after 2 minutes max to prevent memory leaks
+    setTimeout(() => clearInterval(probeInterval), 120000);
+  }
 };
 
 /**
@@ -515,6 +581,9 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
       }
       
       console.log('Session is valid');
+      // If we get a valid session, clear any pause recovery flags
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
       return { valid: true, session: data.session };
     } catch (error) {
       lastError = error;
