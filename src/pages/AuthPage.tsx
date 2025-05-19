@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, validateTokenIntegrity } from "@/integrations/supabase/client";
@@ -21,12 +22,12 @@ import {
   performFullAuthRecovery, 
   emergencyAuthReset,
   testSessionWithRetries,
-  isPauseRecoveryRequired,
-  clearPauseRecoveryRequired,
   probeSupabaseService,
   clearPauseDetected,
   resetAuthRecovery,
-  cleanAuthState
+  cleanAuthState,
+  isPauseRecoveryRequired,
+  clearPauseRecoveryRequired
 } from '@/utils/authRecovery';
 
 /**
@@ -53,6 +54,32 @@ const recordSuccessfulAuth = () => {
   }
 };
 
+// Nuclear option - completely clear auth state and retry
+const hardResetLogin = async () => {
+  try {
+    console.log("Performing HARD RESET on authentication state");
+    toast.info("Performing complete authentication reset");
+    
+    // Sign out first
+    await supabase.auth.signOut({ scope: 'global' });
+    
+    // Clear all storage
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Preserve theme if possible
+    const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    localStorage.setItem('theme', currentTheme);
+    
+    // Force reload with cache busting
+    window.location.href = '/auth?hardReset=' + Date.now();
+  } catch (error) {
+    console.error("Hard reset failed:", error);
+    // Last resort - reload page
+    window.location.reload();
+  }
+};
+
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -68,6 +95,7 @@ const AuthPage = () => {
   const [probeAttempts, setProbeAttempts] = useState<number>(0);
   const [hasTriedAutoRecover, setHasTriedAutoRecover] = useState<boolean>(false);
   const [lastProbeTime, setLastProbeTime] = useState<number>(0);
+  const [retryCount, setRetryCount] = useState(0);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -77,7 +105,29 @@ const AuthPage = () => {
   const urlParams = new URLSearchParams(location.search);
   const redirectParam = urlParams.get('redirect');
   const recoveryParam = urlParams.get('recovery');
+  const hardResetParam = urlParams.get('hardReset');
   const from = location.state?.from || redirectParam || '/';
+  
+  // Reset retry counter when URL changes
+  useEffect(() => {
+    setRetryCount(0);
+  }, [location.search]);
+  
+  // Handle hard reset param
+  useEffect(() => {
+    if (hardResetParam) {
+      console.log("Hard reset detected, resetting all auth state");
+      // Clear any remaining flags
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+      resetCircuitBreaker();
+      resetAuthRecovery();
+      
+      // Show advanced troubleshooting options
+      setAdvancedTroubleshooting(true);
+      toast.info("Authentication state has been completely reset");
+    }
+  }, [hardResetParam]);
   
   // Add automatic recovery after Supabase pause
   useEffect(() => {
@@ -334,7 +384,8 @@ const AuthPage = () => {
       setServiceStatus('unavailable');
     }
   };
-  
+
+  // Handle login with retries and improved error handling
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -342,6 +393,16 @@ const AuthPage = () => {
       toast.error("Please fill in all fields");
       return;
     }
+    
+    // Check for too many attempts and apply backoff
+    if (retryCount > 0) {
+      const backoffMs = Math.min(Math.pow(2, retryCount) * 1000, 8000); // Max 8 seconds
+      toast.info(`Please wait ${backoffMs/1000} seconds before trying again`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
+    
+    // Increment retry counter
+    setRetryCount(prev => prev + 1);
     
     // Reset circuit breaker before sign in attempt
     resetCircuitBreaker();
@@ -420,19 +481,8 @@ const AuthPage = () => {
   };
   
   const handleHardReset = () => {
-    try {
-      // Use the enhanced emergency reset function
-      emergencyAuthReset();
-      
-      toast.success("Complete browser storage reset successful", {
-        description: "Reloading page..."
-      });
-    } catch (err) {
-      console.error('Hard reset failed:', err);
-      toast.error("Reset failed", {
-        description: "Please try clearing browser data manually"
-      });
-    }
+    // Use the nuclear option function
+    hardResetLogin();
   };
   
   // New function to specifically handle Supabase pause recovery
@@ -726,6 +776,20 @@ const AuthPage = () => {
                     <RefreshCw className="mr-2 h-4 w-4" />
                   )}
                   Troubleshoot Login
+                </Button>
+              )}
+              
+              {/* New Hard Reset Login Button - always visible in advanced mode */}
+              {advancedTroubleshooting && (
+                <Button
+                  type="button" 
+                  variant="destructive"
+                  className="w-full text-sm"
+                  onClick={handleHardReset}
+                  disabled={loading}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Hard Reset Login
                 </Button>
               )}
               

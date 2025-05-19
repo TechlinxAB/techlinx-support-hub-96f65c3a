@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   supabase, 
@@ -10,10 +11,7 @@ import {
   resetCircuitBreaker,
   recordSuccessfulAuth,
   STORAGE_KEY,
-  validateTokenIntegrity,
-  isPauseRecoveryRequired,
-  markPauseRecoveryRequired,
-  clearPauseRecoveryRequired
+  validateTokenIntegrity
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -22,7 +20,12 @@ import {
   testSessionWithRetries, 
   resetAuthLoopState,
   cleanAuthState,
-  testSessionWithBackoff
+  testSessionWithBackoff,
+  isPauseRecoveryRequired,
+  markPauseRecoveryRequired,
+  clearPauseRecoveryRequired,
+  clearPauseDetected,
+  resetRecoveryAttempts
 } from '@/utils/authRecovery';
 
 // Define user profile type
@@ -97,6 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
   const [resetAttempts, setResetAttempts] = useState(0);
   const [sessionRestoreAttempted, setSessionRestoreAttempted] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
   
   // Impersonation state
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -110,6 +114,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const restoreSession = async (): Promise<boolean> => {
     try {
       console.log('Attempting to restore session');
+      
+      // Check if we've exceeded retry attempts
+      if (retryCount >= MAX_AUTH_RETRIES) {
+        console.warn(`Too many session restore attempts (${retryCount}), aborting to prevent loops`);
+        setAuthError("Too many authentication attempts. Please login manually.");
+        setAuthState('ERROR');
+        return false;
+      }
+      
+      // Increment retry counter
+      setRetryCount(prev => prev + 1);
+      
+      // Apply exponential backoff if this is a retry
+      if (retryCount > 0) {
+        const backoffMs = Math.pow(2, retryCount) * 1000;
+        console.log(`Backing off for ${backoffMs}ms before session restore attempt ${retryCount + 1}`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+      
       setSessionRestoreAttempted(true);
       
       // Check if Supabase is available first
@@ -137,6 +160,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // We have a valid session, update state
       setSession(restoredSession);
       setUser(restoredSession.user);
+      
+      // Reset retry count on success
+      setRetryCount(0);
       
       // Only try to fetch profile if we have a user
       if (restoredSession.user) {
@@ -198,6 +224,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         resetAuthErrorCount(); // Reset error count on successful fetch
         recordSuccessfulAuth(); // Record a successful auth action
         resetAuthLoopState(); // Reset loop detection
+        clearPauseRecoveryRequired(); // Clear pause recovery flag on success
+        clearPauseDetected(); // Clear pause detected flag on success
         return mappedProfile;
       }
       
@@ -254,6 +282,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       resetAuthErrorCount();
       resetAuthLoopState();
       
+      // Clear pause flags
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+      
       // Clear state
       setUser(null);
       setSession(null);
@@ -308,11 +340,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let authSubscription: { data: { subscription: { unsubscribe: () => void } } } | null = null;
     
     try {
-      // Set up auth listener
+      // Set up auth listener with deferral for Supabase client actions
       authSubscription = supabase.auth.onAuthStateChange((event, currentSession) => {
         console.log('Auth state changed:', event, currentSession ? 'Session exists' : 'No session');
         
-        // Update session and user state
+        // Synchronously update session and user state to avoid deadlocks
         setSession(currentSession);
         setUser(currentSession?.user || null);
         
@@ -332,6 +364,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   resetAuthErrorCount(); // Reset error counter on success
                   recordSuccessfulAuth(); // Record successful auth
                   resetAuthLoopState(); // Reset loop detection
+                  clearPauseRecoveryRequired(); // Clear pause flags on success
+                  clearPauseDetected();
+                  resetRecoveryAttempts();
                 }
               } else {
                 console.error('Failed to fetch profile for user:', currentSession.user.id);
@@ -360,6 +395,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setLoading(false);
         }
       });
+
+      // Mark auth as initialized after setting up the listener
+      setAuthInitialized(true);
+      
     } catch (error) {
       console.error('Failed to set up auth listener:', error);
       setAuthState('ERROR');
@@ -384,6 +423,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isPauseRecoveryRequired()) {
         console.warn('Pause recovery flag detected. Forcing full auth reset.');
         await cleanAuthState();
+        clearPauseRecoveryRequired();
+        clearPauseDetected();
         setAuthState('SIGNED_OUT');
         setLoading(false);
         return;
@@ -401,8 +442,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     };
     
-    // Defer session check slightly to avoid race conditions
-    setTimeout(checkSession, 500); // Increased from 300ms to 500ms
+    // Only try to check session once auth is initialized
+    if (authInitialized) {
+      // Defer session check slightly to avoid race conditions
+      setTimeout(checkSession, 1000); // Increased to 1000ms for more reliability
+    }
     
     return () => {
       // Clean up subscription
@@ -410,7 +454,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         authSubscription.data.subscription.unsubscribe();
       }
     };
-  }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState, sessionRestoreAttempted]);
+  }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState, sessionRestoreAttempted, authInitialized]);
+
+  // Add an effect to run session check once auth is initialized
+  useEffect(() => {
+    if (!authInitialized) return;
+    
+    // Only check session if we don't already have one
+    if (!session && !sessionRestoreAttempted && !sessionCheckDone) {
+      // Defer to next tick to avoid race conditions
+      setTimeout(async () => {
+        console.log("Auth initialized, checking for existing session");
+        
+        try {
+          // First check if Supabase is responding
+          const isAvailable = await probeSupabaseService();
+          if (!isAvailable) {
+            console.warn("Supabase not available for initial session check");
+            setLoading(false);
+            setAuthState('SIGNED_OUT');
+            return;
+          }
+          
+          // Check for session with backoff to prevent hammering
+          const { valid, session: existingSession } = await testSessionWithBackoff(0, 2);
+          
+          if (valid && existingSession) {
+            console.log("Found existing valid session during initialization check");
+            setSession(existingSession);
+            setUser(existingSession.user);
+            
+            if (existingSession.user) {
+              // Fetch profile for this user
+              const profile = await fetchProfile(existingSession.user.id);
+              if (profile) {
+                setProfile(profile);
+                setAuthState('AUTHENTICATED');
+                clearPauseRecoveryRequired();
+                clearPauseDetected();
+              }
+            }
+          } else {
+            console.log("No valid session found during initialization");
+            setAuthState('SIGNED_OUT');
+          }
+        } catch (err) {
+          console.error("Error during initial session check:", err);
+          setAuthState('SIGNED_OUT');
+        } finally {
+          setLoading(false);
+          setSessionCheckDone(true);
+        }
+      }, 0);
+    }
+  }, [authInitialized, session, sessionRestoreAttempted, sessionCheckDone]);
 
   // Start impersonation function
   const startImpersonation = async (userId: string) => {
@@ -486,6 +583,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     // Clear any pause recovery flags
     clearPauseRecoveryRequired();
+    clearPauseDetected();
+    resetRecoveryAttempts();
     
     // Clear any stale session data first
     await cleanAuthState({ signOut: true });
@@ -525,6 +624,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (data?.session) {
             recordSuccessfulAuth();
             resetAuthLoopState();
+            clearPauseRecoveryRequired();
+            clearPauseDetected();
             
             // Ensure state is updated
             setSession(data.session);

@@ -19,13 +19,13 @@ import {
   resetAuthLoopState,
   cleanAuthState,
   probeSupabaseService,
-  detectAuthLoops
+  detectAuthLoops,
+  isPauseRecoveryRequired,
+  clearPauseRecoveryRequired
 } from '@/utils/authRecovery';
 import { 
   supabase, 
   STORAGE_KEY, 
-  isPauseRecoveryRequired, 
-  clearPauseRecoveryRequired, 
   validateTokenIntegrity 
 } from '@/integrations/supabase/client';
 
@@ -48,6 +48,7 @@ const ProtectedRoute = () => {
   const [resetAttempts, setResetAttempts] = useState(0);
   const [sessionTestResult, setSessionTestResult] = useState<{valid?: boolean; error?: string}>({});
   const [authCheckComplete, setAuthCheckComplete] = useState(false);
+  const [redirectStarted, setRedirectStarted] = useState(false);
   
   // Check if we need to use force bypass mode (completely skip auth checks)
   const bypassActive = isForceBypassActive();
@@ -127,6 +128,7 @@ const ProtectedRoute = () => {
       // Clear the pause detected flag after a delay
       const timer = setTimeout(() => {
         clearPauseDetected();
+        clearPauseRecoveryRequired();
         setIsPauseRecovery(false);
       }, 15000);
       
@@ -144,7 +146,7 @@ const ProtectedRoute = () => {
         setAuthCheckComplete(true);
         
         // If we're timing out and still no session, force navigation to auth
-        if (!session && location.pathname !== '/auth') {
+        if (!session && location.pathname !== '/auth' && !redirectStarted) {
           console.log("Force timeout with no session - redirecting to auth");
           handleNavigateToAuth();
         }
@@ -167,7 +169,8 @@ const ProtectedRoute = () => {
     // If we don't have a valid session or token, stay on auth page
     if (!isSessionValid && !bypassActive) {
       console.warn('Invalid session or missing token. Routing to /auth.');
-      if (location.pathname !== '/auth') {
+      if (location.pathname !== '/auth' && !redirectStarted) {
+        setRedirectStarted(true);
         setRedirecting(true);
         navigate('/auth', { replace: true, state: { from: location.pathname } });
       }
@@ -175,11 +178,12 @@ const ProtectedRoute = () => {
     }
     
     // If we have a valid session, navigate away from auth page
-    if ((isSessionValid || bypassActive) && location.pathname === '/auth') {
+    if ((isSessionValid || bypassActive) && location.pathname === '/auth' && !redirectStarted) {
+      setRedirectStarted(true);
       setRedirecting(true);
       navigate('/', { replace: true });
     }
-  }, [loading, session, location.pathname, navigate, bypassActive]);
+  }, [loading, session, location.pathname, navigate, bypassActive, redirectStarted]);
   
   // Handle recovery action - enhanced for pause recovery
   const handleRecovery = async () => {
@@ -229,18 +233,30 @@ const ProtectedRoute = () => {
   
   // Handle forcing auth page navigation
   const handleNavigateToAuth = () => {
+    if (redirectStarted) return; // Prevent duplicate redirects
+    
+    setRedirectStarted(true);
     setRedirecting(true);
     resetCircuitBreaker();
     resetAuthLoopState();
+    clearPauseRecoveryRequired(); 
+    clearPauseDetected();
+    
     // Add a cache-busting parameter
     window.location.href = '/auth?redirect=' + encodeURIComponent(location.pathname) + '&t=' + Date.now();
   };
   
   // Handle force dashboard navigation
   const handleForceDashboard = () => {
+    if (redirectStarted) return; // Prevent duplicate redirects
+    
+    setRedirectStarted(true);
     setRedirecting(true);
     resetCircuitBreaker();
     resetAuthLoopState();
+    clearPauseRecoveryRequired();
+    clearPauseDetected();
+    
     // Add a cache-busting parameter with special force flag
     window.location.href = '/?force=' + Date.now();
   };
@@ -249,6 +265,8 @@ const ProtectedRoute = () => {
   const handleForceBypass = () => {
     setForceBypass(3600000); // 1 hour
     resetAuthLoopState();
+    clearPauseRecoveryRequired();
+    clearPauseDetected();
     setForceTimeout(true);
     window.location.reload();
   };
@@ -380,7 +398,8 @@ const ProtectedRoute = () => {
   }
   
   // If definitely not authenticated, redirect to login with cache busting
-  if (!loading && !redirecting && authCheckComplete) {
+  if (!loading && !redirecting && authCheckComplete && !redirectStarted) {
+    setRedirectStarted(true);
     const redirectPath = encodeURIComponent(location.pathname);
     const cacheBuster = Date.now();
     console.log("Not authenticated and auth check complete - redirecting to login");
