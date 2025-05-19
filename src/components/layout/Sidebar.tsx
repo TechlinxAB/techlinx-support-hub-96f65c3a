@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MessageCircle, Users, Settings, Clock, UserPlus, Building, X } from 'lucide-react';
+import { LayoutDashboard, MessageCircle, Users, Settings, Clock, UserPlus, Building, X, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useSidebar } from '@/context/SidebarContext';
@@ -60,30 +60,56 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
       isActive: location.pathname === '/settings'
     }
   ];
-  
+
   return (
     <aside 
       className={cn(
-        "h-screen bg-sidebar z-30 flex flex-col fixed left-0 top-0 bottom-0 transition-all duration-300 ease-in-out",
-        isOpen ? "translate-x-0 w-64" : "w-0 -translate-x-full md:translate-x-0 md:w-16",
+        "h-screen bg-sidebar z-30 flex flex-col fixed left-0 top-0 bottom-0 transition-all duration-300 ease-in-out w-full",
       )}
     >
       <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border bg-sidebar">
-        <Link to="/" className={cn("flex items-center gap-2 font-bold text-xl text-white", !isOpen && "md:justify-center")}>
-          <Clock className="h-6 w-6" />
-          {isOpen && <span>Techlinx</span>}
-        </Link>
+        {isOpen && (
+          <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
+            <Clock className="h-6 w-6" />
+            <span>Techlinx</span>
+          </Link>
+        )}
+        
+        {!isOpen && !isMobile && (
+          <Link to="/" className="flex justify-center w-full">
+            <Clock className="h-6 w-6 text-white" />
+          </Link>
+        )}
         
         {/* Mobile close button */}
         {isMobile && isOpen && (
-          <Button 
-            variant="ghost" 
+          <div className="flex justify-between w-full items-center">
+            <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
+              <Clock className="h-6 w-6" />
+              <span>Techlinx</span>
+            </Link>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={toggleSidebar}
+              className="text-white"
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close sidebar</span>
+            </Button>
+          </div>
+        )}
+        
+        {/* Toggle button for desktop collapsed state */}
+        {!isOpen && !isMobile && (
+          <Button
+            variant="ghost"
             size="icon"
             onClick={toggleSidebar}
-            className="text-white"
+            className="text-sidebar-foreground/70 hover:text-white absolute right-2 top-2"
           >
-            <X className="h-5 w-5" />
-            <span className="sr-only">Close sidebar</span>
+            <Menu className="h-4 w-4" />
+            <span className="sr-only">Open sidebar</span>
           </Button>
         )}
       </div>
@@ -149,7 +175,7 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
           </div>
         )}
         
-        {!isOpen && (
+        {!isOpen && !isMobile && (
           <div className="flex flex-col items-center space-y-4 pt-2">
             {menuItems.map((item) => {
               // Check if item should be shown (based on user role)
