@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -290,8 +291,8 @@ const CompanyNewsBuilderPage = () => {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // Fix: removed the second argument from refetchCompanyNewsBlocks()
-      await refetchCompanyNewsBlocks();
+      // Fix: call refetchCompanyNewsBlocks with only one argument (true)
+      await refetchCompanyNewsBlocks(true);
     } finally {
       setLoading(false);
     }
