@@ -75,16 +75,10 @@ const AuthPage = () => {
       setRedirectAttempted(true);
       console.log("User is authenticated, redirecting to:", from);
       
-      // Force a hard redirect if the normal navigation doesn't work
-      const redirectTimer = setTimeout(() => {
-        console.log("Forcing hard redirect after timeout");
-        window.location.href = from;
-      }, 1000);
-      
-      // Try normal navigation first
-      navigate(from, { replace: true });
-      
-      return () => clearTimeout(redirectTimer);
+      // Use a short timeout to ensure all state updates have processed
+      setTimeout(() => {
+        navigate(from, { replace: true });
+      }, 100);
     }
   }, [isAuthenticated, navigate, from, redirectAttempted]);
   
@@ -109,25 +103,14 @@ const AuthPage = () => {
       recordSuccessfulAuth();
       toast.success("You have been logged in");
       
-      // Force a hard redirect if the normal navigation doesn't work
-      setTimeout(() => {
-        if (!redirectAttempted) {
-          console.log("Forcing navigation after successful login");
-          navigate(from, { replace: true });
-          
-          // As a last resort, force a hard redirect
-          setTimeout(() => {
-            window.location.href = from;
-          }, 500);
-        }
-      }, 300);
+      // Set the redirectAttempted flag to trigger the redirect in the useEffect
+      setRedirectAttempted(false);
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error("Login failed", {
         description: error.message || "Invalid email or password"
       });
       setShowRecovery(true);
-    } finally {
       setLoading(false);
     }
   };
@@ -149,12 +132,15 @@ const AuthPage = () => {
       toast.success("Authentication reset successful", {
         description: "Please log in again"
       });
+      
+      // Reset states after recovery
+      setLoading(false);
+      setRecoveryMode(false);
     } catch (err) {
       console.error('Recovery failed:', err);
       toast.error("Recovery failed", {
         description: "Please try clearing your browser cache and cookies"
       });
-    } finally {
       setLoading(false);
       setRecoveryMode(false);
     }
@@ -193,6 +179,20 @@ const AuthPage = () => {
   
   const isAuthError = authState === 'ERROR' || !!authError;
   const circuitBreakerInfo = isCircuitBreakerActive();
+  
+  // If authenticated, show a loading screen during redirect
+  if (isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-center">You are logged in. Redirecting...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">

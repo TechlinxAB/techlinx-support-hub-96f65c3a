@@ -17,7 +17,7 @@ export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 
 // Set a version for the current auth implementation
 // Increment this when making changes to auth logic
-export const CURRENT_AUTH_VERSION = '1.2.0';
+export const CURRENT_AUTH_VERSION = '1.2.1';
 
 // Create a custom storage object with debugging
 const createStorage = () => {
@@ -36,6 +36,8 @@ const createStorage = () => {
           // When setting the auth token, also mark that we had a successful auth
           try {
             localStorage.setItem(SUCCESSFUL_AUTH_KEY, Date.now().toString());
+            // Reset error count when token is set
+            resetAuthErrorCount();
           } catch (e) {
             // Ignore errors
           }

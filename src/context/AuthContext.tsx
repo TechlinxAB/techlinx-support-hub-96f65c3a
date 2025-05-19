@@ -402,6 +402,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Mark as authenticated to trigger the useEffect that handles redirection
       if (data?.session) {
         recordSuccessfulAuth();
+        
+        // Ensure state is updated
+        setSession(data.session);
+        setUser(data.session.user || null);
+        setAuthState('AUTHENTICATED');
+        
+        // Fetch profile immediately to speed up the process
+        if (data.session.user) {
+          setTimeout(async () => {
+            const fetchedProfile = await fetchProfile(data.session.user.id);
+            if (fetchedProfile) {
+              setProfile(fetchedProfile);
+            }
+          }, 0);
+        }
       }
       
       return { error: null };

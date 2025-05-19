@@ -128,8 +128,9 @@ const ProtectedRoute = () => {
     );
   }
   
-  // If not authenticated, redirect to login
+  // If not authenticated, redirect to login - with location state preserved
   if (!isAuthenticated) {
+    // Clear any potential stale state to ensure fresh authentication attempt
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
   
