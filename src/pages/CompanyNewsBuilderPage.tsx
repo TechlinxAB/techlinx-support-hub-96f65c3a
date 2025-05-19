@@ -291,7 +291,7 @@ const CompanyNewsBuilderPage = () => {
       });
       
       // Fix: call refetchCompanyNewsBlocks with only one argument
-      await refetchCompanyNewsBlocks(true);
+      await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
     }
