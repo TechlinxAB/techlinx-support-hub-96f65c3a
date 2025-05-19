@@ -38,7 +38,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { supabase } from '@/utils/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
