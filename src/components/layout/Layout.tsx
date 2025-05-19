@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -16,6 +15,7 @@ import {
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
 import { useSidebar } from '@/context/SidebarContext';
+import Container from '@/components/layout/Container';
 
 const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
@@ -31,7 +31,7 @@ const Layout = () => {
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
-  
+
   useEffect(() => {
     // Set a timeout to force show content after 5 seconds
     const timer = setTimeout(() => {
@@ -166,23 +166,29 @@ const Layout = () => {
         
         {isPauseRecovery && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
-            <span className="text-sm">Recovering from app pause...</span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 text-xs"
-              onClick={() => clearPauseDetected()}
-            >
-              Dismiss
-            </Button>
+            <Container>
+              <div className="flex items-center justify-between w-full">
+                <span className="text-sm">Recovering from app pause...</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 text-xs"
+                  onClick={() => clearPauseDetected()}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </Container>
           </div>
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white overflow-x-hidden">
+        <main className="flex-1 bg-white overflow-x-hidden py-6">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
-              <Outlet />
+              <Container>
+                <Outlet />
+              </Container>
             </PageTransition>
           </AnimatePresence>
         </main>
