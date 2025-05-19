@@ -14,7 +14,7 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ 
-        duration: 0.2,
+        duration: 0.3, 
         ease: "easeInOut",
       }}
       style={{ 
@@ -22,12 +22,14 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
         position: 'relative',
         width: '100%',
         height: '100%',
-        backgroundColor: 'white',
-        zIndex: 2,
+        backgroundColor: 'white !important', 
+        zIndex: 1,
       }}
-      className={`${className || "w-full h-full"} bg-white`}
+      className={`${className || "w-full h-full"} bg-white loading-wrapper`} 
     >
-      {children}
+      <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
+        {children}
+      </div>
     </motion.div>
   );
 };

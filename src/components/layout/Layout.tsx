@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import { Loader, RefreshCw } from 'lucide-react';
@@ -14,7 +15,6 @@ import {
   setForceBypass 
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
-import TransitionOverlay from '@/components/layout/TransitionOverlay';
 import { useSidebar } from '@/context/SidebarContext';
 import Container from '@/components/layout/Container';
 
@@ -22,11 +22,8 @@ const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
-  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
-  const location = useLocation();
-  const navigationType = useNavigationType();
   
   // Calculate content margin based on sidebar state
   const contentMarginLeft = isMobile
@@ -36,21 +33,10 @@ const Layout = () => {
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
 
-  // Track page transitions
+  // Force white background during loading
   useEffect(() => {
-    setIsPageTransitioning(true);
-    const transitionTimeout = setTimeout(() => {
-      setIsPageTransitioning(false);
-    }, 300); // Match with animation duration
-    
-    return () => clearTimeout(transitionTimeout);
-  }, [location.pathname, navigationType]);
-
-  useEffect(() => {
-    // Set a timeout to force show content after 5 seconds
-    const timer = setTimeout(() => {
-      setForceShow(true);
-    }, 5000);
+    document.body.style.backgroundColor = 'white';
+    document.documentElement.style.backgroundColor = 'white';
     
     // Check if we're returning from a pause state
     if (wasPauseDetected()) {
@@ -66,6 +52,11 @@ const Layout = () => {
         setIsPauseRecovery(false);
       }, 5000);
     }
+    
+    // Set a timeout to force show content after 5 seconds
+    const timer = setTimeout(() => {
+      setForceShow(true);
+    }, 5000);
     
     return () => {
       clearTimeout(timer);
@@ -98,7 +89,7 @@ const Layout = () => {
     return (
       <div 
         className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
-        style={{ backgroundColor: 'white' }}
+        style={{ backgroundColor: 'white !important' }}
       >
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="mb-4 text-gray-700">Loading application...</p>
@@ -147,7 +138,7 @@ const Layout = () => {
     return (
       <div 
         className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
-        style={{ backgroundColor: 'white' }}
+        style={{ backgroundColor: 'white !important' }}
       >
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
         <div className="flex gap-2">
@@ -176,15 +167,13 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex min-h-screen w-full">
-      {/* Add the transition overlay that shows during page transitions */}
-      <TransitionOverlay isVisible={isPageTransitioning} />
-      
+    <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white !important' }}>
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
         style={{ 
           marginLeft: contentMarginLeft,
+          backgroundColor: 'white !important', 
           position: 'relative',
           zIndex: 1
         }}
@@ -210,14 +199,18 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 overflow-x-hidden py-6 w-full bg-white">
-          <AnimatePresence mode="wait">
-            <PageTransition key={location.pathname}>
-              <Container>
-                <Outlet />
-              </Container>
-            </PageTransition>
-          </AnimatePresence>
+        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white !important' }}>
+          <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
+            <AnimatePresence mode="wait">
+              <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
+                <PageTransition key={location.pathname}>
+                  <Container>
+                    <Outlet />
+                  </Container>
+                </PageTransition>
+              </div>
+            </AnimatePresence>
+          </div>
         </main>
       </div>
     </div>
