@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader, AlertCircle } from 'lucide-react';
-import { probeSupabaseService } from '@/utils/authRecovery';
+import { Loader, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const AuthPage = () => {
   const [email, setEmail] = useState('');
@@ -16,51 +17,35 @@ const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serviceAvailable, setServiceAvailable] = useState(true);
-  const [redirectInProgress, setRedirectInProgress] = useState(false);
-  const [lastRecoveryAttempt, setLastRecoveryAttempt] = useState(0);
   
   const { signIn, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  
-  // Check if we're in recovery mode
-  const isRecoveryMode = location.search.includes('recovery') || 
-                         location.search.includes('reset') ||
-                         location.search.includes('mode=recovery');
-  
-  // Get redirect path from URL if available
-  const getRedirectPath = () => {
-    const params = new URLSearchParams(location.search);
-    const redirectPath = params.get('redirect');
-    return redirectPath || '/';
-  };
   
   // Check Supabase service availability
   useEffect(() => {
     const checkService = async () => {
       try {
-        const available = await probeSupabaseService();
-        setServiceAvailable(available);
+        const startTime = Date.now();
+        const { error } = await supabase.from('profiles').select('id').limit(1);
+        const responseTime = Date.now() - startTime;
         
-        if (!available) {
-          console.warn('Supabase service unavailable - may be in cold start');
+        // If response time is very slow, service might be starting up
+        const isAvailable = !error && responseTime < 3000;
+        setServiceAvailable(isAvailable);
+        
+        if (!isAvailable) {
+          console.warn('Supabase service unavailable or slow - may be in cold start');
           setError('Service is currently starting up. Please wait a moment...');
           
           // Retry after 3 seconds
-          setTimeout(async () => {
-            const retryAvailable = await probeSupabaseService();
-            setServiceAvailable(retryAvailable);
-            
-            if (retryAvailable) {
-              setError(null);
-            } else {
-              setError('Service is still starting. This may take a few more seconds...');
-            }
-          }, 3000);
+          setTimeout(checkService, 3000);
+        } else {
+          setError(null);
         }
       } catch (err) {
         console.error('Error checking service:', err);
         setServiceAvailable(false);
+        setError('Service is currently unavailable. Please try again later.');
       }
     };
     
@@ -69,24 +54,10 @@ const AuthPage = () => {
   
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated && !authLoading && !redirectInProgress) {
-      // Check if we're in recovery mode - don't redirect immediately
-      if (isRecoveryMode) {
-        console.log("In recovery mode, delaying redirect");
-        
-        // Add a short delay before redirecting to avoid loops
-        setTimeout(() => {
-          setRedirectInProgress(true);
-          navigate(getRedirectPath(), { replace: true });
-        }, 1000);
-        return;
-      }
-      
-      // Normal redirect
-      setRedirectInProgress(true);
-      navigate(getRedirectPath(), { replace: true });
+    if (isAuthenticated && !authLoading) {
+      navigate('/', { replace: true });
     }
-  }, [isAuthenticated, authLoading, navigate, location.search, isRecoveryMode, redirectInProgress]);
+  }, [isAuthenticated, authLoading, navigate]);
   
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,37 +82,42 @@ const AuthPage = () => {
       const { error } = await signIn(email, password);
       
       if (error) {
-        console.error('Sign in error:', error);
         setError(error.message || 'Failed to sign in. Please check your credentials.');
-        setIsLoading(false);
-      } else {
-        // Success - redirect will happen via the useEffect
-        setError(null);
       }
     } catch (err: any) {
       console.error('Exception during sign in:', err);
       setError(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
     }
   };
   
-  // Handle recovery mode
-  useEffect(() => {
-    if (isRecoveryMode) {
-      // Check if we've recently attempted recovery to prevent loops
-      const now = Date.now();
-      if (window.location.href.includes("recovery") && (now - lastRecoveryAttempt) < 3000) {
-        console.log("Recovery already in progress, not repeating redirect.");
-        return;
-      }
+  // Hard reset function for complete auth reset
+  const hardReset = async () => {
+    try {
+      setIsLoading(true);
       
-      setLastRecoveryAttempt(now);
-      console.log('Auth page loaded in recovery mode');
-      toast.info("Authentication recovery mode", {
-        description: "The system is recovering from an authentication issue."
+      // Sign out first
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      // Clear auth-related storage
+      localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      
+      toast.success("Auth state has been reset", {
+        description: "Please try logging in again."
       });
+      
+      // Force page reload to ensure clean state
+      window.location.href = '/auth';
+    } catch (err) {
+      console.error('Error during hard reset:', err);
+      toast.error("Reset failed", {
+        description: "Please try refreshing the page."
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [isRecoveryMode, lastRecoveryAttempt]);
+  };
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
@@ -165,14 +141,6 @@ const AuthPage = () => {
             <Alert className="mb-4 bg-amber-100 text-amber-800 border-amber-200">
               <AlertDescription>
                 The service is currently starting up. This may take a few moments.
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {isRecoveryMode && (
-            <Alert className="mb-4 bg-blue-100 text-blue-800 border-blue-200">
-              <AlertDescription>
-                Recovery mode active. Please sign in again to restore your session.
               </AlertDescription>
             </Alert>
           )}
@@ -225,6 +193,16 @@ const AuthPage = () => {
           <div className="text-sm text-muted-foreground text-center w-full">
             Forgot your password? Please contact your administrator.
           </div>
+          
+          <Button 
+            variant="outline" 
+            className="w-full mt-2" 
+            onClick={hardReset}
+            disabled={isLoading}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Hard Reset Login
+          </Button>
         </CardFooter>
       </Card>
     </div>
