@@ -27,12 +27,10 @@ const Dashboard = () => {
   // Show loading state
   if (loading || !profile || !currentUser) {
     return (
-      <PageTransition>
-        <div className="flex flex-col items-center justify-center w-full h-[80vh]">
-          <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-          <p className="text-sm text-muted-foreground">Loading dashboard content...</p>
-        </div>
-      </PageTransition>
+      <div className="flex flex-col items-center justify-center w-full h-[80vh]">
+        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Loading dashboard content...</p>
+      </div>
     );
   }
   
@@ -40,15 +38,13 @@ const Dashboard = () => {
   const showConsultantDashboard = profile.role === 'consultant';
   
   return (
-    <PageTransition>
-      <div className="w-full">
-        {showConsultantDashboard ? (
-          <ConsultantDashboard />
-        ) : (
-          <UserDashboard />
-        )}
-      </div>
-    </PageTransition>
+    <div className="w-full">
+      {showConsultantDashboard ? (
+        <ConsultantDashboard />
+      ) : (
+        <UserDashboard />
+      )}
+    </div>
   );
 };
 

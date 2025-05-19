@@ -12,6 +12,7 @@ import SearchPage from "./pages/SearchPage";
 import { useEffect } from "react";
 import { initPauseUnpauseDetection } from "./utils/authRecovery";
 import { AnimatePresence } from "framer-motion";
+import PageTransition from "./components/layout/PageTransition";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -65,7 +66,7 @@ const AnimatedRoutes = () => {
   const location = useLocation();
   
   return (
-    <Routes location={location} key={location.pathname}>
+    <Routes location={location}>
       {/* Public route - accessible without authentication */}
       <Route path="/auth" element={<AuthPage />} />
       
@@ -73,79 +74,79 @@ const AnimatedRoutes = () => {
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Layout />}>
           <Route index element={
-            <AnimatePresence mode="wait" initial={false}>
-              <Dashboard key="dashboard" />
-            </AnimatePresence>
+            <PageTransition>
+              <Dashboard />
+            </PageTransition>
           } />
           <Route path="cases" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CasesPage key="cases" />
-            </AnimatePresence>
+            <PageTransition>
+              <CasesPage />
+            </PageTransition>
           } />
           <Route path="cases/new" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <NewCasePage key="new-case" />
-            </AnimatePresence>
+            <PageTransition>
+              <NewCasePage />
+            </PageTransition>
           } />
           <Route path="cases/:id" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CaseDetailPage key="case-detail" />
-            </AnimatePresence>
+            <PageTransition>
+              <CaseDetailPage />
+            </PageTransition>
           } />
           <Route path="companies" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompaniesPage key="companies" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompaniesPage />
+            </PageTransition>
           } />
           <Route path="companies/:id" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompaniesPage key="companies-id" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompaniesPage />
+            </PageTransition>
           } />
           <Route path="company/:id/settings" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompanySettingsPage key="company-settings" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompanySettingsPage />
+            </PageTransition>
           } />
           <Route path="company-dashboard" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompanyDashboardPage key="company-dashboard" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompanyDashboardPage />
+            </PageTransition>
           } />
           <Route path="company-dashboard-builder/:companyId" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompanyDashboardBuilderPage key="company-dashboard-builder" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompanyDashboardBuilderPage />
+            </PageTransition>
           } />
           <Route path="company-news/:companyId" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompanyNewsPage key="company-news" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompanyNewsPage />
+            </PageTransition>
           } />
           <Route path="company-news-builder/:companyId" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompanyNewsBuilderPage key="company-news-builder" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompanyNewsBuilderPage />
+            </PageTransition>
           } />
           <Route path="users" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <UserManagementPage key="users" />
-            </AnimatePresence>
+            <PageTransition>
+              <UserManagementPage />
+            </PageTransition>
           } />
           <Route path="company-management" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <CompanyManagementPage key="company-management" />
-            </AnimatePresence>
+            <PageTransition>
+              <CompanyManagementPage />
+            </PageTransition>
           } />
           <Route path="settings" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <SettingsPage key="settings" />
-            </AnimatePresence>
+            <PageTransition>
+              <SettingsPage />
+            </PageTransition>
           } />
           <Route path="search" element={
-            <AnimatePresence mode="wait" initial={false}>
-              <SearchPage key="search" />
-            </AnimatePresence>
+            <PageTransition>
+              <SearchPage />
+            </PageTransition>
           } />
           <Route path="*" element={<NotFound />} />
         </Route>

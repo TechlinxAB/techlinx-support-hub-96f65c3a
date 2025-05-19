@@ -7,6 +7,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import { Loader, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { AnimatePresence } from 'framer-motion';
 import { 
   performFullAuthRecovery, 
   wasPauseDetected, 
@@ -258,7 +259,9 @@ const Layout = () => {
           </div>
         )}
         <main className="flex-1 overflow-y-auto p-4">
-          <Outlet />
+          <AnimatePresence mode="wait" initial={false}>
+            <Outlet />
+          </AnimatePresence>
         </main>
       </div>
     </div>
