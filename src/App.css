@@ -250,6 +250,7 @@ div:has(> .outlet) {
 /* Fix specifically for the PersistentSidebar */
 .sidebar-container {
   z-index: 40; /* Lower than loading overlay */
+  isolation: isolate; /* Create a stacking context */
 }
 
 /* Global loading overlay */
@@ -291,4 +292,66 @@ body.loading::before {
 /* The sidebar has a specific color that needs to be contained */
 .sidebar-container {
   isolation: isolate;
+}
+
+/* NEW TRANSITION OVERLAY STYLES */
+/* Style for the transition overlay to ensure it's above everything else */
+.transition-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: white !important;
+  z-index: 1000; /* Very high to be above everything */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Make sure the page transition container has a white background */
+.page-transition-container {
+  background-color: white !important;
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  width: 100%;
+}
+
+/* Ensure framer-motion page transitions have white background */
+.page-transition {
+  background-color: white !important;
+}
+
+/* Force the sidebar to stay behind the main content during transitions */
+.sidebar {
+  isolation: isolate;
+  z-index: 40;
+}
+
+/* Make sure the main content container is above the sidebar */
+.main-content-container {
+  position: relative;
+  z-index: 45;
+  background-color: white !important;
+}
+
+/* Fix for animation frames that might show green */
+@keyframes fadeIn {
+  0% { 
+    opacity: 0;
+    background-color: white !important; 
+  }
+  100% { 
+    opacity: 1;
+    background-color: white !important;
+  }
+}
+
+@keyframes fadeOut {
+  0% { 
+    opacity: 1;
+    background-color: white !important;
+  }
+  100% { 
+    opacity: 0;
+    background-color: white !important;
+  }
 }

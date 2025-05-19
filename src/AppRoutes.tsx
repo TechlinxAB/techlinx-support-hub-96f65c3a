@@ -29,6 +29,14 @@ import CompanySettingsPage from "./pages/CompanySettingsPage";
 import PersistentSidebar from "./components/layout/PersistentSidebar";
 import Layout from "./components/layout/Layout";
 
+// Main styling to prevent green flash
+const appStyle: React.CSSProperties = {
+  backgroundColor: 'white',
+  position: 'relative',
+  zIndex: 0,
+  isolation: 'isolate', // Create a stacking context
+};
+
 const AppRoutes = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -40,12 +48,20 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen" style={{ backgroundColor: 'white' }}> {/* Explicit white background */}
+      {/* Extra white background layer to ensure no green bleeding */}
+      <div className="fixed inset-0 bg-white -z-10"></div>
+      
+      <div className="flex min-h-screen bg-white" style={appStyle}> 
         {/* Persistent Sidebar - COMPLETELY outside of animation context */}
         <PersistentSidebar />
 
         {/* Main content wrapper with explicit white background */}
-        <div className="w-full h-full bg-white flex-1" style={{ backgroundColor: 'white', position: 'relative', zIndex: 1 }}> 
+        <div className="w-full h-full bg-white flex-1" style={{ 
+          backgroundColor: 'white', 
+          position: 'relative', 
+          zIndex: 1,
+          overflow: 'hidden', // Contain any animations
+        }}> 
           <Routes location={location}>
             {/* Auth route - doesn't use the main layout */}
             <Route path="/auth" element={<AuthPage />} />

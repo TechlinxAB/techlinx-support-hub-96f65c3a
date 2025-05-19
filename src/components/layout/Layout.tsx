@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import { Loader, RefreshCw } from 'lucide-react';
@@ -15,6 +15,7 @@ import {
   setForceBypass 
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
+import TransitionOverlay from '@/components/layout/TransitionOverlay';
 import { useSidebar } from '@/context/SidebarContext';
 import Container from '@/components/layout/Container';
 
@@ -22,8 +23,11 @@ const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
+  const location = useLocation();
+  const navigationType = useNavigationType();
   
   // Calculate content margin based on sidebar state
   const contentMarginLeft = isMobile
@@ -32,6 +36,18 @@ const Layout = () => {
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
+
+  // Track page transitions
+  useEffect(() => {
+    setIsPageTransitioning(true);
+    const transitionTimeout = setTimeout(() => {
+      setIsPageTransitioning(false);
+    }, 300); // Slightly longer than animation to ensure full coverage
+    
+    return () => {
+      clearTimeout(transitionTimeout);
+    };
+  }, [location.pathname, navigationType]);
 
   useEffect(() => {
     // Set a timeout to force show content after 5 seconds
@@ -164,6 +180,9 @@ const Layout = () => {
 
   return (
     <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
+      {/* Add the transition overlay that shows during page transitions */}
+      <TransitionOverlay isVisible={isPageTransitioning} />
+      
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
@@ -196,9 +215,9 @@ const Layout = () => {
         
         {/* Content area with AnimatePresence for page transitions */}
         <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
-          <div className="bg-white w-full h-full"> {/* Additional wrapper */}
+          <div className="bg-white w-full h-full"> 
             <AnimatePresence mode="wait">
-              <div className="bg-white w-full h-full"> {/* Additional wrapper inside AnimatePresence */}
+              <div className="bg-white w-full h-full"> 
                 <PageTransition key={location.pathname}>
                   <Container>
                     <Outlet />
