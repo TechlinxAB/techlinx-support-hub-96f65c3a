@@ -107,3 +107,55 @@ export const isTokenValid = (token: string): boolean => {
     return false;
   }
 };
+
+/**
+ * Check stored tokens for corruption
+ */
+export const checkStoredTokens = (): { valid: boolean; issue?: string } => {
+  try {
+    const storageKey = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
+    const tokenData = localStorage.getItem(storageKey);
+    
+    if (!tokenData) {
+      return { valid: false, issue: 'No token found in storage' };
+    }
+    
+    try {
+      const parsed = JSON.parse(tokenData);
+      
+      if (!parsed.access_token || !parsed.refresh_token) {
+        return { valid: false, issue: 'Missing required token fields' };
+      }
+      
+      if (!isTokenValid(parsed.access_token)) {
+        return { valid: false, issue: 'Access token is invalid' };
+      }
+      
+      return { valid: true };
+    } catch (e) {
+      return { valid: false, issue: 'Token data is corrupted and cannot be parsed' };
+    }
+  } catch (e) {
+    return { valid: false, issue: 'Exception checking tokens' };
+  }
+};
+
+/**
+ * Enhanced token refresh function that attempts to fix common issues
+ */
+export const attemptTokenRefresh = async (): Promise<boolean> => {
+  try {
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.error('Token refresh failed:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (e) {
+    console.error('Exception during token refresh:', e);
+    return false;
+  }
+};

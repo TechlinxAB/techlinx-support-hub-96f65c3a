@@ -4,11 +4,17 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { clearAuthState, isCircuitBreakerActive, resetCircuitBreaker } from '@/integrations/supabase/client';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { 
+  clearAuthState, 
+  isCircuitBreakerActive, 
+  resetCircuitBreaker,
+  detectAuthLoops,
+  isTokenPotentiallyStale
+} from '@/integrations/supabase/client';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
@@ -16,6 +22,7 @@ const AuthPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [showRecovery, setShowRecovery] = useState<boolean>(false);
   const [recoveryMode, setRecoveryMode] = useState<boolean>(false);
+  const [advancedTroubleshooting, setAdvancedTroubleshooting] = useState<boolean>(false);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -24,12 +31,33 @@ const AuthPage = () => {
   // Get redirect path from state or default to home
   const from = location.state?.from || '/';
   
-  // Check if circuit breaker is active on mount
+  // Check for auth issues on mount
   useEffect(() => {
-    const circuitActive = isCircuitBreakerActive();
-    if (circuitActive) {
-      setShowRecovery(true);
-    }
+    const checkForAuthIssues = () => {
+      const circuitBreakerInfo = isCircuitBreakerActive();
+      const staleToken = isTokenPotentiallyStale();
+      const loopDetected = detectAuthLoops();
+      
+      // Show recovery options if any issues detected
+      if (circuitBreakerInfo.active || staleToken || loopDetected) {
+        setShowRecovery(true);
+        
+        // Auto show advanced troubleshooting for serious issues
+        if (loopDetected || (circuitBreakerInfo.active && circuitBreakerInfo.reason)) {
+          setAdvancedTroubleshooting(true);
+        }
+      }
+      
+      // Log diagnostic info for debugging
+      console.log("Auth diagnostics:", { 
+        circuitBreaker: circuitBreakerInfo,
+        staleToken, 
+        loopDetected, 
+        authState 
+      });
+    };
+    
+    checkForAuthIssues();
     
     // After 3 seconds, show the troubleshooting option
     const timer = setTimeout(() => {
@@ -37,7 +65,7 @@ const AuthPage = () => {
     }, 3000);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [authState]);
   
   // Redirect if user is already authenticated
   useEffect(() => {
@@ -102,7 +130,39 @@ const AuthPage = () => {
     }
   };
   
+  const handleHardReset = () => {
+    try {
+      // Clear all localStorage
+      localStorage.clear();
+      
+      // Clear all sessionStorage
+      sessionStorage.clear();
+      
+      // Clear all cookies
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c
+          .replace(/^ +/, '')
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+      
+      toast.success("Complete browser storage reset successful", {
+        description: "Reloading page..."
+      });
+      
+      // Hard reload after short delay
+      setTimeout(() => {
+        window.location.href = '/auth';
+      }, 1000);
+    } catch (err) {
+      console.error('Hard reset failed:', err);
+      toast.error("Reset failed", {
+        description: "Please try clearing browser data manually"
+      });
+    }
+  };
+  
   const isAuthError = authState === 'ERROR' || !!authError;
+  const circuitBreakerInfo = isCircuitBreakerActive();
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
@@ -112,12 +172,21 @@ const AuthPage = () => {
           <CardDescription>Sign in to access your support dashboard</CardDescription>
         </CardHeader>
         
-        {isAuthError && (
+        {(isAuthError || circuitBreakerInfo.active) && (
           <CardContent>
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4 mr-2" />
+              <AlertTitle>Authentication Error</AlertTitle>
               <AlertDescription>
-                {authError || "Authentication error. This could be due to a stale session."}
+                {authError || circuitBreakerInfo.reason || "Authentication error. This could be due to a stale session."}
+                
+                {circuitBreakerInfo.active && circuitBreakerInfo.remainingSeconds && (
+                  <p className="mt-2 text-sm">
+                    Authentication is temporarily disabled for{' '}
+                    {Math.floor(circuitBreakerInfo.remainingSeconds / 60)} minutes and{' '}
+                    {circuitBreakerInfo.remainingSeconds % 60} seconds due to repeated errors.
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
             
@@ -167,7 +236,11 @@ const AuthPage = () => {
           </CardContent>
           
           <CardFooter className="flex flex-col space-y-3">
-            <Button type="submit" className="w-full" disabled={loading || recoveryMode}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || recoveryMode || circuitBreakerInfo.active}
+            >
               {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
@@ -186,6 +259,30 @@ const AuthPage = () => {
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Troubleshoot Login
+              </Button>
+            )}
+            
+            {advancedTroubleshooting && (
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full text-sm mt-3"
+                onClick={handleHardReset}
+                disabled={loading}
+              >
+                <Shield className="mr-2 h-4 w-4" />
+                Complete Reset (Clear All Data)
+              </Button>
+            )}
+            
+            {!advancedTroubleshooting && showRecovery && (
+              <Button
+                type="button"
+                variant="link"
+                className="text-xs text-muted-foreground w-full mt-1"
+                onClick={() => setAdvancedTroubleshooting(true)}
+              >
+                Advanced Troubleshooting Options
               </Button>
             )}
           </CardFooter>

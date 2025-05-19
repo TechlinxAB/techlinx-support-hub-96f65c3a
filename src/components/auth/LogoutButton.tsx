@@ -11,12 +11,16 @@ interface LogoutButtonProps {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
+  // New property to control redirection behavior
+  redirectAfterLogout?: boolean;
 }
 
 const LogoutButton = ({ 
   variant = 'ghost',
   size = 'default',
-  className = ''
+  className = '',
+  // Default to true to maintain backward compatibility
+  redirectAfterLogout = true
 }: LogoutButtonProps) => {
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -29,22 +33,30 @@ const LogoutButton = ({
       setIsLoggingOut(true);
       const toastId = toast.loading('Logging out...');
       
-      // Use enhanced signOut method
-      await signOut();
-      
-      // Additional safety measure - make sure auth state is completely cleared
-      await clearAuthState();
+      try {
+        // Use enhanced signOut method
+        await signOut();
+      } catch (error) {
+        console.error("Primary signOut failed, trying fallback", error);
+        // Fallback - manual cleanup
+        await clearAuthState();
+      }
       
       toast.success('Successfully logged out', { id: toastId });
       
-      // Navigate to auth page
-      navigate('/auth');
+      // Only navigate if redirectAfterLogout is true
+      if (redirectAfterLogout) {
+        // Navigate to auth page
+        navigate('/auth', { replace: true });
+      }
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');
       
-      // Last resort - hard redirect
-      window.location.href = '/auth';
+      // Last resort - hard redirect, but only if redirectAfterLogout is true
+      if (redirectAfterLogout) {
+        window.location.href = '/auth';
+      }
     } finally {
       setIsLoggingOut(false);
     }
