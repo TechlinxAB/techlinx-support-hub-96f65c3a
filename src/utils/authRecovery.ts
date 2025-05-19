@@ -1,10 +1,41 @@
 
-import { clearAuthState, resetCircuitBreaker } from '@/integrations/supabase/client';
+import { clearAuthState, resetCircuitBreaker as resetSupabaseCircuitBreaker, isCircuitBreakerActive as checkCircuitBreakerActive } from '@/integrations/supabase/client';
 
 /**
  * Comprehensive authentication recovery utilities
  * These functions help recover from various auth-related issues
  */
+
+// Re-export the circuit breaker functions
+export const resetCircuitBreaker = resetSupabaseCircuitBreaker;
+export const isCircuitBreakerActive = checkCircuitBreakerActive;
+
+/**
+ * Detect potential authentication loops by analyzing redirects
+ * @returns Information about detected auth loops
+ */
+export const detectAuthLoops = (): boolean => {
+  // Check for rapid redirects (potential auth loop)
+  const redirectCount = parseInt(sessionStorage.getItem('redirect_count') || '0', 10);
+  const lastRedirect = parseInt(sessionStorage.getItem('last_redirect') || '0', 10);
+  const now = Date.now();
+  
+  // If we've had 3+ redirects in under 10 seconds, likely an auth loop
+  if (redirectCount > 3 && (now - lastRedirect) < 10000) {
+    return true;
+  }
+  
+  // Update redirect counter for next check
+  sessionStorage.setItem('redirect_count', (redirectCount + 1).toString());
+  sessionStorage.setItem('last_redirect', now.toString());
+  
+  // Reset counter after 20 seconds of no redirects
+  setTimeout(() => {
+    sessionStorage.setItem('redirect_count', '0');
+  }, 20000);
+  
+  return false;
+};
 
 /**
  * Full authentication recovery process
@@ -68,26 +99,7 @@ export const detectAuthProblems = (): boolean => {
   const urlParams = new URLSearchParams(window.location.search);
   const hasErrorParam = urlParams.has('error') || urlParams.has('error_description');
   
-  // Check for rapid redirects (potential auth loop)
-  const redirectCount = parseInt(sessionStorage.getItem('redirect_count') || '0', 10);
-  const lastRedirect = parseInt(sessionStorage.getItem('last_redirect') || '0', 10);
-  const now = Date.now();
-  
-  // If we've had 3+ redirects in under 10 seconds, likely an auth loop
-  if (redirectCount > 3 && (now - lastRedirect) < 10000) {
-    return true;
-  }
-  
-  // Update redirect counter for next check
-  sessionStorage.setItem('redirect_count', (redirectCount + 1).toString());
-  sessionStorage.setItem('last_redirect', now.toString());
-  
-  // Reset counter after 20 seconds of no redirects
-  setTimeout(() => {
-    sessionStorage.setItem('redirect_count', '0');
-  }, 20000);
-  
-  return hasErrorParam;
+  return hasErrorParam || detectAuthLoops();
 };
 
 /**
@@ -121,4 +133,3 @@ export const emergencyAuthReset = (): void => {
     alert("Emergency reset failed. Please clear your browser data manually and reload.");
   }
 };
-
