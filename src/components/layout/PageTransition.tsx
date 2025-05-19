@@ -22,12 +22,12 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
         position: 'relative',
         width: '100%',
         height: '100%',
-        backgroundColor: 'white !important', 
-        zIndex: 1,
+        backgroundColor: 'white', // Explicit white background
+        zIndex: 1, // Ensure this is above any green elements
       }}
-      className={`${className || "w-full h-full"} bg-white loading-wrapper`} 
+      className={`${className || "w-full h-full"} bg-white`} // Adding bg-white class
     >
-      <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
+      <div className="bg-white w-full h-full"> {/* Additional white wrapper */}
         {children}
       </div>
     </motion.div>
