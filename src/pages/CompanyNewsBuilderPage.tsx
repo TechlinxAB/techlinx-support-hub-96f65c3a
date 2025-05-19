@@ -268,6 +268,34 @@ const CompanyNewsBuilderPage = () => {
     }
   };
 
+  const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
+    setLoading(true);
+    try {
+      // Optimistic update
+      updateLocalBlock({
+        id: blockId,
+        isPublished
+      });
+      
+      // Database update
+      await publishCompanyNewsBlock(blockId, isPublished);
+      
+      toast.success(isPublished ? "Published" : "Unpublished", {
+        description: `Block ${isPublished ? 'published' : 'unpublished'} successfully`
+      });
+    } catch (error) {
+      console.error('Error toggling publish status:', error);
+      toast.error("Error", {
+        description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
+      });
+      
+      // Only refetch on error
+      await refetchCompanyNewsBlocks();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Content editor based on block type
   const renderBlockEditor = () => {
     if (!selectedBlock || !editedBlockData || !editedBlockData.content) return null;
