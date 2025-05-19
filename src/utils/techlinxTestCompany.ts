@@ -39,8 +39,7 @@ export const ensureTechlinxCompanyExists = async () => {
       description: "A test company for demo purposes",
       website: "https://example.com",
       size: "50-100",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      // Remove createdAt and updatedAt fields - these might be managed by the database
     };
     
     const { data: createdCompany, error: createError } = await supabase
@@ -110,7 +109,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
       return;
     }
     
-    // Create sample cases
+    // Create sample cases - make sure these field names match your database schema
     const sampleCases = [
       {
         title: "Configure SSO for our domain",
@@ -119,8 +118,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
         priority: "medium",
         company_id: companyId,
         user_id: userId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        // Use fields that match your database schema
       },
       {
         title: "Dashboard showing stale data",
@@ -129,8 +127,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
         priority: "high",
         company_id: companyId,
         user_id: userId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        // Use fields that match your database schema
       },
       {
         title: "Need to add new team member",
@@ -139,8 +136,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
         priority: "low",
         company_id: companyId,
         user_id: userId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        // Use fields that match your database schema
       }
     ];
     
