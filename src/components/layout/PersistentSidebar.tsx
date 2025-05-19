@@ -15,7 +15,7 @@ const PersistentSidebar: React.FC = () => {
       style={{ 
         width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
         transform: isSidebarOpen || !isMobile ? 'translateX(0)' : 'translateX(-100%)',
-        isolation: 'isolate', // Contain the background color
+        isolation: 'isolate',
       }}
     >
       <Sidebar isOpen={isSidebarOpen} />

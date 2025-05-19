@@ -40,8 +40,8 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen" style={{ backgroundColor: 'white' }}> {/* Explicit white background */}
-        {/* Persistent Sidebar - COMPLETELY outside of animation context */}
+      <div className="flex min-h-screen bg-white" style={{ backgroundColor: 'white' }}> 
+        {/* Persistent Sidebar */}
         <PersistentSidebar />
 
         {/* Main content wrapper with explicit white background */}
@@ -53,7 +53,7 @@ const AppRoutes = () => {
             {/* All protected routes */}
             <Route path="/*" element={
               <ProtectedRoute>
-                <div className="w-full h-full bg-white"> {/* Extra white wrapper */}
+                <div className="w-full h-full bg-white"> 
                   <Layout />
                 </div>
               </ProtectedRoute>

@@ -18,10 +18,22 @@ import PageTransition from '@/components/layout/PageTransition';
 import { useSidebar } from '@/context/SidebarContext';
 import Container from '@/components/layout/Container';
 
+// Create a separate LoadingOverlay component
+const LoadingOverlay = ({ message }: { message?: string }) => (
+  <div 
+    className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
+    style={{ backgroundColor: 'white' }}
+  >
+    <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+    <p className="mb-4 text-gray-700">{message || "Loading application..."}</p>
+  </div>
+);
+
 const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
+  const [pageTransitioning, setPageTransitioning] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
   
@@ -58,6 +70,28 @@ const Layout = () => {
       clearTimeout(timer);
     };
   }, []);
+  
+  // Track page transitions
+  useEffect(() => {
+    // Add listener for navigation events
+    const handlePageTransitionStart = () => {
+      setPageTransitioning(true);
+    };
+    
+    const handlePageTransitionEnd = () => {
+      setTimeout(() => {
+        setPageTransitioning(false);
+      }, 300);
+    };
+    
+    window.addEventListener('popstate', handlePageTransitionStart);
+    window.addEventListener('beforeunload', handlePageTransitionStart);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePageTransitionStart);
+      window.removeEventListener('beforeunload', handlePageTransitionStart);
+    };
+  }, []);
 
   // Emergency recovery helper
   const handleAuthReset = async () => {
@@ -82,51 +116,7 @@ const Layout = () => {
 
   // If loading or initial session state, show a loading indicator with WHITE background
   if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
-    return (
-      <div 
-        className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
-        style={{ backgroundColor: 'white' }}
-      >
-        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="mb-4 text-gray-700">Loading application...</p>
-        {isPauseRecovery && (
-          <p className="text-sm text-amber-500 mb-4">
-            Recovering from app pause/background state...
-          </p>
-        )}
-        <div className="flex gap-2">
-          <Button 
-            variant="link" 
-            onClick={() => setForceShow(true)}
-            size="sm"
-            className="text-gray-700"
-          >
-            Continue anyway
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleAuthReset}
-            size="sm"
-            disabled={isRecovering}
-          >
-            {isRecovering ? (
-              <Loader className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Reset auth
-          </Button>
-          <Button
-            variant="link"
-            onClick={handleForceBypass}
-            className="text-sm text-amber-500"
-            size="sm"
-          >
-            Bypass auth checks
-          </Button>
-        </div>
-      </div>
-    );
+    return <LoadingOverlay message="Loading application..." />;
   }
 
   // If no session and not authenticated, show an error state with WHITE background
@@ -162,14 +152,24 @@ const Layout = () => {
     );
   }
 
+  // Add transition overlay that appears during page transitions
+  const showTransitionOverlay = pageTransitioning;
+
   return (
     <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
+      {/* Show a full-page transition overlay during page transitions */}
+      {showTransitionOverlay && (
+        <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+          <Loader className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      )}
+      
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
         style={{ 
           marginLeft: contentMarginLeft,
-          backgroundColor: 'white', // Explicit style
+          backgroundColor: 'white',
           position: 'relative',
           zIndex: 1
         }}
@@ -196,17 +196,13 @@ const Layout = () => {
         
         {/* Content area with AnimatePresence for page transitions */}
         <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
-          <div className="bg-white w-full h-full"> {/* Additional wrapper */}
-            <AnimatePresence mode="wait">
-              <div className="bg-white w-full h-full"> {/* Additional wrapper inside AnimatePresence */}
-                <PageTransition key={location.pathname}>
-                  <Container>
-                    <Outlet />
-                  </Container>
-                </PageTransition>
-              </div>
-            </AnimatePresence>
-          </div>
+          <AnimatePresence mode="wait">
+            <PageTransition key={location.pathname}>
+              <Container>
+                <Outlet />
+              </Container>
+            </PageTransition>
+          </AnimatePresence>
         </main>
       </div>
     </div>
