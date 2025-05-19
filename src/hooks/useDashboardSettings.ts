@@ -6,12 +6,13 @@ import { DashboardSettings } from '@/types/dashboardTypes';
 
 // Default dashboard settings
 const defaultSettings: DashboardSettings = {
-  showWelcomeMessage: true,
-  showQuickActions: true,
+  showWelcome: true,
+  showSubtitle: true,
+  showNewCaseButton: true,
+  showCompanyNewsButton: true,
+  showCompanyDashboardButton: true,
   showActiveCases: true,
-  showAnnouncements: true,
-  compactView: false,
-  theme: 'system'
+  showCompanyNotices: true
 };
 
 export const useDashboardSettings = (companyId?: string) => {
