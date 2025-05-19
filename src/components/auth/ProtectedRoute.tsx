@@ -26,6 +26,10 @@ const ProtectedRoute = () => {
   const [isRecovering, setIsRecovering] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [forceTimeout, setForceTimeout] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
+  
+  // Track if we're in a "force through" mode after recovery
+  const [forceThrough, setForceThrough] = useState(false);
   
   // Handle diagnostic info for circuit breaker
   const circuitBreakerInfo = isCircuitBreakerActive();
@@ -44,16 +48,32 @@ const ProtectedRoute = () => {
     return () => clearTimeout(timer);
   }, [redirecting]);
   
+  // Add protection against excessive recovery attempts
+  useEffect(() => {
+    if (attemptCount > 3) {
+      // If we've tried to recover multiple times, force through
+      setForceThrough(true);
+    }
+  }, [attemptCount]);
+  
   // Handle recovery action
   const handleRecovery = async () => {
     setIsRecovering(true);
+    setAttemptCount(prev => prev + 1);
+    
     try {
       await performFullAuthRecovery();
       setRedirecting(true);
-      window.location.href = '/auth';
+      // Add a cache-busting parameter
+      window.location.href = '/auth?recovery=' + Date.now();
     } catch (err) {
       console.error("Recovery failed:", err);
       setIsRecovering(false);
+      
+      if (attemptCount > 2) {
+        // If we've tried multiple times, force through anyway
+        setForceThrough(true);
+      }
     }
   };
   
@@ -61,8 +81,22 @@ const ProtectedRoute = () => {
   const handleNavigateToAuth = () => {
     setRedirecting(true);
     resetCircuitBreaker();
-    window.location.href = '/auth';
+    // Add a cache-busting parameter
+    window.location.href = '/auth?redirect=' + encodeURIComponent(location.pathname) + '&t=' + Date.now();
   };
+  
+  // Handle force dashboard navigation
+  const handleForceDashboard = () => {
+    setRedirecting(true);
+    resetCircuitBreaker();
+    // Add a cache-busting parameter
+    window.location.href = '/?force=' + Date.now();
+  };
+  
+  // If we're stuck in a loop but have tried recovery multiple times, force through
+  if (forceThrough) {
+    return <Outlet />;
+  }
   
   // Show loading spinner while checking authentication - with a timeout
   if ((loading && !forceTimeout) && !redirecting) {
@@ -70,13 +104,22 @@ const ProtectedRoute = () => {
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-sm text-muted-foreground">Checking authentication status...</p>
-        <Button 
-          variant="link" 
-          onClick={handleNavigateToAuth}
-          className="mt-4 text-sm"
-        >
-          Click here if stuck
-        </Button>
+        <div className="flex gap-2 mt-4">
+          <Button 
+            variant="link" 
+            onClick={handleNavigateToAuth}
+            className="text-sm"
+          >
+            Go to login
+          </Button>
+          <Button 
+            variant="link" 
+            onClick={handleForceDashboard}
+            className="text-sm"
+          >
+            Force dashboard
+          </Button>
+        </div>
       </div>
     );
   }
@@ -125,6 +168,14 @@ const ProtectedRoute = () => {
               Go to Login Page
             </Button>
             
+            <Button
+              variant="outline"
+              onClick={() => setForceThrough(true)}
+              className="w-full mt-2"
+            >
+              Force Access Anyway
+            </Button>
+            
             <p className="text-xs text-muted-foreground text-center mt-4">
               If problems persist, try clearing your browser cache and cookies.
             </p>
@@ -141,7 +192,7 @@ const ProtectedRoute = () => {
   
   // If definitely not authenticated, redirect to login
   const redirectPath = encodeURIComponent(location.pathname);
-  window.location.href = `/auth?redirect=${redirectPath}`;
+  window.location.href = `/auth?redirect=${redirectPath}&t=${Date.now()}`;
   return null;
 };
 

@@ -1,4 +1,3 @@
-
 import { clearAuthState, resetCircuitBreaker as resetSupabaseCircuitBreaker, isCircuitBreakerActive as checkCircuitBreakerActive } from '@/integrations/supabase/client';
 
 /**
@@ -20,8 +19,10 @@ export const detectAuthLoops = (): boolean => {
   const lastRedirect = parseInt(sessionStorage.getItem('last_redirect') || '0', 10);
   const now = Date.now();
   
-  // If we've had 3+ redirects in under 10 seconds, likely an auth loop
-  if (redirectCount > 3 && (now - lastRedirect) < 10000) {
+  // Make this more lenient: require 5+ redirects in under 5 seconds to trigger
+  // This prevents false positives during normal navigation
+  if (redirectCount > 5 && (now - lastRedirect) < 5000) {
+    console.log(`Auth loop detected: ${redirectCount} redirects in ${now - lastRedirect}ms`);
     return true;
   }
   
@@ -29,10 +30,10 @@ export const detectAuthLoops = (): boolean => {
   sessionStorage.setItem('redirect_count', (redirectCount + 1).toString());
   sessionStorage.setItem('last_redirect', now.toString());
   
-  // Reset counter after 20 seconds of no redirects
+  // Reset counter after 30 seconds of no redirects (increased from 20)
   setTimeout(() => {
     sessionStorage.setItem('redirect_count', '0');
-  }, 20000);
+  }, 30000);
   
   return false;
 };
@@ -53,7 +54,25 @@ export const performFullAuthRecovery = async (): Promise<boolean> => {
     
     // Step 3: Clear any session cookies and local storage directly
     try {
-      localStorage.clear();
+      // Clear localStorage items individually to be thorough
+      for (const key of Object.keys(localStorage)) {
+        // Keep non-auth related items
+        if (key.includes('auth') || key.includes('supabase') || key.includes('sb-')) {
+          localStorage.removeItem(key);
+        }
+      }
+      
+      // Specifically clear known auth keys
+      localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      localStorage.removeItem('auth-token-version');
+      localStorage.removeItem('auth-error-count');
+      localStorage.removeItem('auth-circuit-breaker');
+      localStorage.removeItem('auth-init-count');
+      localStorage.removeItem('auth-last-init');
+      localStorage.removeItem('last-session-check');
+      localStorage.removeItem('last-successful-auth');
+      
+      // Clear all sessionStorage
       sessionStorage.clear();
       
       // Clear cookies
@@ -66,7 +85,11 @@ export const performFullAuthRecovery = async (): Promise<boolean> => {
       console.error("Failed to clear storage directly:", e);
     }
     
-    // Step 4: Force page reload if needed
+    // Step 4: Reset redirect counters explicitly
+    sessionStorage.setItem('redirect_count', '0');
+    sessionStorage.setItem('last_redirect', '0');
+    
+    // Step 5: Force page reload if needed
     if (window.location.pathname !== '/auth') {
       window.location.href = '/auth';
       return true;
@@ -110,6 +133,12 @@ export const emergencyAuthReset = (): void => {
   console.log("Performing emergency auth reset...");
   
   try {
+    // First try to sign out through supabase
+    import('@/integrations/supabase/client').then(({ supabase }) => {
+      supabase.auth.signOut({ scope: 'global' })
+        .catch(e => console.error("Sign out failed:", e));
+    });
+    
     // Clear localStorage
     localStorage.clear();
     console.log("LocalStorage cleared");
@@ -126,8 +155,8 @@ export const emergencyAuthReset = (): void => {
     });
     console.log("Cookies cleared");
     
-    // Force reload to auth page
-    window.location.href = '/auth';
+    // Force reload to auth page with cache busting parameter
+    window.location.href = '/auth?reset=' + Date.now();
   } catch (e) {
     console.error("Emergency reset failed:", e);
     alert("Emergency reset failed. Please clear your browser data manually and reload.");

@@ -4,13 +4,15 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import { Loader } from 'lucide-react';
+import { Loader, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { performFullAuthRecovery } from '@/utils/authRecovery';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { loading, session } = useAuth();
+  const { loading, session, isAuthenticated, authState } = useAuth();
   const [forceShow, setForceShow] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,24 +42,76 @@ const Layout = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
+  // Emergency recovery helper
+  const handleAuthReset = async () => {
+    setIsRecovering(true);
+    try {
+      await performFullAuthRecovery();
+      // Add cache busting to prevent browser caching issues
+      window.location.href = `/auth?reset=${Date.now()}`;
+    } catch (error) {
+      console.error("Recovery failed:", error);
+      setIsRecovering(false);
+    }
+  };
+
   // Emergency navigation helper
   const handleForceNavigate = (path: string) => {
-    window.location.href = path;
+    // Add cache busting to prevent browser caching issues
+    window.location.href = `${path}?force=${Date.now()}`;
   };
 
   // Show a loading state until authentication is confirmed, but add a timeout
-  if (loading && !forceShow) {
+  if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
     return (
       <div className="flex items-center justify-center min-h-screen flex-col">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="mb-4">Loading application...</p>
-        <Button 
-          variant="link" 
-          onClick={() => setForceShow(true)}
-          size="sm"
-        >
-          Click here if stuck
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="link" 
+            onClick={() => setForceShow(true)}
+            size="sm"
+          >
+            Continue anyway
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleAuthReset}
+            size="sm"
+            disabled={isRecovering}
+          >
+            {isRecovering ? (
+              <Loader className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Reset auth
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Force show if we don't have a session but we're on the main layout
+  if (!session && !isAuthenticated && !loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen flex-col">
+        <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
+        <div className="flex gap-2">
+          <Button 
+            variant="default"
+            onClick={() => handleForceNavigate('/auth')}
+          >
+            Go to login
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => setForceShow(true)}
+          >
+            Continue anyway
+          </Button>
+        </div>
       </div>
     );
   }

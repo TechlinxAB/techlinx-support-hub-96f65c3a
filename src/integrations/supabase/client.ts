@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
@@ -17,7 +16,7 @@ export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 
 // Set a version for the current auth implementation
 // Increment this when making changes to auth logic
-export const CURRENT_AUTH_VERSION = '1.2.2';
+export const CURRENT_AUTH_VERSION = '1.2.3';
 
 // Important! Initialize these variables at the top level,
 // before any function calls to prevent 'cannot access before initialization' errors
@@ -95,8 +94,8 @@ export const isCircuitBreakerActive = (): { active: boolean, reason?: string, re
     const lastSuccessfulAuth = parseInt(localStorage.getItem(SUCCESSFUL_AUTH_KEY) || '0', 10);
     const now = Date.now();
     
-    // If we've had a successful auth in the last 30 seconds, bypass circuit breaker
-    if (lastSuccessfulAuth > 0 && (now - lastSuccessfulAuth < 30000)) {
+    // If we've had a successful auth in the last 60 seconds, bypass circuit breaker (increased from 30 seconds)
+    if (lastSuccessfulAuth > 0 && (now - lastSuccessfulAuth < 60000)) {
       resetCircuitBreaker(); // Auto-reset circuit breaker on recent successful auth
       return { active: false };
     }
@@ -109,6 +108,14 @@ export const isCircuitBreakerActive = (): { active: boolean, reason?: string, re
       
       if (now < expiry) {
         const remainingSeconds = Math.round((expiry - now) / 1000);
+        
+        // If less than 10 seconds remaining in circuit breaker, auto-reset it 
+        // to prevent getting stuck in short timeouts
+        if (remainingSeconds < 10) {
+          resetCircuitBreaker();
+          return { active: false };
+        }
+        
         return { 
           active: true,
           reason,
@@ -122,11 +129,20 @@ export const isCircuitBreakerActive = (): { active: boolean, reason?: string, re
     } catch (e) {
       // If JSON parse fails, assume it's the old format
       const expiryTime = parseInt(circuitBreakerData, 10);
+      
+      // If less than 10 seconds remaining in circuit breaker, auto-reset it
       if (Date.now() < expiryTime) {
+        const secondsRemaining = Math.round((expiryTime - Date.now()) / 1000);
+        
+        if (secondsRemaining < 10) {
+          resetCircuitBreaker();
+          return { active: false };
+        }
+        
         return { 
           active: true,
           reason: "Legacy circuit breaker format",
-          remainingSeconds: Math.round((expiryTime - Date.now()) / 1000)
+          remainingSeconds: secondsRemaining
         };
       }
       resetCircuitBreaker();
@@ -158,7 +174,7 @@ export const resetAuthErrorCount = (): void => {
   }
 };
 
-// Function to detect and reset authentication errors
+// Function to detect and reset authentication errors - MODIFIED to be less aggressive
 export const trackAuthError = (): number => {
   try {
     const currentCount = parseInt(localStorage.getItem(AUTH_ERROR_KEY) || '0', 10);
@@ -277,9 +293,10 @@ export const recordSuccessfulAuth = (): void => {
   }
 };
 
-// Advanced circuit breaker pattern with diagnostic info
-export const activateCircuitBreaker = (timeoutMinutes = 5, reason = "Unknown"): void => {
+// Advanced circuit breaker pattern with diagnostic info - MODIFIED to be less aggressive
+export const activateCircuitBreaker = (timeoutMinutes = 1, reason = "Unknown"): void => {
   try {
+    // Reduced default timeoutMinutes from 5 to 1
     const expiryTime = Date.now() + (timeoutMinutes * 60 * 1000);
     localStorage.setItem(CIRCUIT_BREAKER_KEY, JSON.stringify({
       expiry: expiryTime,
@@ -327,24 +344,7 @@ export const clearAuthState = async () => {
   try {
     console.log("🧹 Clearing all auth state...");
     
-    // Step 1: Clean all auth-related localStorage items
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(VERSION_KEY);
-    localStorage.removeItem(AUTH_ERROR_KEY);
-    localStorage.removeItem(CIRCUIT_BREAKER_KEY);
-    localStorage.removeItem(AUTH_INIT_COUNT);
-    localStorage.removeItem(AUTH_LAST_INIT);
-    localStorage.removeItem(SESSION_CHECK_TIMESTAMP);
-    localStorage.removeItem(SUCCESSFUL_AUTH_KEY);
-    
-    // Step 2: Clear any session cookies
-    document.cookie.split(';').forEach(c => {
-      document.cookie = c
-        .replace(/^ +/, '')
-        .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
-    });
-    
-    // Step 3: Try to sign out from Supabase
+    // Step 1: Try to sign out from Supabase first
     try {
       await supabase.auth.signOut({ scope: 'global' });
     } catch (signOutError) {
@@ -352,8 +352,28 @@ export const clearAuthState = async () => {
       // Continue with cleanup even if sign out fails
     }
     
-    // Step 4: Reset auth version to current
+    // Step 2: Clean all auth-related localStorage items
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(AUTH_ERROR_KEY);
+    localStorage.removeItem(CIRCUIT_BREAKER_KEY);
+    localStorage.removeItem(AUTH_INIT_COUNT);
+    localStorage.removeItem(AUTH_LAST_INIT);
+    localStorage.removeItem(SESSION_CHECK_TIMESTAMP);
+    localStorage.removeItem(SUCCESSFUL_AUTH_KEY);
+    
+    // We'll keep the version key to maintain our version tracking
     localStorage.setItem(VERSION_KEY, CURRENT_AUTH_VERSION);
+    
+    // Step 3: Clear any session cookies
+    try {
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c
+          .replace(/^ +/, '')
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+    } catch (e) {
+      console.error('Error clearing cookies:', e);
+    }
     
     console.log("✅ Auth state cleared successfully");
     return true;

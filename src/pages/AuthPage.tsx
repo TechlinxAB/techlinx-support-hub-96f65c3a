@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,7 @@ import {
   isTokenPotentiallyStale,
   recordSuccessfulAuth
 } from '@/integrations/supabase/client';
-import { performFullAuthRecovery } from '@/utils/authRecovery';
+import { performFullAuthRecovery, emergencyAuthReset } from '@/utils/authRecovery';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
@@ -40,11 +39,14 @@ const AuthPage = () => {
   // Add an emergency force redirect function
   const handleForceRedirect = () => {
     setForceHomeRedirect(true);
-    window.location.href = '/';
+    window.location.href = '/?force=' + Date.now();
   };
   
   // Check for auth issues on mount
   useEffect(() => {
+    // Auto-reset the circuit breaker when on login page for a fresh start
+    resetCircuitBreaker();
+    
     const checkForAuthIssues = () => {
       const circuitBreakerInfo = isCircuitBreakerActive();
       const staleToken = isTokenPotentiallyStale();
@@ -84,7 +86,7 @@ const AuthPage = () => {
     // If we have a session, we should go to the homepage regardless
     if (session) {
       console.log("Session exists, forcing redirect to /");
-      window.location.href = "/";
+      window.location.href = "/?session=" + Date.now();
       return;
     }
     
@@ -92,8 +94,8 @@ const AuthPage = () => {
       setRedirectAttempted(true);
       console.log("User is authenticated, redirecting to:", from);
       
-      // Use hard redirect for reliability
-      window.location.href = from;
+      // Use hard redirect for reliability with cache busting
+      window.location.href = from + (from.includes('?') ? '&' : '?') + 'auth=' + Date.now();
     }
   }, [isAuthenticated, navigate, from, redirectAttempted, session, forceHomeRedirect]);
   
@@ -118,10 +120,10 @@ const AuthPage = () => {
       recordSuccessfulAuth();
       toast.success("You have been logged in");
       
-      // Force a hard redirect after successful login
+      // Force a hard redirect after successful login with cache busting
       setTimeout(() => {
-        window.location.href = from;
-      }, 500);
+        window.location.href = from + (from.includes('?') ? '&' : '?') + 'login=' + Date.now();
+      }, 300);
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error("Login failed", {
@@ -137,6 +139,9 @@ const AuthPage = () => {
     setRecoveryMode(true);
     
     try {
+      // Reset circuit breaker first
+      resetCircuitBreaker();
+      
       // Use the enhanced recovery function
       await performFullAuthRecovery();
       
@@ -144,10 +149,10 @@ const AuthPage = () => {
         description: "Please log in again"
       });
       
-      // Force reload after recovery
+      // Force reload after recovery with cache busting
       setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+        window.location.href = '/auth?recovery=' + Date.now();
+      }, 300);
     } catch (err) {
       console.error('Recovery failed:', err);
       toast.error("Recovery failed", {
@@ -160,27 +165,12 @@ const AuthPage = () => {
   
   const handleHardReset = () => {
     try {
-      // Clear all localStorage
-      localStorage.clear();
-      
-      // Clear all sessionStorage
-      sessionStorage.clear();
-      
-      // Clear all cookies
-      document.cookie.split(';').forEach(c => {
-        document.cookie = c
-          .replace(/^ +/, '')
-          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
-      });
+      // Use the enhanced emergency reset function
+      emergencyAuthReset();
       
       toast.success("Complete browser storage reset successful", {
         description: "Reloading page..."
       });
-      
-      // Hard reload after short delay
-      setTimeout(() => {
-        window.location.href = '/auth';
-      }, 1000);
     } catch (err) {
       console.error('Hard reset failed:', err);
       toast.error("Reset failed", {
@@ -309,7 +299,7 @@ const AuthPage = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading || recoveryMode || circuitBreakerInfo.active}
+              disabled={loading || recoveryMode || (circuitBreakerInfo.active && !advancedTroubleshooting)}
             >
               {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
