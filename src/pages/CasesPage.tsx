@@ -31,7 +31,7 @@ const CasesPage = () => {
   }, [location]);
 
   // Get watchlist count for badge
-  const watchlistCount = cases.filter(c => starredCases.includes(c.id)).length;
+  const watchlistCount = cases ? cases.filter(c => starredCases.includes(c.id)).length : 0;
   
   // Navigate to case detail
   const viewCase = (caseId: string) => {
@@ -51,11 +51,11 @@ const CasesPage = () => {
     searchQuery: string 
   }) => {
     // Filter cases based on user role and impersonation state
-    let filteredCases = cases;
+    let filteredCases = cases || [];
     
     // If user role is not consultant OR if impersonating a user (not a consultant), only show user's cases
-    if (profile?.role !== 'consultant' || isImpersonating && profile?.role !== 'consultant') {
-      filteredCases = cases.filter(c => c.userId === profile?.id);
+    if (profile?.role !== 'consultant' || (isImpersonating && profile?.role !== 'consultant')) {
+      filteredCases = filteredCases.filter(c => c.userId === profile?.id);
     }
     
     // Apply additional filters
