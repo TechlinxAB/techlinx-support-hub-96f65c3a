@@ -9,6 +9,8 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import useModalManager from "./hooks/use-modal-manager";
 import ModalReset from "./components/ui/modal-reset";
 import SearchPage from "./pages/SearchPage";
+import { useEffect } from "react";
+import { initPauseUnpauseDetection } from "./utils/authRecovery";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -47,6 +49,16 @@ const ModalManager = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Init App Component to set up pause/unpause detection
+const InitApp = () => {
+  useEffect(() => {
+    // Initialize pause/unpause detection at the app root level
+    initPauseUnpauseDetection();
+  }, []);
+  
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -55,6 +67,7 @@ const App = () => (
           <ModalManager>
             <Toaster />
             <ModalReset />
+            <InitApp />
             <BrowserRouter>
               <Routes>
                 {/* Public route - accessible without authentication */}

@@ -4,16 +4,27 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import { Loader, RefreshCw } from 'lucide-react';
+import { Loader, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { performFullAuthRecovery } from '@/utils/authRecovery';
+import { toast } from 'sonner';
+import { 
+  performFullAuthRecovery, 
+  wasPauseDetected, 
+  clearPauseDetected, 
+  isForceBypassActive, 
+  setForceBypass 
+} from '@/utils/authRecovery';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const navigate = useNavigate();
+  
+  // Check if bypass is active
+  const bypassActive = isForceBypassActive();
 
   useEffect(() => {
     const handleResize = () => {
@@ -30,7 +41,22 @@ const Layout = () => {
     // Set a timeout to force show content after 3 seconds
     const timer = setTimeout(() => {
       setForceShow(true);
-    }, 3000);
+    }, 5000); // Increased from 3s to 5s for more reliability
+    
+    // Check if we're returning from a pause state
+    if (wasPauseDetected()) {
+      setIsPauseRecovery(true);
+      toast.info("Recovering from app pause", {
+        description: "Your session is being verified after returning from background",
+        duration: 5000
+      });
+      
+      // Clear the pause detected flag after showing the message
+      setTimeout(() => {
+        clearPauseDetected();
+        setIsPauseRecovery(false);
+      }, 10000);
+    }
     
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -60,6 +86,45 @@ const Layout = () => {
     // Add cache busting to prevent browser caching issues
     window.location.href = `${path}?force=${Date.now()}`;
   };
+  
+  // Handle force bypass activation
+  const handleForceBypass = () => {
+    setForceBypass();
+    toast.success("Authentication bypass activated", {
+      description: "You can now access the app regardless of auth status"
+    });
+    setForceShow(true);
+  };
+
+  // If force bypass is active, skip all checks and render content
+  if (bypassActive) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-muted/20">
+        <Sidebar isOpen={isSidebarOpen} />
+        
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header toggleSidebar={toggleSidebar} />
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} />
+              <span className="text-sm font-medium">Authentication bypass active</span>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 text-xs"
+              onClick={handleAuthReset}
+            >
+              Reset Auth
+            </Button>
+          </div>
+          <main className="flex-1 overflow-y-auto p-4">
+            <Outlet />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   // Show a loading state until authentication is confirmed, but add a timeout
   if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
@@ -67,6 +132,11 @@ const Layout = () => {
       <div className="flex items-center justify-center min-h-screen flex-col">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="mb-4">Loading application...</p>
+        {isPauseRecovery && (
+          <p className="text-sm text-amber-500 mb-4">
+            Recovering from app pause/background state...
+          </p>
+        )}
         <div className="flex gap-2">
           <Button 
             variant="link" 
@@ -88,13 +158,21 @@ const Layout = () => {
             )}
             Reset auth
           </Button>
+          <Button
+            variant="link"
+            onClick={handleForceBypass}
+            className="text-sm text-amber-500"
+            size="sm"
+          >
+            Bypass auth checks
+          </Button>
         </div>
       </div>
     );
   }
 
   // Force show if we don't have a session but we're on the main layout
-  if (!session && !isAuthenticated && !loading) {
+  if (!session && !isAuthenticated && !loading && !bypassActive) {
     return (
       <div className="flex items-center justify-center min-h-screen flex-col">
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
@@ -111,6 +189,13 @@ const Layout = () => {
           >
             Continue anyway
           </Button>
+          <Button
+            variant="outline"
+            onClick={handleForceBypass}
+            className="text-amber-500"
+          >
+            Bypass auth checks
+          </Button>
         </div>
       </div>
     );
@@ -122,6 +207,19 @@ const Layout = () => {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header toggleSidebar={toggleSidebar} />
+        {isPauseRecovery && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
+            <span className="text-sm">Recovering from app pause...</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 text-xs"
+              onClick={() => clearPauseDetected()}
+            >
+              Dismiss
+            </Button>
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto p-4">
           <Outlet />
         </main>

@@ -2,14 +2,21 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { Loader } from 'lucide-react';
+import { Loader, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { 
   isCircuitBreakerActive, 
   detectAuthLoops,
   resetCircuitBreaker,
-  performFullAuthRecovery
+  performFullAuthRecovery,
+  isForceBypassActive,
+  setForceBypass,
+  initPauseUnpauseDetection,
+  wasPauseDetected,
+  clearPauseDetected,
+  hasTooManyRecoveryAttempts,
+  resetRecoveryAttempts
 } from '@/utils/authRecovery';
 
 const ProtectedRoute = () => {
@@ -26,40 +33,57 @@ const ProtectedRoute = () => {
   const [isRecovering, setIsRecovering] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [forceTimeout, setForceTimeout] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0);
+  const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   
-  // Track if we're in a "force through" mode after recovery
-  const [forceThrough, setForceThrough] = useState(false);
+  // Check if we need to use force bypass mode (completely skip auth checks)
+  const bypassActive = isForceBypassActive();
   
-  // Handle diagnostic info for circuit breaker
+  // Check for circuit breaker and auth loop issues
   const circuitBreakerInfo = isCircuitBreakerActive();
   const authLoopDetected = detectAuthLoops();
-
-  // Add a strict timeout to force progression after 3 seconds max
+  const pauseDetected = wasPauseDetected();
+  
+  // Initialize pause/unpause detection on first render
   useEffect(() => {
-    // Set a timeout to force progress after 3 seconds
+    initPauseUnpauseDetection();
+    
+    // If we have bypass active, reset recovery attempts
+    if (bypassActive) {
+      resetRecoveryAttempts();
+    }
+    
+    // Display message if coming back from pause
+    if (pauseDetected) {
+      console.log("🔄 Returning from app pause/background - using lenient auth checks");
+      setIsPauseRecovery(true);
+      
+      // Auto-reset circuit breaker when coming back from pause
+      resetCircuitBreaker();
+      
+      // Clear the pause detected flag after using it
+      setTimeout(() => {
+        clearPauseDetected();
+        setIsPauseRecovery(false);
+      }, 10000);
+    }
+  }, [bypassActive, pauseDetected]);
+  
+  // Add a longer timeout to force progression after 8 seconds max
+  useEffect(() => {
+    // Set a timeout to force progress after 8 seconds (up from 3)
     const timer = setTimeout(() => {
       if (!redirecting) {
         console.log("Force timeout triggered - progressing auth flow");
         setForceTimeout(true);
       }
-    }, 3000);
+    }, 8000);
     
     return () => clearTimeout(timer);
   }, [redirecting]);
   
-  // Add protection against excessive recovery attempts
-  useEffect(() => {
-    if (attemptCount > 3) {
-      // If we've tried to recover multiple times, force through
-      setForceThrough(true);
-    }
-  }, [attemptCount]);
-  
   // Handle recovery action
   const handleRecovery = async () => {
     setIsRecovering(true);
-    setAttemptCount(prev => prev + 1);
     
     try {
       await performFullAuthRecovery();
@@ -70,9 +94,9 @@ const ProtectedRoute = () => {
       console.error("Recovery failed:", err);
       setIsRecovering(false);
       
-      if (attemptCount > 2) {
-        // If we've tried multiple times, force through anyway
-        setForceThrough(true);
+      if (hasTooManyRecoveryAttempts()) {
+        // If we've tried multiple times, activate bypass
+        setForceBypass();
       }
     }
   };
@@ -89,21 +113,36 @@ const ProtectedRoute = () => {
   const handleForceDashboard = () => {
     setRedirecting(true);
     resetCircuitBreaker();
-    // Add a cache-busting parameter
+    // Add a cache-busting parameter with special force flag
     window.location.href = '/?force=' + Date.now();
   };
   
-  // If we're stuck in a loop but have tried recovery multiple times, force through
-  if (forceThrough) {
+  // Handle force bypass activation
+  const handleForceBypass = () => {
+    setForceBypass();
+    setForceTimeout(true);
+    window.location.reload();
+  };
+  
+  // If force bypass is active, skip all checks and render the outlet
+  if (bypassActive) {
+    console.log("🔓 Force bypass active - skipping auth checks");
     return <Outlet />;
   }
   
-  // Show loading spinner while checking authentication - with a timeout
+  // Show loading spinner while checking authentication - with increased timeout
   if ((loading && !forceTimeout) && !redirecting) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-sm text-muted-foreground">Checking authentication status...</p>
+        
+        {isPauseRecovery && (
+          <p className="text-sm text-amber-500 mt-2 mb-2">
+            Recovering from app pause/background state...
+          </p>
+        )}
+        
         <div className="flex gap-2 mt-4">
           <Button 
             variant="link" 
@@ -118,6 +157,13 @@ const ProtectedRoute = () => {
             className="text-sm"
           >
             Force dashboard
+          </Button>
+          <Button
+            variant="link"
+            onClick={handleForceBypass}
+            className="text-sm text-amber-500"
+          >
+            Bypass auth checks
           </Button>
         </div>
       </div>
@@ -147,6 +193,12 @@ const ProtectedRoute = () => {
                   Authentication loop detected. The system is attempting to authenticate too frequently.
                 </p>
               )}
+              
+              {isPauseRecovery && (
+                <p className="mt-2 text-sm text-amber-500">
+                  Possible Supabase service pause/unpause detected. Recovery measures activated.
+                </p>
+              )}
             </AlertDescription>
           </Alert>
           
@@ -170,10 +222,10 @@ const ProtectedRoute = () => {
             
             <Button
               variant="outline"
-              onClick={() => setForceThrough(true)}
+              onClick={handleForceBypass}
               className="w-full mt-2"
             >
-              Force Access Anyway
+              Force Access Anyway (4 hrs)
             </Button>
             
             <p className="text-xs text-muted-foreground text-center mt-4">
@@ -185,14 +237,16 @@ const ProtectedRoute = () => {
     );
   }
   
-  // IMPORTANT FIX: If we have a session, we should allow access even if other flags aren't set
-  if (session || isAuthenticated || forceTimeout) {
+  // IMPROVED CHECK: If we have a session OR isAuthenticated flag OR we're in force timeout,
+  // OR we've detected a pause/unpause and want to be lenient, allow access
+  if (session || isAuthenticated || forceTimeout || (isPauseRecovery && session)) {
     return <Outlet />;
   }
   
-  // If definitely not authenticated, redirect to login
+  // If definitely not authenticated, redirect to login with cache busting
   const redirectPath = encodeURIComponent(location.pathname);
-  window.location.href = `/auth?redirect=${redirectPath}&t=${Date.now()}`;
+  const cacheBuster = Date.now();
+  window.location.href = `/auth?redirect=${redirectPath}&t=${cacheBuster}`;
   return null;
 };
 
