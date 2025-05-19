@@ -4,21 +4,40 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { clearAuthState, isCircuitBreakerActive, resetCircuitBreaker } from '@/integrations/supabase/client';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [showRecovery, setShowRecovery] = useState<boolean>(false);
+  const [recoveryMode, setRecoveryMode] = useState<boolean>(false);
   
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, signIn, forceRecovery, authState, authError } = useAuth();
   
   // Get redirect path from state or default to home
   const from = location.state?.from || '/';
+  
+  // Check if circuit breaker is active on mount
+  useEffect(() => {
+    const circuitActive = isCircuitBreakerActive();
+    if (circuitActive) {
+      setShowRecovery(true);
+    }
+    
+    // After 3 seconds, show the troubleshooting option
+    const timer = setTimeout(() => {
+      setShowRecovery(true);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Redirect if user is already authenticated
   useEffect(() => {
@@ -49,10 +68,41 @@ const AuthPage = () => {
       toast.error("Login failed", {
         description: error.message || "Invalid email or password"
       });
+      setShowRecovery(true);
     } finally {
       setLoading(false);
     }
   };
+  
+  const handleRecovery = async () => {
+    setLoading(true);
+    setRecoveryMode(true);
+    
+    try {
+      // Reset circuit breaker
+      resetCircuitBreaker();
+      
+      // Clear all auth state
+      await clearAuthState();
+      
+      // Force recovery through auth context
+      await forceRecovery();
+      
+      toast.success("Authentication reset successful", {
+        description: "Please log in again"
+      });
+    } catch (err) {
+      console.error('Recovery failed:', err);
+      toast.error("Recovery failed", {
+        description: "Please try clearing your browser cache and cookies"
+      });
+    } finally {
+      setLoading(false);
+      setRecoveryMode(false);
+    }
+  };
+  
+  const isAuthError = authState === 'ERROR' || !!authError;
   
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
@@ -61,6 +111,31 @@ const AuthPage = () => {
           <CardTitle className="text-2xl font-bold text-primary">Techlinx Helpdesk</CardTitle>
           <CardDescription>Sign in to access your support dashboard</CardDescription>
         </CardHeader>
+        
+        {isAuthError && (
+          <CardContent>
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              <AlertDescription>
+                {authError || "Authentication error. This could be due to a stale session."}
+              </AlertDescription>
+            </Alert>
+            
+            <Button 
+              onClick={handleRecovery} 
+              variant="secondary"
+              className="w-full mb-4"
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Reset Authentication
+            </Button>
+          </CardContent>
+        )}
         
         <form onSubmit={handleSignIn}>
           <CardContent className="space-y-4">
@@ -91,11 +166,28 @@ const AuthPage = () => {
             </div>
           </CardContent>
           
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <CardFooter className="flex flex-col space-y-3">
+            <Button type="submit" className="w-full" disabled={loading || recoveryMode}>
+              {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
+            
+            {showRecovery && !isAuthError && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full text-sm"
+                onClick={handleRecovery}
+                disabled={loading || recoveryMode}
+              >
+                {recoveryMode ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Troubleshoot Login
+              </Button>
+            )}
           </CardFooter>
         </form>
         
@@ -103,6 +195,12 @@ const AuthPage = () => {
           <p className="text-sm text-muted-foreground text-center">
             New users must be created by an administrator through the User Management page.
           </p>
+          
+          {showRecovery && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Having trouble logging in? Try the "Troubleshoot Login" option above or clear your browser cache.
+            </p>
+          )}
         </CardFooter>
       </Card>
     </div>

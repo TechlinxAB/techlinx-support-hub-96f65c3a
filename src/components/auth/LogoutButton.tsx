@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { clearAuthState } from '@/integrations/supabase/client';
 
 interface LogoutButtonProps {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
@@ -28,7 +29,11 @@ const LogoutButton = ({
       setIsLoggingOut(true);
       const toastId = toast.loading('Logging out...');
       
+      // Use enhanced signOut method
       await signOut();
+      
+      // Additional safety measure - make sure auth state is completely cleared
+      await clearAuthState();
       
       toast.success('Successfully logged out', { id: toastId });
       
@@ -37,6 +42,9 @@ const LogoutButton = ({
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');
+      
+      // Last resort - hard redirect
+      window.location.href = '/auth';
     } finally {
       setIsLoggingOut(false);
     }
