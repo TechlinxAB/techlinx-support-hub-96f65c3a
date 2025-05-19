@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
-import { Loader, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { AnimatePresence } from 'framer-motion';
@@ -24,7 +24,6 @@ const LoadingOverlay = ({ message }: { message?: string }) => (
     className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
     style={{ backgroundColor: 'white' }}
   >
-    <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
     <p className="mb-4 text-gray-700">{message || "Loading application..."}</p>
   </div>
 );
@@ -152,18 +151,11 @@ const Layout = () => {
     );
   }
 
-  // Add transition overlay that appears during page transitions
-  const showTransitionOverlay = pageTransitioning;
+  // No loading overlay during page transitions anymore
+  const showTransitionOverlay = false;
 
   return (
     <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
-      {/* Show a full-page transition overlay during page transitions */}
-      {showTransitionOverlay && (
-        <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
-          <Loader className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      )}
-      
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
