@@ -161,7 +161,7 @@ const CompanyNewsBuilderPage = () => {
         description: error.message || "Please try again"
       });
       
-      // Refetch to ensure state is correct after error
+      // Fix: call refetchCompanyNewsBlocks without any arguments
       await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
@@ -268,7 +268,7 @@ const CompanyNewsBuilderPage = () => {
     }
   };
 
-  // Handle toggle publish - fixed by removing the incorrect second argument
+  // Handle toggle publish - fixed by removing the incorrect argument to refetchCompanyNewsBlocks
   const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
     setLoading(true);
     try {
@@ -290,7 +290,7 @@ const CompanyNewsBuilderPage = () => {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // Fix: call refetchCompanyNewsBlocks with only one argument
+      // Fix: call refetchCompanyNewsBlocks without any arguments
       await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
