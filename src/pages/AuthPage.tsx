@@ -13,7 +13,8 @@ import {
   isCircuitBreakerActive, 
   resetCircuitBreaker,
   detectAuthLoops,
-  isTokenPotentiallyStale
+  isTokenPotentiallyStale,
+  recordSuccessfulAuth
 } from '@/integrations/supabase/client';
 
 const AuthPage = () => {
@@ -23,6 +24,7 @@ const AuthPage = () => {
   const [showRecovery, setShowRecovery] = useState<boolean>(false);
   const [recoveryMode, setRecoveryMode] = useState<boolean>(false);
   const [advancedTroubleshooting, setAdvancedTroubleshooting] = useState<boolean>(false);
+  const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -69,10 +71,22 @@ const AuthPage = () => {
   
   // Redirect if user is already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !redirectAttempted) {
+      setRedirectAttempted(true);
+      console.log("User is authenticated, redirecting to:", from);
+      
+      // Force a hard redirect if the normal navigation doesn't work
+      const redirectTimer = setTimeout(() => {
+        console.log("Forcing hard redirect after timeout");
+        window.location.href = from;
+      }, 1000);
+      
+      // Try normal navigation first
       navigate(from, { replace: true });
+      
+      return () => clearTimeout(redirectTimer);
     }
-  }, [isAuthenticated, navigate, from]);
+  }, [isAuthenticated, navigate, from, redirectAttempted]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +96,8 @@ const AuthPage = () => {
       return;
     }
     
+    // Reset circuit breaker before sign in attempt
+    resetCircuitBreaker();
     setLoading(true);
     
     try {
@@ -89,8 +105,22 @@ const AuthPage = () => {
       
       if (error) throw error;
       
+      // Mark successful authentication
+      recordSuccessfulAuth();
       toast.success("You have been logged in");
-      // Navigation will happen via the effect above
+      
+      // Force a hard redirect if the normal navigation doesn't work
+      setTimeout(() => {
+        if (!redirectAttempted) {
+          console.log("Forcing navigation after successful login");
+          navigate(from, { replace: true });
+          
+          // As a last resort, force a hard redirect
+          setTimeout(() => {
+            window.location.href = from;
+          }, 500);
+        }
+      }, 300);
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error("Login failed", {

@@ -13,10 +13,11 @@ export const CIRCUIT_BREAKER_KEY = 'auth-circuit-breaker';
 export const AUTH_INIT_COUNT = 'auth-init-count';
 export const AUTH_LAST_INIT = 'auth-last-init';
 export const SESSION_CHECK_TIMESTAMP = 'last-session-check';
+export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 
 // Set a version for the current auth implementation
 // Increment this when making changes to auth logic
-export const CURRENT_AUTH_VERSION = '1.1.0';
+export const CURRENT_AUTH_VERSION = '1.2.0';
 
 // Create a custom storage object with debugging
 const createStorage = () => {
@@ -32,6 +33,12 @@ const createStorage = () => {
       setItem: (key: string, value: string) => {
         if (key === STORAGE_KEY) {
           console.log("✅ Setting auth token in storage");
+          // When setting the auth token, also mark that we had a successful auth
+          try {
+            localStorage.setItem(SUCCESSFUL_AUTH_KEY, Date.now().toString());
+          } catch (e) {
+            // Ignore errors
+          }
         }
         localStorage.setItem(key, value);
       },
@@ -135,6 +142,7 @@ export const clearAuthState = async () => {
     localStorage.removeItem(AUTH_INIT_COUNT);
     localStorage.removeItem(AUTH_LAST_INIT);
     localStorage.removeItem(SESSION_CHECK_TIMESTAMP);
+    localStorage.removeItem(SUCCESSFUL_AUTH_KEY);
     
     // Step 2: Clear any session cookies
     document.cookie.split(';').forEach(c => {
@@ -222,12 +230,21 @@ export const activateCircuitBreaker = (timeoutMinutes = 5, reason = "Unknown"): 
 // Check if circuit breaker is active with details
 export const isCircuitBreakerActive = (): { active: boolean, reason?: string, remainingSeconds?: number } => {
   try {
+    // Check if we recently had a successful auth - if so, don't activate circuit breaker
+    const lastSuccessfulAuth = parseInt(localStorage.getItem(SUCCESSFUL_AUTH_KEY) || '0', 10);
+    const now = Date.now();
+    
+    // If we've had a successful auth in the last 30 seconds, bypass circuit breaker
+    if (lastSuccessfulAuth > 0 && (now - lastSuccessfulAuth < 30000)) {
+      resetCircuitBreaker(); // Auto-reset circuit breaker on recent successful auth
+      return { active: false };
+    }
+    
     const circuitBreakerData = localStorage.getItem(CIRCUIT_BREAKER_KEY);
     if (!circuitBreakerData) return { active: false };
     
     try {
       const { expiry, reason } = JSON.parse(circuitBreakerData);
-      const now = Date.now();
       
       if (now < expiry) {
         const remainingSeconds = Math.round((expiry - now) / 1000);
@@ -304,5 +321,16 @@ export const isTokenPotentiallyStale = (): boolean => {
     return false;
   } catch (e) {
     return false;
+  }
+};
+
+// Record successful auth action to prevent unnecessary circuit breaking
+export const recordSuccessfulAuth = (): void => {
+  try {
+    localStorage.setItem(SUCCESSFUL_AUTH_KEY, Date.now().toString());
+    // Also reset error counter on successful auth
+    resetAuthErrorCount();
+  } catch (e) {
+    // Silent fail
   }
 };

@@ -8,7 +8,8 @@ import {
   resetAuthErrorCount,
   activateCircuitBreaker,
   isCircuitBreakerActive,
-  resetCircuitBreaker
+  resetCircuitBreaker,
+  recordSuccessfulAuth
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -81,6 +82,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authState, setAuthState] = useState<AuthState>('INITIAL_SESSION');
   const [retryCount, setRetryCount] = useState(0);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
+  const [sessionCheckDone, setSessionCheckDone] = useState(false);
   
   // Impersonation state
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -117,6 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data) {
         const mappedProfile = mapDbProfileToUserProfile(data);
         resetAuthErrorCount(); // Reset error count on successful fetch
+        recordSuccessfulAuth(); // Record a successful auth action
         return mappedProfile;
       }
       
@@ -178,6 +182,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Initialize auth state with improved error handling
   useEffect(() => {
+    if (initialized) return;
+    setInitialized(true);
+    
     console.log('Initializing AuthContext');
     setLoading(true);
     
@@ -190,7 +197,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     // Check if circuit breaker is active
-    if (isCircuitBreakerActive()) {
+    if (isCircuitBreakerActive().active) {
       console.log("Circuit breaker is active, skipping auth initialization");
       setAuthState('ERROR');
       setAuthError("Authentication temporarily disabled due to repeated errors. Please try again later.");
@@ -220,6 +227,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setAuthState('AUTHENTICATED');
                 console.log('Profile fetch successful, user authenticated');
                 resetAuthErrorCount(); // Reset error counter on success
+                recordSuccessfulAuth(); // Record successful auth
               }
             } else {
               console.error('Failed to fetch profile for user:', currentSession.user.id);
@@ -230,7 +238,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               // If we've had too many errors, activate circuit breaker
               if (errorCount >= MAX_AUTH_ERRORS) {
                 console.warn("Too many auth errors, activating circuit breaker");
-                activateCircuitBreaker(5); // 5 minutes timeout
+                activateCircuitBreaker(5, "Failed to fetch user profile"); // 5 minutes timeout
                 setAuthError("Authentication temporarily disabled due to repeated errors");
                 setAuthState('ERROR');
               }
@@ -250,20 +258,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
     
     // Check for existing session with retry logic
-    const checkSession = async (attempt = 0) => {
+    const checkSession = async () => {
+      if (sessionCheckDone) return;
+      setSessionCheckDone(true);
+      
       try {
-        console.log(`Checking session, attempt ${attempt + 1}`);
+        console.log(`Checking session, attempt 1`);
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Session check error:', error);
-          
-          if (attempt < MAX_AUTH_RETRIES) {
-            console.log(`Retrying session check in ${(attempt + 1) * 1000}ms...`);
-            setTimeout(() => checkSession(attempt + 1), (attempt + 1) * 1000);
-            return;
-          }
-          
           setAuthState('SIGNED_OUT');
           setLoading(false);
           return;
@@ -273,20 +277,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(data.session?.user || null);
         
         if (data.session?.user) {
-          const fetchedProfile = await fetchProfile(data.session.user.id);
-          if (fetchedProfile) {
-            setProfile(fetchedProfile);
-            setAuthState('AUTHENTICATED');
-            resetAuthErrorCount();
-          } else {
-            const errorCount = trackAuthError();
-            setAuthState('SIGNED_IN');
-            
-            if (errorCount >= MAX_AUTH_ERRORS) {
-              console.warn("Too many auth errors, activating circuit breaker");
-              activateCircuitBreaker(5);
-              setAuthError("Authentication temporarily disabled due to repeated errors");
-              setAuthState('ERROR');
+          // Only fetch profile if we haven't done so already
+          if (!profile) {
+            const fetchedProfile = await fetchProfile(data.session.user.id);
+            if (fetchedProfile) {
+              setProfile(fetchedProfile);
+              setAuthState('AUTHENTICATED');
+              resetAuthErrorCount();
+              recordSuccessfulAuth(); // Record successful auth
+            } else {
+              const errorCount = trackAuthError();
+              setAuthState('SIGNED_IN');
+              
+              if (errorCount >= MAX_AUTH_ERRORS) {
+                console.warn("Too many auth errors, activating circuit breaker");
+                activateCircuitBreaker(5, "Failed to fetch user profile during session check");
+                setAuthError("Authentication temporarily disabled due to repeated errors");
+                setAuthState('ERROR');
+              }
             }
           }
         } else {
@@ -300,12 +308,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     
-    checkSession();
+    // Defer session check slightly to avoid race conditions
+    setTimeout(checkSession, 100);
     
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []);
+  }, [initialized, profile, isImpersonating, sessionCheckDone]);
 
   // Start impersonation function
   const startImpersonation = async (userId: string) => {
@@ -388,6 +397,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Track auth errors for explicit sign in attempts too
         trackAuthError();
         return { error };
+      }
+      
+      // Mark as authenticated to trigger the useEffect that handles redirection
+      if (data?.session) {
+        recordSuccessfulAuth();
       }
       
       return { error: null };

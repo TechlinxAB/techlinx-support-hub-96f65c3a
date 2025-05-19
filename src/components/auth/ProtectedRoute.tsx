@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
@@ -23,10 +23,23 @@ const ProtectedRoute = () => {
   const location = useLocation();
   const [isRecovering, setIsRecovering] = React.useState(false);
   const [redirecting, setRedirecting] = React.useState(false);
+  const [authAttempts, setAuthAttempts] = React.useState(0);
   
   // Handle diagnostic info for circuit breaker
   const circuitBreakerInfo = isCircuitBreakerActive();
   const authLoopDetected = detectAuthLoops();
+
+  // Add a useEffect to handle auth retries
+  useEffect(() => {
+    if (!isAuthenticated && !loading && authState !== 'ERROR' && authAttempts < 2) {
+      // Try to wait a bit and let auth complete, in case of race conditions
+      const timer = setTimeout(() => {
+        setAuthAttempts(prev => prev + 1);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, loading, authState, authAttempts]);
   
   // Handle recovery action - with better error handling
   const handleRecovery = async () => {
@@ -53,7 +66,7 @@ const ProtectedRoute = () => {
   };
   
   // Show loading spinner while checking authentication
-  if (loading && !redirecting) {
+  if ((loading || authAttempts < 2) && !redirecting) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
