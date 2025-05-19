@@ -11,8 +11,6 @@ import ModalReset from "./components/ui/modal-reset";
 import SearchPage from "./pages/SearchPage";
 import { useEffect } from "react";
 import { initPauseUnpauseDetection } from "./utils/authRecovery";
-import { AnimatePresence } from "framer-motion";
-import PageTransition from "./components/layout/PageTransition";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -61,93 +59,31 @@ const InitApp = () => {
   return null;
 };
 
-// Animation wrapper for routes
-const AnimatedRoutes = () => {
-  const location = useLocation();
-  
+// Routes Component
+const AppRoutes = () => {
   return (
-    <Routes location={location}>
+    <Routes>
       {/* Public route - accessible without authentication */}
       <Route path="/auth" element={<AuthPage />} />
       
       {/* Protected routes - require authentication */}
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Layout />}>
-          <Route index element={
-            <PageTransition>
-              <Dashboard />
-            </PageTransition>
-          } />
-          <Route path="cases" element={
-            <PageTransition>
-              <CasesPage />
-            </PageTransition>
-          } />
-          <Route path="cases/new" element={
-            <PageTransition>
-              <NewCasePage />
-            </PageTransition>
-          } />
-          <Route path="cases/:id" element={
-            <PageTransition>
-              <CaseDetailPage />
-            </PageTransition>
-          } />
-          <Route path="companies" element={
-            <PageTransition>
-              <CompaniesPage />
-            </PageTransition>
-          } />
-          <Route path="companies/:id" element={
-            <PageTransition>
-              <CompaniesPage />
-            </PageTransition>
-          } />
-          <Route path="company/:id/settings" element={
-            <PageTransition>
-              <CompanySettingsPage />
-            </PageTransition>
-          } />
-          <Route path="company-dashboard" element={
-            <PageTransition>
-              <CompanyDashboardPage />
-            </PageTransition>
-          } />
-          <Route path="company-dashboard-builder/:companyId" element={
-            <PageTransition>
-              <CompanyDashboardBuilderPage />
-            </PageTransition>
-          } />
-          <Route path="company-news/:companyId" element={
-            <PageTransition>
-              <CompanyNewsPage />
-            </PageTransition>
-          } />
-          <Route path="company-news-builder/:companyId" element={
-            <PageTransition>
-              <CompanyNewsBuilderPage />
-            </PageTransition>
-          } />
-          <Route path="users" element={
-            <PageTransition>
-              <UserManagementPage />
-            </PageTransition>
-          } />
-          <Route path="company-management" element={
-            <PageTransition>
-              <CompanyManagementPage />
-            </PageTransition>
-          } />
-          <Route path="settings" element={
-            <PageTransition>
-              <SettingsPage />
-            </PageTransition>
-          } />
-          <Route path="search" element={
-            <PageTransition>
-              <SearchPage />
-            </PageTransition>
-          } />
+          <Route index element={<Dashboard />} />
+          <Route path="cases" element={<CasesPage />} />
+          <Route path="cases/new" element={<NewCasePage />} />
+          <Route path="cases/:id" element={<CaseDetailPage />} />
+          <Route path="companies" element={<CompaniesPage />} />
+          <Route path="companies/:id" element={<CompaniesPage />} />
+          <Route path="company/:id/settings" element={<CompanySettingsPage />} />
+          <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+          <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+          <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
+          <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
+          <Route path="users" element={<UserManagementPage />} />
+          <Route path="company-management" element={<CompanyManagementPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="search" element={<SearchPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
@@ -165,9 +101,7 @@ const App = () => (
               <Toaster />
               <ModalReset />
               <InitApp />
-              <AnimatePresence mode="wait">
-                <AnimatedRoutes />
-              </AnimatePresence>
+              <AppRoutes />
             </ModalManager>
           </TooltipProvider>
         </AppProvider>

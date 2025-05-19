@@ -15,6 +15,7 @@ import {
   isForceBypassActive, 
   setForceBypass 
 } from '@/utils/authRecovery';
+import PageTransition from '@/components/layout/PageTransition';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -140,7 +141,11 @@ const Layout = () => {
             </Button>
           </div>
           <main className="flex-1 overflow-y-auto p-4">
-            <Outlet />
+            <AnimatePresence mode="wait" initial={false}>
+              <PageTransition key={location.pathname}>
+                <Outlet />
+              </PageTransition>
+            </AnimatePresence>
           </main>
         </div>
       </div>
@@ -260,7 +265,9 @@ const Layout = () => {
         )}
         <main className="flex-1 overflow-y-auto p-4">
           <AnimatePresence mode="wait" initial={false}>
-            <Outlet />
+            <PageTransition key={location.pathname}>
+              <Outlet />
+            </PageTransition>
           </AnimatePresence>
         </main>
       </div>

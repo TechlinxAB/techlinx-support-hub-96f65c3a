@@ -6,7 +6,6 @@ import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
-import PageTransition from "@/components/layout/PageTransition";
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
