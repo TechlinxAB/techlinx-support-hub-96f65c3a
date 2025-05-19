@@ -14,7 +14,7 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ 
-        duration: 0.2, // Faster transition to reduce flash
+        duration: 0.2,
         ease: "easeInOut",
       }}
       style={{ 
@@ -22,18 +22,12 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
         position: 'relative',
         width: '100%',
         height: '100%',
-        backgroundColor: 'white !important', // Force white background
-        zIndex: 2, // Higher than sidebar but lower than loading overlay
+        backgroundColor: 'white',
+        zIndex: 2,
       }}
       className={`${className || "w-full h-full"} bg-white`}
     >
-      {/* Extra white wrapper to ensure no green shows through */}
-      <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}> 
-        {/* Add another white layer for extra protection against green showing through */}
-        <div className="bg-white w-full h-full" style={{ backgroundColor: 'white !important' }}>
-          {children}
-        </div>
-      </div>
+      {children}
     </motion.div>
   );
 };

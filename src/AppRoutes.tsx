@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import NavigationService from "./services/navigationService";
@@ -29,14 +29,6 @@ import CompanySettingsPage from "./pages/CompanySettingsPage";
 import PersistentSidebar from "./components/layout/PersistentSidebar";
 import Layout from "./components/layout/Layout";
 
-// Main styling to prevent green flash
-const appStyle: React.CSSProperties = {
-  backgroundColor: 'white',
-  position: 'relative',
-  zIndex: 0,
-  isolation: 'isolate', // Create a stacking context
-};
-
 const AppRoutes = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -48,19 +40,14 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      {/* Extra white background layer to ensure no green bleeding */}
-      <div className="fixed inset-0 bg-white -z-10"></div>
-      
-      <div className="flex min-h-screen bg-white" style={appStyle}> 
-        {/* Persistent Sidebar - COMPLETELY outside of animation context */}
+      <div className="flex min-h-screen bg-white">
+        {/* Persistent Sidebar - always outside of animation context */}
         <PersistentSidebar />
 
-        {/* Main content wrapper with explicit white background */}
-        <div className="w-full h-full bg-white flex-1" style={{ 
-          backgroundColor: 'white', 
+        {/* Main content wrapper */}
+        <div className="w-full h-full flex-1 bg-white" style={{ 
           position: 'relative', 
           zIndex: 1,
-          overflow: 'hidden', // Contain any animations
         }}> 
           <Routes location={location}>
             {/* Auth route - doesn't use the main layout */}
@@ -69,9 +56,7 @@ const AppRoutes = () => {
             {/* All protected routes */}
             <Route path="/*" element={
               <ProtectedRoute>
-                <div className="w-full h-full bg-white"> {/* Extra white wrapper */}
-                  <Layout />
-                </div>
+                <Layout />
               </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />

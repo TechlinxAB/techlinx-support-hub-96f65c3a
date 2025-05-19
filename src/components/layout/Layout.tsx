@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -42,11 +41,9 @@ const Layout = () => {
     setIsPageTransitioning(true);
     const transitionTimeout = setTimeout(() => {
       setIsPageTransitioning(false);
-    }, 300); // Slightly longer than animation to ensure full coverage
+    }, 300); // Match with animation duration
     
-    return () => {
-      clearTimeout(transitionTimeout);
-    };
+    return () => clearTimeout(transitionTimeout);
   }, [location.pathname, navigationType]);
 
   useEffect(() => {
@@ -179,7 +176,7 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
+    <div className="flex min-h-screen w-full">
       {/* Add the transition overlay that shows during page transitions */}
       <TransitionOverlay isVisible={isPageTransitioning} />
       
@@ -188,7 +185,6 @@ const Layout = () => {
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
         style={{ 
           marginLeft: contentMarginLeft,
-          backgroundColor: 'white', // Explicit style
           position: 'relative',
           zIndex: 1
         }}
@@ -214,18 +210,14 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
-          <div className="bg-white w-full h-full"> 
-            <AnimatePresence mode="wait">
-              <div className="bg-white w-full h-full"> 
-                <PageTransition key={location.pathname}>
-                  <Container>
-                    <Outlet />
-                  </Container>
-                </PageTransition>
-              </div>
-            </AnimatePresence>
-          </div>
+        <main className="flex-1 overflow-x-hidden py-6 w-full bg-white">
+          <AnimatePresence mode="wait">
+            <PageTransition key={location.pathname}>
+              <Container>
+                <Outlet />
+              </Container>
+            </PageTransition>
+          </AnimatePresence>
         </main>
       </div>
     </div>

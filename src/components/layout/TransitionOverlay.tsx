@@ -16,7 +16,6 @@ const TransitionOverlay: React.FC<TransitionOverlayProps> = ({ isVisible }) => {
         opacity: isVisible ? 1 : 0,
         pointerEvents: isVisible ? 'auto' : 'none',
         transition: 'opacity 0.2s ease-in-out',
-        backgroundColor: 'white',
       }}
     >
       <Loader className="h-8 w-8 animate-spin text-primary" />

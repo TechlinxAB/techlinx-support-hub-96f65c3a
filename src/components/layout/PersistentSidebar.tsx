@@ -7,7 +7,6 @@ import { useSidebar } from '@/context/SidebarContext';
 
 const PersistentSidebar: React.FC = () => {
   const { isSidebarOpen, isMobile } = useSidebar();
-  const location = useLocation();
   
   return (
     <div 
@@ -15,15 +14,10 @@ const PersistentSidebar: React.FC = () => {
       style={{ 
         width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
         transform: isSidebarOpen || !isMobile ? 'translateX(0)' : 'translateX(-100%)',
-        isolation: 'isolate', // Contain the background color within this element
-        position: 'fixed',
       }}
     >
-      {/* Wrap sidebar in a white background container to prevent color leaking */}
-      <div className="absolute inset-0 bg-white -z-10"></div>
-      
-      {/* Add another container to properly isolate the sidebar's green background */}
-      <div className="relative h-full w-full overflow-hidden isolate">
+      {/* The sidebar itself is contained in its own stacking context */}
+      <div className="relative h-full w-full overflow-hidden">
         <Sidebar isOpen={isSidebarOpen} />
       </div>
     </div>
