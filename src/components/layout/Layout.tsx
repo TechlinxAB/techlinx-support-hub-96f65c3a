@@ -227,8 +227,10 @@ const Layout = () => {
     );
   }
 
+  // Main layout - FIXED to ensure sidebar persistence
   return (
     <div className="flex h-screen overflow-hidden bg-muted/20">
+      {/* Sidebar - OUTSIDE of any animation context to ensure it's always persistent */}
       {/* Mobile overlay to close sidebar when clicked outside */}
       {isSidebarOpen && window.innerWidth < 768 && (
         <div 
@@ -238,18 +240,19 @@ const Layout = () => {
         />
       )}
       
-      {/* Sidebar with fixed positioning and transition */}
+      {/* Sidebar with fixed positioning */}
       <div className={`fixed inset-y-0 left-0 z-30 transition-transform duration-300 ease-in-out transform 
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <Sidebar isOpen={isSidebarOpen} />
       </div>
       
-      {/* Main content that adjusts its margin based on sidebar state */}
+      {/* Main content that adjusts based on sidebar state */}
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
         ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}
       >
         <Header toggleSidebar={toggleSidebar} />
+        
         {isPauseRecovery && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
             <span className="text-sm">Recovering from app pause...</span>
@@ -263,6 +266,8 @@ const Layout = () => {
             </Button>
           </div>
         )}
+        
+        {/* Only the main content is wrapped with AnimatePresence */}
         <main className="flex-1 overflow-y-auto p-4">
           <AnimatePresence mode="wait" initial={false}>
             <PageTransition key={location.pathname}>

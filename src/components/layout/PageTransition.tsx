@@ -4,21 +4,20 @@ import { motion } from 'framer-motion';
 
 interface PageTransitionProps {
   children: React.ReactNode;
-  key?: string;
+  className?: string;
 }
 
-const PageTransition = ({ children, key }: PageTransitionProps) => {
+const PageTransition = ({ children, className }: PageTransitionProps) => {
   return (
     <motion.div
-      key={key}
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+      exit={{ opacity: 0, y: -5 }}
       transition={{ 
-        duration: 0.2,
+        duration: 0.15,
         ease: "easeInOut"
       }}
-      className="w-full h-full"
+      className={className || "w-full h-full"}
     >
       {children}
     </motion.div>

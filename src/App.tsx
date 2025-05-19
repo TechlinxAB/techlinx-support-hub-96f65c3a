@@ -59,7 +59,7 @@ const InitApp = () => {
   return null;
 };
 
-// Routes Component
+// Routes Component - Note: AnimatePresence is NOT here, it's in the Layout
 const AppRoutes = () => {
   return (
     <Routes>
@@ -68,6 +68,7 @@ const AppRoutes = () => {
       
       {/* Protected routes - require authentication */}
       <Route element={<ProtectedRoute />}>
+        {/* The Layout component handles AnimatePresence for its children */}
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="cases" element={<CasesPage />} />
