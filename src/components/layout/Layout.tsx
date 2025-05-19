@@ -1,9 +1,8 @@
 
-import React, { useEffect, useState, memo } from 'react';
-import { useLocation, Outlet, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
 import { Loader, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -17,63 +16,20 @@ import {
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
 
-// Memoized Sidebar component to prevent unnecessary re-renders
-const MemoizedSidebar = memo(Sidebar);
-
 const Layout = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { loading, session, isAuthenticated, authState } = useAuth();
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { loading, session, isAuthenticated, authState } = useAuth();
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
-
-  // Calculate sidebar margin based on screen size
-  const [sidebarMargin, setSidebarMargin] = useState('16rem');
-
-  // Update margin based on screen size and sidebar state
-  useEffect(() => {
-    const updateMargin = () => {
-      if (window.innerWidth < 768) {
-        setSidebarMargin(isSidebarOpen ? '16rem' : '0');
-      } else {
-        setSidebarMargin(isSidebarOpen ? '16rem' : '4rem');
-      }
-    };
-
-    updateMargin();
-    window.addEventListener('resize', updateMargin);
-    return () => window.removeEventListener('resize', updateMargin);
-  }, [isSidebarOpen]);
-
-  useEffect(() => {
-    // Load sidebar state from localStorage if available
-    const savedSidebarState = localStorage.getItem('sidebarState');
-    if (savedSidebarState !== null) {
-      setIsSidebarOpen(savedSidebarState === 'open');
-    } else {
-      // Default behavior based on screen size
-      const handleResize = () => {
-        if (window.innerWidth < 768) {
-          setIsSidebarOpen(false);
-        } else {
-          setIsSidebarOpen(true);
-        }
-      };
   
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-    
-    // Set a timeout to force show content after 3 seconds
+  useEffect(() => {
+    // Set a timeout to force show content after 5 seconds
     const timer = setTimeout(() => {
       setForceShow(true);
-    }, 5000); // 5s for reliability
+    }, 5000);
     
     // Check if we're returning from a pause state
     if (wasPauseDetected()) {
@@ -95,22 +51,12 @@ const Layout = () => {
     };
   }, []);
 
-  // Save sidebar state to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem('sidebarState', isSidebarOpen ? 'open' : 'closed');
-  }, [isSidebarOpen]);
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
-
-  // Emergency recovery helper - fixed to use React Router
+  // Emergency recovery helper
   const handleAuthReset = async () => {
     setIsRecovering(true);
     try {
       await performFullAuthRecovery();
-      // Use React Router navigate instead of window.location
-      navigate(`/auth?reset=${Date.now()}`, { replace: true });
+      window.location.href = `/auth?reset=${Date.now()}`;
     } catch (error) {
       console.error("Recovery failed:", error);
       setIsRecovering(false);
@@ -180,7 +126,7 @@ const Layout = () => {
         <div className="flex gap-2">
           <Button 
             variant="default"
-            onClick={() => navigate(`/auth?force=${Date.now()}`, { replace: true })}
+            onClick={() => window.location.href = `/auth?force=${Date.now()}`}
           >
             Go to login
           </Button>
@@ -203,20 +149,10 @@ const Layout = () => {
   }
 
   return (
-    <div className="layout-container">
-      {/* Fixed position sidebar - completely outside the animation flow */}
-      <div 
-        className={`sidebar-persistent ${isSidebarOpen ? 'w-64' : 'w-0 -translate-x-full md:translate-x-0 md:w-16'}`}
-      >
-        <MemoizedSidebar isOpen={isSidebarOpen} />
-      </div>
-      
-      {/* Main content area that adjusts based on sidebar state */}
-      <div 
-        className="main-content bg-white"
-        style={{ marginLeft: sidebarMargin }}
-      >
-        <Header toggleSidebar={toggleSidebar} />
+    <div className="flex min-h-screen bg-white overflow-hidden">
+      {/* Main content area that properly adjusts to sidebar width */}
+      <div className="flex-1 flex flex-col ml-0 md:ml-16 lg:ml-64 transition-all duration-300">
+        <Header />
         
         {isPauseRecovery && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
@@ -233,8 +169,8 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="p-4 bg-white flex-1 content-transition-wrapper">
-          <AnimatePresence mode="wait" initial={false}>
+        <main className="flex-1 bg-white">
+          <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Outlet />
             </PageTransition>

@@ -4,7 +4,11 @@ import { useLocation } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import Sidebar from './Sidebar';
 
-const PersistentSidebar: React.FC = () => {
+interface PersistentSidebarProps {
+  // No specific props needed
+}
+
+const PersistentSidebar: React.FC<PersistentSidebarProps> = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
   

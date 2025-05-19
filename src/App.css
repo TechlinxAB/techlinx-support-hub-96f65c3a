@@ -60,45 +60,26 @@ html, body, #root {
   background-color: white;
 }
 
-/* Global layout styles - ensures sidebar doesn't flash */
+/* Main layout styles */
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+/* Ensure no green flash during transitions */
+.route-content,
+.main-content,
+.content-area,
+[class*="transition"],
+[class*="animate"],
+[class*="motion-"],
+.layout-container,
 .app-container {
-  display: flex;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background-color: white;
+  background-color: white !important;
 }
 
-/* Main content styles */
-.main-content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background-color: white;
-  position: relative;
-  transition: margin-left 0.3s ease-in-out;
-}
-
-/* Completely separate sidebar to prevent flashing */
-.persistent-sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  height: 100vh;
-  z-index: 50;
-  background-color: var(--sidebar-bg, #fff);
-  transition: width 0.3s ease-in-out;
-  overflow: hidden;
-}
-
-/* Ensure content area doesn't flash */
-.content-area {
-  flex: 1;
-  overflow-y: auto;
-  background-color: white;
-  position: relative;
+/* Fix for animations */
+* {
+  transform-style: flat;
 }
 
 /* Dark mode fixes */
@@ -117,14 +98,4 @@ html, body, #root {
 .dark .custom-toast {
   background-color: hsl(224 71% 4%) !important;
   border-color: hsl(216 34% 17%) !important;
-}
-
-/* Override any default background colors */
-.route-content {
-  background-color: white !important;
-}
-
-/* Remove any animation artifacts */
-* {
-  transform-style: flat;
 }

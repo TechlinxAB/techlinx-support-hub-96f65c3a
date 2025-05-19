@@ -22,9 +22,8 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
         position: 'relative',
         width: '100%',
         height: '100%',
-        background: 'white' 
       }}
-      className={className || "w-full h-full"}
+      className={className || "w-full h-full bg-white"}
     >
       {children}
     </motion.div>

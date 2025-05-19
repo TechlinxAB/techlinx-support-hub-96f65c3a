@@ -8,13 +8,18 @@ import { useAuth } from '@/context/AuthContext';
 import { useAppContext } from '@/context/AppContext';
 import NavigationService from '@/services/navigationService';
 
-const Header = () => {
+// Define a toggleSidebar prop to fix TypeScript error
+interface HeaderProps {
+  toggleSidebar?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const { currentUser } = useAppContext();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
   // Using the global sidebar toggle function
-  const toggleSidebar = () => {
+  const handleToggleSidebar = () => {
     if (window.toggleSidebar) {
       window.toggleSidebar();
     }
@@ -31,7 +36,7 @@ const Header = () => {
           <Button 
             variant="ghost" 
             size="icon"
-            onClick={toggleSidebar}
+            onClick={handleToggleSidebar}
             className="mr-4"
           >
             <Menu className="h-5 w-5" />
@@ -39,7 +44,7 @@ const Header = () => {
           </Button>
           
           <h1 className="text-xl font-bold text-gray-800 hidden md:block">
-            {currentUser?.companyName || "Techlinx Dashboard"}
+            {currentUser?.name || "Techlinx Dashboard"}
           </h1>
         </div>
         
