@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   supabase, 
@@ -16,7 +17,13 @@ import {
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-import { probeSupabaseService, testSessionWithRetries, resetAuthLoopState } from '@/utils/authRecovery';
+import { 
+  probeSupabaseService, 
+  testSessionWithRetries, 
+  resetAuthLoopState,
+  cleanAuthState,
+  testSessionWithBackoff
+} from '@/utils/authRecovery';
 
 // Define user profile type
 export type UserProfile = {
@@ -89,6 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [initialized, setInitialized] = useState(false);
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
   const [resetAttempts, setResetAttempts] = useState(0);
+  const [sessionRestoreAttempted, setSessionRestoreAttempted] = useState(false);
   
   // Impersonation state
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -97,6 +105,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   // Simple derived state
   const isAuthenticated = !!session && !!user;
+
+  // New improved session restore function with retries and backoff
+  const restoreSession = async (): Promise<boolean> => {
+    try {
+      console.log('Attempting to restore session');
+      setSessionRestoreAttempted(true);
+      
+      // Check if Supabase is available first
+      const isServiceAvailable = await probeSupabaseService();
+      
+      if (!isServiceAvailable) {
+        console.warn('Supabase service unavailable during session restore');
+        return false;
+      }
+      
+      // First verify token integrity without making API calls
+      if (!validateTokenIntegrity()) {
+        console.warn('No valid token in storage during restore');
+        return false;
+      }
+      
+      // Use the enhanced session test with backoff
+      const { valid, session: restoredSession, error } = await testSessionWithBackoff(100, 2);
+      
+      if (!valid || !restoredSession) {
+        console.warn('Session restore failed:', error || 'No session returned');
+        return false;
+      }
+      
+      // We have a valid session, update state
+      setSession(restoredSession);
+      setUser(restoredSession.user);
+      
+      // Only try to fetch profile if we have a user
+      if (restoredSession.user) {
+        const fetchedProfile = await fetchProfile(restoredSession.user.id);
+        if (fetchedProfile) {
+          setProfile(fetchedProfile);
+          setAuthState('AUTHENTICATED');
+          resetAuthErrorCount();
+          recordSuccessfulAuth();
+          resetAuthLoopState();
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (err) {
+      console.error('Session restore failed with error:', err);
+      return false;
+    }
+  };
 
   // Function to fetch user profile with retry logic
   const fetchProfile = async (userId: string, retryAttempt = 0): Promise<UserProfile | null> => {
@@ -184,8 +244,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const isServiceAvailable = await probeSupabaseService();
       console.log(`Service availability check: ${isServiceAvailable ? 'OK' : 'NOT RESPONDING'}`);
       
-      // Full reset of auth state
-      await clearAuthState();
+      // Use enhanced cleanAuthState for a complete reset
+      await cleanAuthState({ signOut: true, keepUserData: false, preserveTheme: true });
       
       // Reset circuit breaker
       resetCircuitBreaker();
@@ -314,81 +374,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       setSessionCheckDone(true);
       
-      // FIX 5: Prevent duplicate session restoration in AuthContext.tsx
-      if (session || authState === 'AUTHENTICATED') {
-        console.log('Session already initialized, skipping checkSession.');
+      // Prevent duplicate session restoration
+      if (session || authState === 'AUTHENTICATED' || sessionRestoreAttempted) {
+        console.log('Session already initialized or restore attempted, skipping checkSession.');
         return;
       }
 
       // Check for pause recovery flag and handle it here
       if (isPauseRecoveryRequired()) {
         console.warn('Pause recovery flag detected. Forcing full auth reset.');
-        await clearAuthState();
+        await cleanAuthState();
         setAuthState('SIGNED_OUT');
         setLoading(false);
         return;
       }
       
-      // First validate token integrity without making API calls
-      if (!validateTokenIntegrity()) {
-        console.warn('No valid auth token in storage, skipping session check.');
+      // Try to restore the session with our improved function
+      const restored = await restoreSession();
+      
+      // If restore failed, make sure we're in a clean state
+      if (!restored) {
+        console.log('Session restore failed, setting to signed out');
         setAuthState('SIGNED_OUT');
-        setLoading(false);
-        return;
       }
       
-      try {
-        console.log(`Checking session, attempt 1`);
-        
-        // Use our enhanced session test with retries and exponential backoff
-        const result = await testSessionWithRetries(3);
-        
-        if (result.valid && result.session) {
-          console.log('Session test successful, valid session found');
-          
-          // Update session and user
-          setSession(result.session);
-          setUser(result.session.user || null);
-          
-          if (result.session.user) {
-            // Only fetch profile if we haven't done so already
-            if (!profile) {
-              const fetchedProfile = await fetchProfile(result.session.user.id);
-              if (fetchedProfile) {
-                setProfile(fetchedProfile);
-                setAuthState('AUTHENTICATED');
-                resetAuthErrorCount();
-                recordSuccessfulAuth(); // Record successful auth
-                resetAuthLoopState(); // Reset loop detection
-              } else {
-                const errorCount = trackAuthError();
-                setAuthState('SIGNED_IN');
-                
-                if (errorCount >= MAX_AUTH_ERRORS) {
-                  console.warn("Too many auth errors, activating circuit breaker");
-                  activateCircuitBreaker(5, "Failed to fetch user profile during session check");
-                  setAuthError("Authentication temporarily disabled due to repeated errors");
-                  setAuthState('ERROR');
-                }
-              }
-            }
-          } else {
-            setAuthState('SIGNED_OUT');
-          }
-        } else {
-          console.warn('Session test failed:', result.error);
-          setAuthState('SIGNED_OUT');
-        }
-      } catch (error) {
-        console.error('Session check exception:', error);
-        setAuthState('SIGNED_OUT');
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     };
     
     // Defer session check slightly to avoid race conditions
-    setTimeout(checkSession, 300); // Increased from 100ms to 300ms
+    setTimeout(checkSession, 500); // Increased from 300ms to 500ms
     
     return () => {
       // Clean up subscription
@@ -396,7 +410,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         authSubscription.data.subscription.unsubscribe();
       }
     };
-  }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState]);
+  }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState, sessionRestoreAttempted]);
 
   // Start impersonation function
   const startImpersonation = async (userId: string) => {
@@ -470,7 +484,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     resetCircuitBreaker();
     resetAuthLoopState();
     
+    // Clear any pause recovery flags
+    clearPauseRecoveryRequired();
+    
+    // Clear any stale session data first
+    await cleanAuthState({ signOut: true });
+    
     try {
+      // Check if Supabase is available before attempting login
+      const isAvailable = await probeSupabaseService();
+      if (!isAvailable) {
+        return { error: new Error("Supabase service is currently unavailable. Please try again in a moment.") };
+      }
+      
       // Attempt to sign in with backoff on failure
       let attempts = 0;
       let lastError: any = null;
@@ -540,15 +566,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     try {
-      // Use the enhanced clearAuthState function
-      const success = await clearAuthState();
+      // Use the enhanced cleanAuthState function
+      const success = await cleanAuthState({ signOut: true });
       
       if (!success) {
         console.warn("Standard sign out failed, forcing hard reset");
         await forceRecovery();
       }
       
-      // State will be updated by the auth listener
+      // Clear state immediately
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setAuthState('SIGNED_OUT');
+      
+      // State will also be updated by the auth listener
     } catch (err) {
       console.error('Error signing out:', err);
       

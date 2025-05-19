@@ -7,9 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { 
   isCircuitBreakerActive, 
-  detectAuthLoops,
   resetCircuitBreaker,
-  performFullAuthRecovery,
   isForceBypassActive,
   setForceBypass,
   initPauseUnpauseDetection,
@@ -18,7 +16,10 @@ import {
   hasTooManyRecoveryAttempts,
   resetRecoveryAttempts,
   testSessionWithRetries,
-  resetAuthLoopState
+  resetAuthLoopState,
+  cleanAuthState,
+  probeSupabaseService,
+  detectAuthLoops
 } from '@/utils/authRecovery';
 import { 
   supabase, 
@@ -46,6 +47,7 @@ const ProtectedRoute = () => {
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const [resetAttempts, setResetAttempts] = useState(0);
   const [sessionTestResult, setSessionTestResult] = useState<{valid?: boolean; error?: string}>({});
+  const [authCheckComplete, setAuthCheckComplete] = useState(false);
   
   // Check if we need to use force bypass mode (completely skip auth checks)
   const bypassActive = isForceBypassActive();
@@ -71,8 +73,9 @@ const ProtectedRoute = () => {
       setAuthLoopDetected(isLoop);
     };
     
-    // Only check for loops after 1.5 seconds to allow initial auth processes to complete
-    const timer = setTimeout(loopCheck, 1500);
+    // Only check for loops after 2 seconds to allow initial auth processes to complete
+    // Increased from 1.5s to 2s for more stability
+    const timer = setTimeout(loopCheck, 2000);
     return () => clearTimeout(timer);
   }, [loading]);
   
@@ -133,26 +136,36 @@ const ProtectedRoute = () => {
   
   // Add a longer timeout to force progression after 8 seconds max
   useEffect(() => {
-    // Set a timeout to force progress after 8 seconds (up from 3)
+    // Set a timeout to force progress after 10 seconds (up from 8)
     const timer = setTimeout(() => {
-      if (!redirecting) {
+      if (!redirecting && !authCheckComplete) {
         console.log("Force timeout triggered - progressing auth flow");
         setForceTimeout(true);
+        setAuthCheckComplete(true);
+        
+        // If we're timing out and still no session, force navigation to auth
+        if (!session && location.pathname !== '/auth') {
+          console.log("Force timeout with no session - redirecting to auth");
+          handleNavigateToAuth();
+        }
       }
-    }, 8000);
+    }, 10000);
     
     return () => clearTimeout(timer);
-  }, [redirecting]);
+  }, [redirecting, authCheckComplete, session, location.pathname]);
   
   // Add new effect to handle the updated auth flow with raw token check
   useEffect(() => {
     if (loading) return;
     
+    // Mark auth check as completed
+    setAuthCheckComplete(true);
+    
     const rawTokenInStorage = localStorage.getItem(STORAGE_KEY);
     const isSessionValid = session?.user && rawTokenInStorage;
     
     // If we don't have a valid session or token, stay on auth page
-    if (!isSessionValid) {
+    if (!isSessionValid && !bypassActive) {
       console.warn('Invalid session or missing token. Routing to /auth.');
       if (location.pathname !== '/auth') {
         setRedirecting(true);
@@ -162,11 +175,11 @@ const ProtectedRoute = () => {
     }
     
     // If we have a valid session, navigate away from auth page
-    if (isSessionValid && location.pathname === '/auth') {
+    if ((isSessionValid || bypassActive) && location.pathname === '/auth') {
       setRedirecting(true);
       navigate('/', { replace: true });
     }
-  }, [loading, session, location.pathname, navigate]);
+  }, [loading, session, location.pathname, navigate, bypassActive]);
   
   // Handle recovery action - enhanced for pause recovery
   const handleRecovery = async () => {
@@ -188,7 +201,16 @@ const ProtectedRoute = () => {
     setIsRecovering(true);
     
     try {
-      await performFullAuthRecovery();
+      // First check if Supabase is available 
+      for (let i = 0; i < 2; i++) {
+        const available = await probeSupabaseService();
+        if (available) break;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Clean auth state completely
+      await cleanAuthState({ signOut: true });
+      
       setRedirecting(true);
       // Add a cache-busting parameter
       window.location.href = '/auth?recovery=' + Date.now();
@@ -198,7 +220,7 @@ const ProtectedRoute = () => {
       
       if (hasTooManyRecoveryAttempts()) {
         // If we've tried multiple times, activate bypass
-        setForceBypass();
+        setForceBypass(3600000); // 1 hour
         // Force reload page
         window.location.reload();
       }
@@ -225,7 +247,7 @@ const ProtectedRoute = () => {
   
   // Handle force bypass activation
   const handleForceBypass = () => {
-    setForceBypass();
+    setForceBypass(3600000); // 1 hour
     resetAuthLoopState();
     setForceTimeout(true);
     window.location.reload();
@@ -238,7 +260,7 @@ const ProtectedRoute = () => {
   }
   
   // Show loading spinner while checking authentication - with increased timeout
-  if ((loading && !forceTimeout) && !redirecting) {
+  if ((loading && !forceTimeout) && !redirecting && !authCheckComplete) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -337,7 +359,7 @@ const ProtectedRoute = () => {
               onClick={handleForceBypass}
               className="w-full mt-2"
             >
-              Force Access Anyway (4 hrs)
+              Force Access Anyway (1 hr)
             </Button>
             
             <p className="text-xs text-muted-foreground text-center mt-4">
@@ -358,10 +380,20 @@ const ProtectedRoute = () => {
   }
   
   // If definitely not authenticated, redirect to login with cache busting
-  const redirectPath = encodeURIComponent(location.pathname);
-  const cacheBuster = Date.now();
-  window.location.href = `/auth?redirect=${redirectPath}&t=${cacheBuster}`;
-  return null;
+  if (!loading && !redirecting && authCheckComplete) {
+    const redirectPath = encodeURIComponent(location.pathname);
+    const cacheBuster = Date.now();
+    console.log("Not authenticated and auth check complete - redirecting to login");
+    window.location.href = `/auth?redirect=${redirectPath}&t=${cacheBuster}`;
+  }
+  
+  // Show loading while we execute redirect
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen">
+      <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+      <p className="text-sm text-muted-foreground">Redirecting to login...</p>
+    </div>
+  );
 };
 
 export default ProtectedRoute;

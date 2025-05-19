@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, validateTokenIntegrity } from "@/integrations/supabase/client";
@@ -8,11 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, RefreshCw, Shield } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Shield, Power, Loader } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
-  clearAuthState, 
   isCircuitBreakerActive, 
   resetCircuitBreaker 
 } from '@/integrations/supabase/client';
@@ -26,7 +26,8 @@ import {
   clearPauseRecoveryRequired,
   probeSupabaseService,
   clearPauseDetected,
-  resetAuthRecovery
+  resetAuthRecovery,
+  cleanAuthState
 } from '@/utils/authRecovery';
 
 /**
@@ -66,6 +67,8 @@ const AuthPage = () => {
   const [sessionValid, setSessionValid] = useState<boolean | null>(null);
   const [pauseRecoveryNeeded, setPauseRecoveryNeeded] = useState<boolean>(false);
   const [probeAttempts, setProbeAttempts] = useState<number>(0);
+  const [hasTriedAutoRecover, setHasTriedAutoRecover] = useState<boolean>(false);
+  const [lastProbeTime, setLastProbeTime] = useState<number>(0);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,11 +77,48 @@ const AuthPage = () => {
   // Get redirect path from state or query param or default to home
   const urlParams = new URLSearchParams(location.search);
   const redirectParam = urlParams.get('redirect');
+  const recoveryParam = urlParams.get('recovery');
   const from = location.state?.from || redirectParam || '/';
+  
+  // Add automatic recovery after Supabase pause
+  useEffect(() => {
+    // Check if this is loading from a recovery redirect
+    if (recoveryParam && !hasTriedAutoRecover) {
+      console.log("Recovery param detected, performing automatic recovery");
+      setHasTriedAutoRecover(true);
+      handleAutoRecovery();
+    }
+  }, [recoveryParam, hasTriedAutoRecover]);
+  
+  // Auto-recovery function for returning after pause
+  const handleAutoRecovery = async () => {
+    try {
+      setServiceStatus('recovering');
+      
+      // Clear any pause recovery flags
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+      
+      // Clean auth state before checking availability
+      await cleanAuthState({ signOut: false, preserveTheme: true });
+      
+      setTimeout(checkSupabaseService, 1000);
+    } catch (err) {
+      console.error("Auto-recovery failed:", err);
+    }
+  };
   
   // Force clear pause recovery flags if we're on auth page
   useEffect(() => {
     const checkSupabaseService = async () => {
+      // Prevent hammering the service
+      const now = Date.now();
+      if (now - lastProbeTime < 2000) {
+        console.log('Skipping service check - too soon after last check');
+        return;
+      }
+      
+      setLastProbeTime(now);
       setServiceStatus('checking');
       
       // Try to probe Supabase service
@@ -316,6 +356,9 @@ const AuthPage = () => {
         return;
       }
       
+      // Clean auth state first to remove any stale tokens
+      await cleanAuthState({ signOut: false });
+      
       // Proceed with login if service is available
       const { error } = await signIn(email, password);
       
@@ -383,6 +426,54 @@ const AuthPage = () => {
       toast.error("Reset failed", {
         description: "Please try clearing browser data manually"
       });
+    }
+  };
+  
+  // New function to specifically handle Supabase pause recovery
+  const handlePauseRecovery = async () => {
+    setServiceStatus('recovering');
+    setLoading(true);
+    
+    try {
+      // Clear recovery flags first
+      clearPauseRecoveryRequired();
+      clearPauseDetected();
+      
+      // Reset auth state (but don't try to sign out, might fail if Supabase is paused)
+      await cleanAuthState({ signOut: false });
+      
+      // Try probing the service several times with increasing delays
+      let isAvailable = false;
+      for (let i = 0; i < 3; i++) {
+        // Wait 1s, 2s, 4s
+        const delay = Math.pow(2, i) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        isAvailable = await probeSupabaseService();
+        if (isAvailable) break;
+      }
+      
+      if (isAvailable) {
+        toast.success("Supabase service is now available", {
+          description: "You can now log in"
+        });
+        setServiceStatus('available');
+        setPauseRecoveryNeeded(false);
+      } else {
+        toast.error("Supabase service is still unavailable", {
+          description: "Please try again later"
+        });
+        setServiceStatus('unavailable');
+      }
+    } catch (error) {
+      console.error("Pause recovery failed:", error);
+      toast.error("Recovery failed", {
+        description: "Please try again later"
+      });
+      setServiceStatus('unavailable');
+    } finally {
+      setLoading(false);
+      setRecoveryMode(false);
     }
   };
   
@@ -548,6 +639,23 @@ const AuthPage = () => {
             </Button>
           )}
           
+          {pauseRecoveryNeeded && (
+            <Button 
+              onClick={handlePauseRecovery} 
+              variant="secondary"
+              className="w-full mb-4"
+              disabled={loading || serviceStatus === 'checking'}
+              color="amber"
+            >
+              {loading && serviceStatus === 'recovering' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Power className="mr-2 h-4 w-4" />
+              )}
+              Restore After Supabase Pause
+            </Button>
+          )}
+          
           <form onSubmit={handleSignIn}>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -585,7 +693,7 @@ const AuthPage = () => {
                   ((circuitBreakerInfo.active && !advancedTroubleshooting) || 
                   (serviceStatus === 'unavailable' && pauseRecoveryNeeded))}
               >
-                {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading && !recoveryMode ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Sign In
               </Button>
               

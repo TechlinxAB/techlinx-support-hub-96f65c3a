@@ -1,4 +1,3 @@
-
 import { supabase, STORAGE_KEY, isPauseRecoveryRequired, clearPauseRecoveryRequired, markPauseRecoveryRequired, validateTokenIntegrity } from "@/integrations/supabase/client";
 
 /**
@@ -19,15 +18,15 @@ export const detectAuthLoops = (): boolean => {
     // Add current attempt
     authAttempts.push(now);
     
-    // Keep only attempts from the last minute
+    // Keep only attempts from the last 60 seconds (increased from original)
     const recentAttempts = authAttempts.filter((time: number) => now - time < 60000);
     
     // Store updated attempts
     sessionStorage.setItem('authAttempts', JSON.stringify(recentAttempts));
     
-    // Modified: Only detect loop if there are more than 10 attempts in the last minute
-    // This is more lenient than the previous 5 attempts threshold
-    const isLoop = recentAttempts.length > 10;
+    // Modified: Increased threshold to 15 attempts (from 10)
+    // This is more lenient to accommodate legitimate retries
+    const isLoop = recentAttempts.length > 15;
     
     // If a loop is detected, log it for debugging
     if (isLoop) {
@@ -37,6 +36,7 @@ export const detectAuthLoops = (): boolean => {
     return isLoop;
   } catch (error) {
     console.error('Error detecting auth loops:', error);
+    // If we can't check for loops, default to false to prevent blocking users
     return false;
   }
 };
@@ -70,7 +70,7 @@ export const probeSupabaseService = async (): Promise<boolean> => {
       clearPauseRecoveryRequired();
       clearPauseDetected();
       resetRecoveryAttempts();
-      resetAuthLoopState(); // Add this new function call to reset loop detection state
+      resetAuthLoopState();
       return true;
     }
     
@@ -81,7 +81,9 @@ export const probeSupabaseService = async (): Promise<boolean> => {
   }
 };
 
-// New function to reset auth loop state
+/**
+ * Reset auth loop state
+ */
 export const resetAuthLoopState = (): void => {
   try {
     sessionStorage.removeItem('authAttempts');
@@ -91,10 +93,7 @@ export const resetAuthLoopState = (): void => {
   }
 };
 
-/**
- * Checks if the current auth token might be stale
- * @returns true if the token might be stale
- */
+// NEW: Check if the current auth token might be stale
 export const isTokenPotentiallyStale = async (): Promise<boolean> => {
   try {
     // First, check for token integrity issues
@@ -103,8 +102,13 @@ export const isTokenPotentiallyStale = async (): Promise<boolean> => {
       return true;
     }
     
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) return true;
+    const { data: sessionData, error } = await supabase.auth.getSession();
+    
+    // If we get an error or no session, token is stale
+    if (error || !sessionData.session) {
+      console.log('No valid session found or error fetching session');
+      return true;
+    }
     
     // If the token expires in less than 10 minutes, consider it stale
     const expiresAt = sessionData.session.expires_at;
@@ -126,6 +130,131 @@ export const isTokenPotentiallyStale = async (): Promise<boolean> => {
     // If we get an error checking staleness, assume token is stale as a precaution
     return true;
   }
+};
+
+// NEW: Function to reset auth data with proper cleanup
+export const cleanAuthState = async (options: { 
+  keepUserData?: boolean;
+  preserveTheme?: boolean;
+  signOut?: boolean;
+} = {}): Promise<boolean> => {
+  const { 
+    keepUserData = false, 
+    preserveTheme = true,
+    signOut = true 
+  } = options;
+  
+  try {
+    console.log('Cleaning auth state with options:', options);
+    
+    // Items to preserve across reset
+    const preservedKeys = preserveTheme ? ['theme', 'color-mode'] : [];
+    if (keepUserData) {
+      preservedKeys.push('user-preferences');
+    }
+    
+    // Save items we want to keep
+    const preservedItems: Record<string, string> = {};
+    preservedKeys.forEach(key => {
+      const value = localStorage.getItem(key);
+      if (value) preservedItems[key] = value;
+    });
+    
+    // Try to sign out from Supabase
+    if (signOut) {
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+        console.log('Supabase signOut successful');
+      } catch (error) {
+        console.warn('Error during signout - continuing with cleanup:', error);
+      }
+    }
+    
+    // Clear auth flags and markers
+    resetAuthLoopState();
+    resetCircuitBreaker();
+    clearPauseRecoveryRequired();
+    clearPauseDetected();
+    resetRecoveryAttempts();
+    localStorage.removeItem(STORAGE_KEY);
+    
+    // Clear session storage items
+    sessionStorage.removeItem('authAttempts');
+    sessionStorage.removeItem('authDetectionPaused');
+    
+    // Restore preserved items
+    Object.entries(preservedItems).forEach(([key, value]) => {
+      localStorage.setItem(key, value);
+    });
+    
+    console.log('Auth state cleanup successful');
+    return true;
+  } catch (error) {
+    console.error('Failed to clean auth state:', error);
+    return false;
+  }
+};
+
+// NEW: Enhanced session testing with backoff
+export const testSessionWithBackoff = async (
+  initialDelayMs = 0, 
+  maxAttempts = 3
+): Promise<{ valid: boolean; session: any | null; error?: string }> => {
+  // Start with optional delay to prevent hammering Supabase
+  if (initialDelayMs > 0) {
+    await new Promise(resolve => setTimeout(resolve, initialDelayMs));
+  }
+  
+  let attempt = 0;
+  
+  while (attempt < maxAttempts) {
+    try {
+      console.log(`Testing session validity, attempt ${attempt + 1}/${maxAttempts}`);
+      
+      // Progressive backoff delay starting from the second attempt
+      if (attempt > 0) {
+        // Exponential backoff: 1s, 3s, 7s...
+        const backoffMs = Math.pow(2, attempt) * 500;
+        console.log(`Backing off for ${backoffMs}ms before retry`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+      
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.warn(`Session test failed with error:`, error);
+        attempt++;
+        continue;
+      }
+      
+      if (!data?.session) {
+        console.log('No session found');
+        return { valid: false, session: null };
+      }
+      
+      // Check if the session is valid
+      const now = Math.floor(Date.now() / 1000);
+      const expiresAt = data.session.expires_at;
+      
+      if (expiresAt && expiresAt < now) {
+        console.log('Session expired');
+        return { valid: false, session: null, error: 'Session expired' };
+      }
+      
+      console.log('Session is valid');
+      return { valid: true, session: data.session };
+      
+    } catch (error) {
+      console.error(`Unexpected error in attempt ${attempt + 1}:`, error);
+      attempt++;
+    }
+  }
+  
+  return {
+    valid: false,
+    session: null,
+    error: `Failed to validate session after ${maxAttempts} attempts`
+  };
 };
 
 /**
@@ -223,10 +352,7 @@ export const resetAuthErrorCount = (): void => {
   localStorage.setItem('auth-error-count', '0');
 };
 
-/**
- * Full auth recovery - performs a complete reset of auth state
- * Enhanced with specific handling for pause recovery scenarios
- */
+// NEW: Enhanced recovery with backoff for Supabase pause scenarios
 export const performFullAuthRecovery = async (): Promise<void> => {
   try {
     console.log('Performing full auth recovery...');
@@ -235,42 +361,32 @@ export const performFullAuthRecovery = async (): Promise<void> => {
     const attempts = incrementRecoveryAttempts();
     console.log(`Recovery attempt ${attempts}`);
     
-    // Check service availability 
-    const isServiceAvailable = await probeSupabaseService();
+    // First add delay to prevent hammering during recovery
+    // Exponential backoff based on attempt number
+    const backoffDelay = Math.min(attempts * 1000, 5000);
+    console.log(`Using backoff delay of ${backoffDelay}ms before recovery attempt`);
+    await new Promise(resolve => setTimeout(resolve, backoffDelay));
+    
+    // Check service availability with retry
+    let isServiceAvailable = false;
+    for (let i = 0; i < 3; i++) {
+      isServiceAvailable = await probeSupabaseService();
+      if (isServiceAvailable) break;
+      // Wait 1s between probes
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
     console.log(`Supabase service availability: ${isServiceAvailable ? 'OK' : 'NOT RESPONDING'}`);
     
     // If service is available, clear pause recovery flags
     if (isServiceAvailable) {
       clearPauseRecoveryRequired();
       clearPauseDetected();
-      resetAuthLoopState(); // Reset loop detection state
+      resetAuthLoopState();
     }
     
-    // Start with service reset
-    try {
-      // Sign out from Supabase to clear any stale sessions
-      await supabase.auth.signOut({ scope: 'global' });
-      console.log('Supabase signOut successful');
-    } catch (error) {
-      console.warn('Error during signout - continuing with recovery:', error);
-      // Continue with recovery even if signout fails
-    }
-    
-    // Reset all client-side auth state
-    resetAuthErrorCount();
-    resetCircuitBreaker();
-    clearPauseRecoveryRequired();
-    
-    // Clear auth-related storage items
-    localStorage.removeItem('auth-token-version');
-    localStorage.removeItem(STORAGE_KEY);
-    
-    // Clear session storage items
-    sessionStorage.removeItem('authAttempts');
-    sessionStorage.removeItem('authDetectionPaused');
-    
-    // Clear pause detection flags
-    localStorage.removeItem('pause_detected');
+    // Clean up all auth state
+    await cleanAuthState();
     
     console.log('Auth recovery completed successfully');
   } catch (error) {
@@ -353,9 +469,19 @@ export const initPauseUnpauseDetection = (): void => {
             console.log('Auto-probe after pause: Supabase is available, clearing pause flags');
             clearPauseDetected();
             clearPauseRecoveryRequired();
-            resetAuthLoopState(); // Reset loop detection state
+            resetAuthLoopState();
           } else {
             console.warn('Auto-probe after pause: Supabase still unavailable');
+            // Schedule a second probe after 3 seconds
+            setTimeout(async () => {
+              const secondAttempt = await probeSupabaseService();
+              if (secondAttempt) {
+                console.log('Second auto-probe successful, clearing pause flags');
+                clearPauseDetected();
+                clearPauseRecoveryRequired();
+                resetAuthLoopState();
+              }
+            }, 3000);
           }
         }, 1000);
       }
@@ -394,9 +520,19 @@ export const initPauseUnpauseDetection = (): void => {
             console.log('Auto-probe after focus return: Supabase is available, clearing pause flags');
             clearPauseDetected();
             clearPauseRecoveryRequired();
-            resetAuthLoopState(); // Reset loop detection state
+            resetAuthLoopState();
           } else {
             console.warn('Auto-probe after focus return: Supabase still unavailable');
+            // Add a second probe after 3 seconds
+            setTimeout(async () => {
+              const secondAttempt = await probeSupabaseService();
+              if (secondAttempt) {
+                console.log('Second auto-probe successful, clearing pause flags');
+                clearPauseDetected();
+                clearPauseRecoveryRequired();
+                resetAuthLoopState();
+              }
+            }, 3000);
           }
         }, 1000);
       }
@@ -418,7 +554,7 @@ export const initPauseUnpauseDetection = (): void => {
         // If service is available, clear any lingering pause flags
         clearPauseRecoveryRequired();
         clearPauseDetected();
-        resetAuthLoopState(); // Reset loop detection state
+        resetAuthLoopState();
       }
     } catch (error) {
       console.error('Error during initial Supabase service probe:', error);
@@ -435,7 +571,7 @@ export const initPauseUnpauseDetection = (): void => {
           console.log('Recurring probe: Supabase is available, clearing pause flags');
           clearPauseDetected();
           clearPauseRecoveryRequired();
-          resetAuthLoopState(); // Reset loop detection state
+          resetAuthLoopState();
           clearInterval(probeInterval);
         }
       } else {
@@ -490,31 +626,7 @@ export const isForceBypassActive = (): boolean => {
   return true;
 };
 
-/**
- * Pauses auth detection temporarily
- */
-export const pauseAuthDetection = (): void => {
-  sessionStorage.setItem('authDetectionPaused', 'true');
-};
-
-/**
- * Unpauses auth detection
- */
-export const unpauseAuthDetection = (): void => {
-  sessionStorage.removeItem('authDetectionPaused');
-};
-
-/**
- * Checks if auth detection is currently paused
- * @returns true if auth detection is paused
- */
-export const isAuthDetectionPaused = (): boolean => {
-  return sessionStorage.getItem('authDetectionPaused') === 'true';
-};
-
-/**
- * Keep track of recovery attempts to prevent loops
- */
+// Keep track of recovery attempts to prevent loops
 const RECOVERY_ATTEMPTS_KEY = 'auth_recovery_attempts';
 
 /**
@@ -611,7 +723,7 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
       // If we get a valid session, clear any pause recovery flags
       clearPauseRecoveryRequired();
       clearPauseDetected();
-      resetAuthLoopState(); // Reset loop detection state
+      resetAuthLoopState();
       return { valid: true, session: data.session };
     } catch (error) {
       lastError = error;
