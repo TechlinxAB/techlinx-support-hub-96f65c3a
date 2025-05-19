@@ -156,7 +156,7 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-white overflow-hidden">
+    <div className="flex min-h-screen bg-white w-full">
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
@@ -165,10 +165,10 @@ const Layout = () => {
         <Header />
         
         {isPauseRecovery && (
-          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
+          <div className="bg-amber-500/10 border-b border-amber-500/20 w-full">
             <Container>
-              <div className="flex items-center justify-between w-full">
-                <span className="text-sm">Recovering from app pause...</span>
+              <div className="flex items-center justify-between w-full py-1">
+                <span className="text-sm text-amber-800">Recovering from app pause...</span>
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -183,7 +183,7 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white overflow-x-hidden py-6">
+        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Container>

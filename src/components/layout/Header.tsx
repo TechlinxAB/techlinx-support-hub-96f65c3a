@@ -21,7 +21,7 @@ const Header: React.FC = () => {
   };
   
   return (
-    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-10">
+    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-10 w-full">
       <Container className="h-full">
         <div className="flex justify-between items-center h-full">
           <div className="flex items-center">

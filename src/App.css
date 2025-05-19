@@ -137,3 +137,20 @@ main,
   background-color: hsl(224 71% 4%) !important;
   border-color: hsl(216 34% 17%) !important;
 }
+
+/* New layout fixes */
+.sidebar-container {
+  position: relative;
+  z-index: 40;
+}
+
+/* Ensure proper width for all content containers */
+.container-full {
+  width: 100%;
+}
+
+/* Make sure header and content align perfectly */
+header .container,
+main .container {
+  max-width: 72rem; /* Matches max-w-screen-xl */
+}

@@ -1,12 +1,12 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import Sidebar from './Sidebar';
 import { useSidebar } from '@/context/SidebarContext';
 
 const PersistentSidebar: React.FC = () => {
-  const { isSidebarOpen, sidebarWidth, isMobile } = useSidebar();
+  const { isSidebarOpen, isMobile } = useSidebar();
   const location = useLocation();
   
   return (
