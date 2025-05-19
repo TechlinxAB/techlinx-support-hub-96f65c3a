@@ -530,3 +530,6 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
     error: lastError ? String(lastError) : 'Failed to test session after multiple attempts'
   };
 };
+
+// Re-export these functions from supabase/client.ts so that modules importing from authRecovery can use them
+export { isPauseRecoveryRequired, clearPauseRecoveryRequired, markPauseRecoveryRequired } from "@/integrations/supabase/client";
