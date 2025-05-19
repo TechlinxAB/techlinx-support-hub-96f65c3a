@@ -16,7 +16,7 @@ export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 
 // Set a version for the current auth implementation
 // Increment this when making changes to auth logic
-export const CURRENT_AUTH_VERSION = '1.2.3';
+export const CURRENT_AUTH_VERSION = '1.2.4'; // Bumping version to trigger fresh auth state
 
 // Important! Initialize these variables at the top level,
 // before any function calls to prevent 'cannot access before initialization' errors

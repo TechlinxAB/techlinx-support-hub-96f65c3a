@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   supabase, 
@@ -9,7 +8,8 @@ import {
   activateCircuitBreaker,
   isCircuitBreakerActive,
   resetCircuitBreaker,
-  recordSuccessfulAuth
+  recordSuccessfulAuth,
+  STORAGE_KEY
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -84,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
+  const [resetAttempts, setResetAttempts] = useState(0);
   
   // Impersonation state
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -144,6 +145,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setAuthState('RECOVERY');
     setAuthError(null);
+    
+    // Track reset attempts to prevent endless recovery loops
+    const newResetCount = resetAttempts + 1;
+    setResetAttempts(newResetCount);
+    
+    // If we've tried too many times, show error and stop trying
+    if (newResetCount >= 3) {
+      toast.error("Multiple recovery attempts have failed", {
+        description: "Please try clearing your browser cache and cookies manually."
+      });
+      setAuthState('ERROR');
+      setAuthError("Recovery failed after multiple attempts. Please clear your browser cache manually.");
+      setLoading(false);
+      return;
+    }
     
     try {
       // Full reset of auth state
@@ -257,10 +273,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
     
-    // Check for existing session with retry logic
+    // Check for existing session with retry logic and improved token validation
     const checkSession = async () => {
       if (sessionCheckDone) return;
       setSessionCheckDone(true);
+      
+      // Add the new check for raw token existence before attempting to restore session
+      const rawToken = localStorage.getItem(STORAGE_KEY);
+      if (!rawToken) {
+        console.warn('No auth token in storage, skipping session check.');
+        setAuthState('SIGNED_OUT');
+        setLoading(false);
+        return;
+      }
       
       try {
         console.log(`Checking session, attempt 1`);

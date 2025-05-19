@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -18,6 +18,7 @@ import {
   hasTooManyRecoveryAttempts,
   resetRecoveryAttempts
 } from '@/utils/authRecovery';
+import { supabase, STORAGE_KEY } from '@/integrations/supabase/client';
 
 const ProtectedRoute = () => {
   const { 
@@ -30,10 +31,12 @@ const ProtectedRoute = () => {
   } = useAuth();
   
   const location = useLocation();
+  const navigate = useNavigate();
   const [isRecovering, setIsRecovering] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [forceTimeout, setForceTimeout] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
+  const [resetAttempts, setResetAttempts] = useState(0);
   
   // Check if we need to use force bypass mode (completely skip auth checks)
   const bypassActive = isForceBypassActive();
@@ -81,8 +84,46 @@ const ProtectedRoute = () => {
     return () => clearTimeout(timer);
   }, [redirecting]);
   
+  // Add new effect to handle the updated auth flow with raw token check
+  useEffect(() => {
+    if (loading) return;
+    
+    const hasValidSession = session && session.user;
+    const rawTokenInStorage = localStorage.getItem(STORAGE_KEY);
+    
+    // If we have no valid session and no token, stay on auth page
+    if (!hasValidSession && !rawTokenInStorage) {
+      console.warn('No valid session and no token. Staying on auth page.');
+      if (location.pathname !== '/auth') {
+        setRedirecting(true);
+        navigate('/auth', { replace: true });
+      }
+      return;
+    }
+    
+    // If we have a valid session, navigate away from auth page
+    if (hasValidSession) {
+      if (location.pathname === '/auth') {
+        setRedirecting(true);
+        navigate('/', { replace: true });
+      }
+    }
+  }, [loading, session, location.pathname, navigate]);
+  
   // Handle recovery action
   const handleRecovery = async () => {
+    // Track reset attempts to prevent endless recovery loops
+    const newResetCount = resetAttempts + 1;
+    setResetAttempts(newResetCount);
+    
+    // Circuit breaker for recovery attempts
+    if (newResetCount >= 3) {
+      console.warn("Too many recovery attempts, activating bypass");
+      setForceBypass(3600000); // 1 hour bypass
+      window.location.reload();
+      return;
+    }
+    
     setIsRecovering(true);
     
     try {

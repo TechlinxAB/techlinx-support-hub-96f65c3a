@@ -1,5 +1,5 @@
 
-import { clearAuthState, resetCircuitBreaker as resetSupabaseCircuitBreaker, isCircuitBreakerActive as checkCircuitBreakerActive } from '@/integrations/supabase/client';
+import { clearAuthState, resetCircuitBreaker as resetSupabaseCircuitBreaker, isCircuitBreakerActive as checkCircuitBreakerActive, supabase } from '@/integrations/supabase/client';
 
 /**
  * Comprehensive authentication recovery utilities
@@ -38,7 +38,31 @@ export const initPauseUnpauseDetection = (): void => {
       // If app was invisible for more than threshold, mark as potential pause/unpause
       if (lastActive > 0 && (now - lastActive > PAUSE_THRESHOLD_MS)) {
         console.log(`⚠️ Potential pause/unpause detected after ${Math.round((now - lastActive)/1000)}s inactive`);
+        
+        // Set pause detected flag
         sessionStorage.setItem(PAUSE_DETECTED_KEY, 'true');
+        
+        // New code: Actively clear session when pause is detected to prevent using stale tokens
+        console.warn('Supabase was paused and resumed. Clearing session and forcing re-auth.');
+        
+        // Execute this in an IIFE to use async/await
+        (async () => {
+          try {
+            // Sign out from Supabase
+            await supabase.auth.signOut();
+            
+            // Clear storage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Redirect to auth page with timestamp to prevent caching
+            window.location.href = `/auth?pause_recovery=${Date.now()}`;
+          } catch (e) {
+            console.error('Error during pause recovery:', e);
+            // Still redirect even if error occurs
+            window.location.href = `/auth?emergency_recovery=${Date.now()}`;
+          }
+        })();
         
         // Automatically reset the circuit breaker when returning from long pause
         resetCircuitBreaker();
