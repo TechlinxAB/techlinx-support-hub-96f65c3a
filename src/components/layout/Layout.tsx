@@ -15,12 +15,19 @@ import {
   setForceBypass 
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
+import { useSidebar } from '@/context/SidebarContext';
 
 const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
+  const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
+  
+  // Calculate content margin based on sidebar state
+  const contentMarginLeft = isMobile
+    ? 0
+    : (isSidebarOpen ? '16rem' : '4rem');
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
@@ -151,7 +158,10 @@ const Layout = () => {
   return (
     <div className="flex min-h-screen bg-white overflow-hidden">
       {/* Main content area that properly adjusts to sidebar width */}
-      <div className="flex-1 flex flex-col ml-0 md:ml-16 lg:ml-64 transition-all duration-300">
+      <div 
+        className="flex-1 flex flex-col transition-all duration-300 bg-white"
+        style={{ marginLeft: contentMarginLeft }}
+      >
         <Header />
         
         {isPauseRecovery && (
@@ -169,7 +179,7 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white">
+        <main className="flex-1 bg-white overflow-x-hidden">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Outlet />

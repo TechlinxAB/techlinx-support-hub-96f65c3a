@@ -1,45 +1,20 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import Sidebar from './Sidebar';
+import { useSidebar } from '@/context/SidebarContext';
 
-interface PersistentSidebarProps {
-  // No specific props needed
-}
-
-const PersistentSidebar: React.FC<PersistentSidebarProps> = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+const PersistentSidebar: React.FC = () => {
+  const { isSidebarOpen, sidebarWidth, isMobile } = useSidebar();
   const location = useLocation();
-  
-  useEffect(() => {
-    // Load sidebar state from localStorage on component mount only
-    const savedSidebarState = localStorage.getItem('sidebarState');
-    if (savedSidebarState !== null) {
-      setIsSidebarOpen(savedSidebarState === 'open');
-    } else {
-      // Default behavior based on screen size
-      setIsSidebarOpen(window.innerWidth >= 768);
-    }
-  }, []);
-
-  // Save sidebar state to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem('sidebarState', isSidebarOpen ? 'open' : 'closed');
-  }, [isSidebarOpen]);
-  
-  // Make the toggle function available globally
-  window.toggleSidebar = () => {
-    setIsSidebarOpen(prev => !prev);
-  };
   
   return (
     <div 
-      className="fixed top-0 left-0 h-full z-50 bg-sidebar"
+      className="fixed top-0 left-0 h-full z-50 bg-sidebar transition-all duration-300 ease-in-out"
       style={{ 
-        width: isSidebarOpen ? '16rem' : (window.innerWidth < 768 ? '0' : '4rem'),
-        transition: 'width 0.3s ease-in-out',
-        overflow: 'hidden'
+        width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
+        transform: isSidebarOpen || !isMobile ? 'translateX(0)' : 'translateX(-100%)'
       }}
     >
       <Sidebar isOpen={isSidebarOpen} />

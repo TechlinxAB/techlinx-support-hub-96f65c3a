@@ -57,7 +57,7 @@
 /* Prevent white flash during transitions */
 html, body, #root {
   height: 100%;
-  background-color: white;
+  background-color: white !important;
 }
 
 /* Main layout styles */
@@ -65,7 +65,7 @@ html, body, #root {
   flex: 1 1 0%;
 }
 
-/* Ensure no green flash during transitions */
+/* Ensure no green flash during transitions - enforce white backgrounds */
 .route-content,
 .main-content,
 .content-area,
@@ -73,7 +73,21 @@ html, body, #root {
 [class*="animate"],
 [class*="motion-"],
 .layout-container,
-.app-container {
+.app-container,
+[data-motion],
+[data-framer-motion] {
+  background-color: white !important;
+}
+
+/* Extra rules to prevent any green flashing */
+.sidebar-container + div {
+  background-color: white !important;
+}
+
+main, 
+.main-content,
+[role="main"],
+[data-content="true"] {
   background-color: white !important;
 }
 
