@@ -154,3 +154,18 @@ header .container,
 main .container {
   max-width: 72rem; /* Matches max-w-screen-xl */
 }
+
+/* Add specific fixes for loading states and layout containers */
+.loading-container,
+.auth-container,
+.error-container,
+.not-found-container {
+  background-color: white !important;
+}
+
+/* Ensuring all transitions have white backgrounds */
+.layout-transition > div,
+.page-transition > div,
+[data-transition-container] > div {
+  background-color: white !important;
+}
