@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
 interface ProtectedRouteProps {
@@ -10,6 +10,14 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (!loading && !user) {
+      // Use React Router navigate to avoid page reloads
+      navigate(`/auth?redirect=${encodeURIComponent(location.pathname)}`, { replace: true });
+    }
+  }, [user, loading, navigate, location.pathname]);
 
   if (loading) {
     return (
@@ -19,13 +27,13 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
   
-  if (!user) {
-    // Use React Router navigate to avoid page reloads
-    return <Navigate to={`/auth?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  // If not loading and we have a user, return the children
+  if (!loading && user) {
+    return <>{children}</>;
   }
   
-  // Return the children (which will be the Layout component)
-  return <>{children}</>;
+  // Return null while the useEffect navigates to login
+  return null;
 };
 
 export default ProtectedRoute;

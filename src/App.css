@@ -56,14 +56,35 @@
 
 /* Prevent white flash during transitions */
 html, body, #root {
-  background-color: var(--sidebar);
-  min-height: 100%;
   height: 100%;
 }
 
-/* Ensure sidebar background color is applied globally */
-:root {
-  --sidebar: rgb(26, 31, 44); /* Match the sidebar background color */
+/* Persistent sidebar style to prevent flickering */
+.sidebar-persistent {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  will-change: transform;
+  transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+  background-color: var(--sidebar);
+}
+
+/* Layout container that holds both sidebar and content */
+.layout-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: white;
+}
+
+/* Main content area - always white background */
+.main-content {
+  flex: 1;
+  background-color: white;
+  min-height: 100vh;
+  transition: margin-left 0.3s ease-in-out;
+  will-change: margin-left;
 }
 
 /* Improve animation performance */

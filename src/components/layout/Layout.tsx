@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, memo } from 'react';
-import { useLocation, Outlet } from 'react-router-dom';
+import { useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -27,6 +27,7 @@ const Layout = () => {
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
@@ -85,13 +86,13 @@ const Layout = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  // Emergency recovery helper
+  // Emergency recovery helper - fixed to use React Router
   const handleAuthReset = async () => {
     setIsRecovering(true);
     try {
       await performFullAuthRecovery();
-      // Navigate programmatically without full page reload
-      window.location.href = `/auth?reset=${Date.now()}`;
+      // Use React Router navigate instead of window.location
+      navigate(`/auth?reset=${Date.now()}`, { replace: true });
     } catch (error) {
       console.error("Recovery failed:", error);
       setIsRecovering(false);
@@ -161,7 +162,7 @@ const Layout = () => {
         <div className="flex gap-2">
           <Button 
             variant="default"
-            onClick={() => window.location.href = `/auth?force=${Date.now()}`}
+            onClick={() => navigate(`/auth?force=${Date.now()}`, { replace: true })}
           >
             Go to login
           </Button>
@@ -183,68 +184,24 @@ const Layout = () => {
     );
   }
 
-  // If bypass is active, show a special layout with warning
-  if (bypassActive) {
-    return (
-      <div className="flex h-screen overflow-hidden bg-sidebar">
-        <div className="fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-          bg-sidebar will-change-transform
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}">
-          <MemoizedSidebar isOpen={isSidebarOpen} />
-        </div>
-        
-        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out bg-muted/20
-          ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}
-          style={{ willChange: 'margin' }}>
-          <Header toggleSidebar={toggleSidebar} />
-          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={16} />
-              <span className="text-sm font-medium">Authentication bypass active</span>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 text-xs"
-              onClick={handleAuthReset}
-            >
-              Reset Auth
-            </Button>
-          </div>
-          <main className="flex-1 overflow-y-auto p-4">
-            <Outlet />
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  // Main layout with persistent sidebar and animated content
   return (
-    <div className="flex h-screen overflow-hidden bg-sidebar">
-      {/* Mobile overlay */}
-      {isSidebarOpen && window.innerWidth < 768 && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      
-      {/* Persistent sidebar outside of AnimatePresence to prevent remounting */}
+    <div className="layout-container">
+      {/* Sidebar - positioned outside the animation flow */}
       <div 
-        className={`fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out 
-          bg-sidebar will-change-transform
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`sidebar-persistent ${isSidebarOpen ? 'w-64' : 'w-0 -translate-x-full md:translate-x-0 md:w-16'}`}
       >
         <MemoizedSidebar isOpen={isSidebarOpen} />
       </div>
       
       {/* Main content area that adjusts based on sidebar state */}
       <div 
-        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out bg-muted/20
-          ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}
-        style={{ willChange: 'margin' }}
+        className="main-content"
+        style={{ 
+          marginLeft: isSidebarOpen ? '16rem' : '4rem',
+          '@media (max-width: 768px)': {
+            marginLeft: isSidebarOpen ? '16rem' : '0'
+          } 
+        }}
       >
         <Header toggleSidebar={toggleSidebar} />
         
@@ -263,7 +220,7 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 overflow-y-auto p-4 bg-muted/20">
+        <main className="p-4 bg-white flex-1">
           <AnimatePresence mode="wait" initial={false}>
             <PageTransition key={location.pathname}>
               <Outlet />
