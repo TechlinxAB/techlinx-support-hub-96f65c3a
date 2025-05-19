@@ -41,6 +41,18 @@ const ProtectedRoute = () => {
     }
   }, [isAuthenticated, loading, authState, authAttempts]);
   
+  // Force hard redirect to auth page after max retry attempts
+  useEffect(() => {
+    if (!isAuthenticated && authAttempts >= 2 && !redirecting && !loading) {
+      console.log("Max auth attempts reached, redirecting to auth page");
+      setRedirecting(true);
+      
+      // Hard redirect to auth page to clear state
+      const redirectPath = encodeURIComponent(location.pathname);
+      window.location.href = `/auth?redirect=${redirectPath}`;
+    }
+  }, [isAuthenticated, authAttempts, redirecting, loading, location.pathname]);
+  
   // Handle recovery action
   const handleRecovery = async () => {
     setIsRecovering(true);
@@ -65,7 +77,7 @@ const ProtectedRoute = () => {
     window.location.href = '/auth';
   };
   
-  // Show loading spinner while checking authentication
+  // Show loading spinner while checking authentication - with a timeout
   if ((loading || authAttempts < 2) && !redirecting) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -131,14 +143,9 @@ const ProtectedRoute = () => {
   // If not authenticated, redirect to login - with location state preserved
   if (!isAuthenticated) {
     // Use a more reliable hard redirect for auth issues
-    if (process.env.NODE_ENV !== 'development') {
-      const redirectPath = encodeURIComponent(location.pathname);
-      window.location.href = `/auth?redirect=${redirectPath}`;
-      return null;
-    }
-    
-    // Use React Router in development
-    return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
+    const redirectPath = encodeURIComponent(location.pathname);
+    window.location.href = `/auth?redirect=${redirectPath}`;
+    return null;
   }
   
   // If authenticated, render the child routes

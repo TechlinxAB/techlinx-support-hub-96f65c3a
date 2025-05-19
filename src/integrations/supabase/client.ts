@@ -19,9 +19,30 @@ export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 // Increment this when making changes to auth logic
 export const CURRENT_AUTH_VERSION = '1.2.2';
 
+// Important! Initialize these variables at the top level,
+// before any function calls to prevent 'cannot access before initialization' errors
+const inMemoryStorage = new Map<string, string>();
+let storageInitialized = false;
+
 // Create a custom storage object with debugging
 const createStorage = () => {
+  // Prevent multiple initializations
+  if (storageInitialized) {
+    return createLocalStorageWithFallback();
+  }
+  
+  storageInitialized = true;
+  
+  return createLocalStorageWithFallback();
+};
+
+// Move storage logic into a separate function to improve initialization order
+const createLocalStorageWithFallback = () => {
   try {
+    // Test localStorage access
+    localStorage.setItem('storage_test', 'test');
+    localStorage.removeItem('storage_test');
+    
     return {
       getItem: (key: string) => {
         const value = localStorage.getItem(key);
@@ -58,12 +79,11 @@ const createStorage = () => {
   } catch (error) {
     // Fallback for environments where localStorage isn't available
     console.warn("Using in-memory storage fallback");
-    const storage = new Map<string, string>();
     return {
-      getItem: (key: string) => storage.get(key) || null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-      removeItem: (key: string) => storage.delete(key),
-      clear: () => storage.clear()
+      getItem: (key: string) => inMemoryStorage.get(key) || null,
+      setItem: (key: string, value: string) => inMemoryStorage.set(key, value),
+      removeItem: (key: string) => inMemoryStorage.delete(key),
+      clear: () => inMemoryStorage.clear()
     };
   }
 };

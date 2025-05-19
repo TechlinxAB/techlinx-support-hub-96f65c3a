@@ -75,87 +75,33 @@ export const detectAuthProblems = (): boolean => {
 };
 
 /**
- * Validate that a Supabase token is properly formed and not corrupted
- * @param token The token string to validate
- * @returns True if the token appears valid
+ * Emergency recovery function - clears all browser storage
+ * Use this as a last resort if other methods fail
  */
-export const isTokenValid = (token: string): boolean => {
-  if (!token) return false;
+export const emergencyAuthReset = (): void => {
+  console.log("Performing emergency auth reset...");
   
   try {
-    // JWT tokens have 3 parts separated by dots
-    const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    // Clear localStorage
+    localStorage.clear();
+    console.log("LocalStorage cleared");
     
-    // Try to parse the payload (middle part)
-    const payload = JSON.parse(atob(parts[1]));
+    // Clear sessionStorage
+    sessionStorage.clear();
+    console.log("SessionStorage cleared");
     
-    // Check for required JWT fields
-    if (!payload.exp || !payload.iat || !payload.sub) {
-      return false;
-    }
+    // Clear cookies
+    document.cookie.split(';').forEach(c => {
+      document.cookie = c
+        .replace(/^ +/, '')
+        .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+    });
+    console.log("Cookies cleared");
     
-    // Check if token is expired
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp < now) {
-      return false;
-    }
-    
-    return true;
+    // Force reload to auth page
+    window.location.href = '/auth';
   } catch (e) {
-    // If we can't parse the token, it's invalid
-    return false;
-  }
-};
-
-/**
- * Check stored tokens for corruption
- */
-export const checkStoredTokens = (): { valid: boolean; issue?: string } => {
-  try {
-    const storageKey = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
-    const tokenData = localStorage.getItem(storageKey);
-    
-    if (!tokenData) {
-      return { valid: false, issue: 'No token found in storage' };
-    }
-    
-    try {
-      const parsed = JSON.parse(tokenData);
-      
-      if (!parsed.access_token || !parsed.refresh_token) {
-        return { valid: false, issue: 'Missing required token fields' };
-      }
-      
-      if (!isTokenValid(parsed.access_token)) {
-        return { valid: false, issue: 'Access token is invalid' };
-      }
-      
-      return { valid: true };
-    } catch (e) {
-      return { valid: false, issue: 'Token data is corrupted and cannot be parsed' };
-    }
-  } catch (e) {
-    return { valid: false, issue: 'Exception checking tokens' };
-  }
-};
-
-/**
- * Enhanced token refresh function that attempts to fix common issues
- */
-export const attemptTokenRefresh = async (): Promise<boolean> => {
-  try {
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { error } = await supabase.auth.refreshSession();
-    
-    if (error) {
-      console.error('Token refresh failed:', error);
-      return false;
-    }
-    
-    return true;
-  } catch (e) {
-    console.error('Exception during token refresh:', e);
-    return false;
+    console.error("Emergency reset failed:", e);
+    alert("Emergency reset failed. Please clear your browser data manually and reload.");
   }
 };

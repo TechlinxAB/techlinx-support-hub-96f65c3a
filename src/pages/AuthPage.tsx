@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -71,16 +70,25 @@ const AuthPage = () => {
     return () => clearTimeout(timer);
   }, [authState]);
   
-  // Redirect if user is already authenticated
+  // Enhanced redirect logic with safety mechanisms
   useEffect(() => {
     if (isAuthenticated && !redirectAttempted) {
       setRedirectAttempted(true);
       console.log("User is authenticated, redirecting to:", from);
       
-      // Use a short timeout to ensure all state updates have processed
-      setTimeout(() => {
-        navigate(from, { replace: true });
-      }, 200);
+      try {
+        // For dashboard routes, use a hard redirect to ensure clean state
+        if (from === '/' || from.includes('dashboard')) {
+          window.location.href = from;
+        } else {
+          // Use React Router for other routes
+          navigate(from, { replace: true });
+        }
+      } catch (error) {
+        console.error("Navigation error:", error);
+        // Fallback to hard redirect if navigation fails
+        window.location.href = from;
+      }
     }
   }, [isAuthenticated, navigate, from, redirectAttempted]);
   
@@ -182,8 +190,8 @@ const AuthPage = () => {
   const isAuthError = authState === 'ERROR' || !!authError;
   const circuitBreakerInfo = isCircuitBreakerActive();
   
-  // If authenticated, show a loading screen during redirect
-  if (isAuthenticated) {
+  // If authenticated and in a loading process, show a spinner
+  if (isAuthenticated && redirectAttempted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="w-full max-w-md">
