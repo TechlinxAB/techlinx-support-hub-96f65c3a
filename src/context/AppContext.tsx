@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { UserProfile } from './AuthContext';
+import { BlockType } from '@/types/dashboard';
 
 // Define missing types
-export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed';
+export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
 export type CasePriority = 'low' | 'medium' | 'high';
 
 // Define Case type
@@ -17,8 +18,8 @@ export type Case = {
   companyId: string;
   categoryId: string;
   assignedToId?: string;
-  createdAt: string | Date;
-  updatedAt: string | Date;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 // Define Company type
@@ -26,14 +27,14 @@ export type Company = {
   id: string;
   name: string;
   logo?: string;
-  createdAt: string | Date;
+  createdAt: Date;
 };
 
 // Define Category type
 export type Category = {
   id: string;
   name: string;
-  createdAt: string | Date;
+  createdAt: Date;
 };
 
 // Define User type (for user management)
@@ -54,7 +55,7 @@ export type Reply = {
   userId: string;
   content: string;
   isInternal?: boolean;
-  createdAt: string | Date;
+  createdAt: Date;
 };
 
 // Define Note type
@@ -63,7 +64,7 @@ export type Note = {
   caseId: string;
   userId: string;
   content: string;
-  createdAt: string | Date;
+  createdAt: Date;
 };
 
 // Define Attachment type
@@ -76,25 +77,22 @@ export type Attachment = {
   contentType?: string;
   size?: number;
   createdBy: string;
-  createdAt: string | Date;
+  createdAt: Date;
 };
-
-// Define Dashboard Block type
-export type BlockType = 'text' | 'chart' | 'stats' | 'list' | 'custom' | string;
 
 // Define Dashboard Block type
 export type DashboardBlock = {
   id: string;
   companyId: string;
   title: string;
-  type: BlockType;  // Update to BlockType instead of just string
+  type: BlockType;  // Use BlockType from types/dashboard
   content: any;
   position: number;
   parentId?: string;
   showTitle?: boolean; // Add showTitle property
   createdBy: string;
-  createdAt: string | Date;
-  updatedAt: string | Date;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 // Add UserRole and Language types
@@ -198,6 +196,10 @@ const AppContext = createContext<AppContextType>({
   addDashboardBlock: async () => null,
   updateDashboardBlock: async () => null,
   deleteDashboardBlock: async () => false,
+  addCompanyNewsBlock: async (data: any) => null,
+  updateCompanyNewsBlock: async (id: string, data: any) => null,
+  deleteCompanyNewsBlock: async (id: string) => false,
+  publishCompanyNewsBlock: async (id: string) => false,
 });
 
 // Provider component to wrap the app
@@ -412,7 +414,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     setCases(mockCases);
   }, [loading, user, profile]);
 
-  // Provide the context values
+  // Fix context value definition to include all required properties
   const contextValue: AppContextType = {
     language,
     setLanguage,
@@ -449,10 +451,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     addDashboardBlock,
     updateDashboardBlock,
     deleteDashboardBlock,
-    addCompanyNewsBlock,
-    updateCompanyNewsBlock,
-    deleteCompanyNewsBlock,
-    publishCompanyNewsBlock,
+    addCompanyNewsBlock: async (data: any) => null,
+    updateCompanyNewsBlock: async (id: string, data: any) => null,
+    deleteCompanyNewsBlock: async (id: string) => false,
+    publishCompanyNewsBlock: async (id: string) => false,
   };
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;

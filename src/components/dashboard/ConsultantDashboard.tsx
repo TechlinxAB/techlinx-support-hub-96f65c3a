@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -93,9 +92,10 @@ const ConsultantDashboard = () => {
   };
   
   // Calculate days since last update
-  const getDaysSinceUpdate = (updatedAt: Date) => {
+  const getDaysSinceUpdate = (updatedAt: Date | string) => {
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - updatedAt.getTime());
+    const updateDate = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
+    const diffTime = Math.abs(now.getTime() - updateDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
@@ -103,20 +103,32 @@ const ConsultantDashboard = () => {
   // Filter for New Cases (3 most recent with 'new' status)
   const newCases = cases
     .filter(c => c.status === 'new')
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    })
     .slice(0, 3);
   
   // Filter for Ongoing Cases (3 cases where last update wasn't by consultant)
   const ongoingCases = cases
     .filter(c => c.status === 'ongoing')
     // We'd need reply data to know who last updated, but for now we'll just use all ongoing cases
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .sort((a, b) => {
+      const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt);
+      const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
+      return dateB.getTime() - dateA.getTime();
+    })
     .slice(0, 3);
   
   // Filter for Awaiting Confirmation Cases (3 most recent 'resolved' status)
   const awaitingConfirmationCases = cases
     .filter(c => c.status === 'resolved')
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .sort((a, b) => {
+      const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt);
+      const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
+      return dateB.getTime() - dateA.getTime();
+    })
     .slice(0, 3);
   
   // Filter for Overdue Cases (over 30 days since last update, status is 'new' or 'ongoing')
@@ -125,16 +137,22 @@ const ConsultantDashboard = () => {
       (c.status === 'new' || c.status === 'ongoing') && 
       getDaysSinceUpdate(c.updatedAt) > 30
     )
-    .sort((a, b) => 
-      a.updatedAt.getTime() - b.updatedAt.getTime()
-    )
+    .sort((a, b) => {
+      const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt);
+      const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
+      return dateA.getTime() - dateB.getTime();
+    })
     .slice(0, 3);
   
   // Recent Activity Feed (user actions only)
   // In a real implementation, we'd have a separate table for activities
   // For now, we'll simulate with recent cases as a placeholder
   const recentActivities = cases
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    })
     .slice(0, 5)
     .map(c => ({
       timestamp: c.createdAt,

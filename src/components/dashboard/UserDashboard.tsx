@@ -49,14 +49,18 @@ const UserDashboard = () => {
     ? [] 
     : cases
         .filter(c => c.userId === currentUser.id)
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .sort((a, b) => {
+          const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt);
+          const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
+          return dateB.getTime() - dateA.getTime();
+        })
         .filter(c => c.status !== 'completed')
         .slice(0, 3)
         .map(c => ({
           id: c.id,
           title: c.title,
           status: c.status,
-          updatedAt: c.updatedAt.toISOString()
+          updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : new Date(c.updatedAt).toISOString()
         }));
   
   // Extract first name

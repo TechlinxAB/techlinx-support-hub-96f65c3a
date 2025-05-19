@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Company } from "@/context/AppContext";
 
@@ -29,7 +30,8 @@ export const ensureTechlinxCompanyExists = async (): Promise<Company | null> => 
       return {
         id: existingCompanies[0].id,
         name: existingCompanies[0].name,
-        logo: existingCompanies[0].logo
+        logo: existingCompanies[0].logo,
+        createdAt: new Date(existingCompanies[0].created_at) // Add createdAt property
       };
     }
     
@@ -51,7 +53,8 @@ export const ensureTechlinxCompanyExists = async (): Promise<Company | null> => 
     return {
       id: newCompany.id,
       name: newCompany.name,
-      logo: newCompany.logo
+      logo: newCompany.logo,
+      createdAt: new Date(newCompany.created_at) // Add createdAt property
     };
   } catch (error) {
     console.error("Unexpected error ensuring Techlinx exists:", error);
@@ -194,7 +197,7 @@ export const getTechlinxCompany = async (): Promise<Company> => {
       id: companyData[0].id,
       name: companyData[0].name,
       logo: companyData[0].logo,
-      createdAt: new Date()
+      createdAt: new Date(companyData[0].created_at)
     };
   }
   
@@ -222,7 +225,7 @@ export const getTechlinxCompany = async (): Promise<Company> => {
     id: newCompany.id,
     name: newCompany.name,
     logo: newCompany.logo,
-    createdAt: new Date()
+    createdAt: new Date(newCompany.created_at)
   };
 };
 
@@ -253,7 +256,7 @@ export const getTestCompanyObject = async (): Promise<Company> => {
       id: companyData[0].id,
       name: companyData[0].name,
       logo: companyData[0].logo,
-      createdAt: new Date()
+      createdAt: new Date(companyData[0].created_at)
     };
   }
   
@@ -281,6 +284,6 @@ export const getTestCompanyObject = async (): Promise<Company> => {
     id: newCompany.id,
     name: newCompany.name,
     logo: newCompany.logo,
-    createdAt: new Date()
+    createdAt: new Date(newCompany.created_at)
   };
 };
