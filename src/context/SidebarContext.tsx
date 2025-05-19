@@ -25,7 +25,33 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isMobile, setIsMobile] = useState(false);
   const sidebarRef = useRef<HTMLDivElement | null>(null);
 
-  // Load sidebar state from localStorage on component mount only
+  // Check if mobile on mount and resize
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobileView = window.innerWidth < 768;
+      const wasAlreadyMobile = isMobile;
+      setIsMobile(isMobileView);
+      
+      // Auto-close sidebar when switching to mobile
+      if (isMobileView && !wasAlreadyMobile) {
+        setIsSidebarOpen(false);
+      }
+      
+      // When switching from mobile to desktop, restore sidebar state from localStorage
+      if (!isMobileView && wasAlreadyMobile) {
+        const savedState = localStorage.getItem('sidebarState');
+        setIsSidebarOpen(savedState === 'open' || savedState === null);
+      }
+    };
+
+    // Initial check on mount
+    handleResize();
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMobile]);
+
+  // Load sidebar state from localStorage on component mount
   useEffect(() => {
     const savedSidebarState = localStorage.getItem('sidebarState');
     
@@ -33,31 +59,14 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isMobileView = window.innerWidth < 768;
     setIsMobile(isMobileView);
     
-    if (savedSidebarState !== null) {
-      // On mobile, default to closed regardless of saved state
-      setIsSidebarOpen(isMobileView ? false : savedSidebarState === 'open');
-    } else {
-      // Default behavior based on screen size
-      setIsSidebarOpen(!isMobileView);
+    // Always hide sidebar on mobile by default
+    if (isMobileView) {
+      setIsSidebarOpen(false);
+    } else if (savedSidebarState !== null) {
+      // On desktop, respect saved state
+      setIsSidebarOpen(savedSidebarState === 'open');
     }
   }, []);
-
-  // Update isMobile state when window is resized
-  useEffect(() => {
-    const handleResize = () => {
-      const isMobileView = window.innerWidth < 768;
-      setIsMobile(isMobileView);
-      
-      // Close sidebar automatically when switching to mobile
-      if (isMobileView && isSidebarOpen) {
-        setIsSidebarOpen(false);
-      }
-    };
-
-    handleResize(); // Initial check
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isSidebarOpen]);
 
   // Save sidebar state to localStorage when it changes
   // Only save desktop state, don't save mobile state

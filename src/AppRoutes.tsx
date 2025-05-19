@@ -4,6 +4,7 @@ import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import NavigationService from "./services/navigationService";
 import { SidebarProvider } from './context/SidebarContext';
+import { useSidebar } from './context/SidebarContext';
 
 // Page components
 import AuthPage from "./pages/AuthPage";
@@ -29,6 +30,25 @@ import CompanySettingsPage from "./pages/CompanySettingsPage";
 import PersistentSidebar from "./components/layout/PersistentSidebar";
 import Layout from "./components/layout/Layout";
 
+// ContentWrapper component to handle main content margin based on sidebar state
+const ContentWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { isSidebarOpen, isMobile } = useSidebar();
+  
+  return (
+    <div 
+      className="w-full h-full bg-white flex-1 transition-all duration-300" 
+      style={{ 
+        backgroundColor: 'white',
+        position: 'relative',
+        zIndex: 1,
+        marginLeft: isMobile ? 0 : (isSidebarOpen ? '16rem' : '4rem')
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 const AppRoutes = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -40,12 +60,12 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-white" style={{ backgroundColor: 'white' }}> 
+      <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}> 
         {/* Persistent Sidebar */}
         <PersistentSidebar />
 
         {/* Main content wrapper with explicit white background */}
-        <div className="w-full h-full bg-white flex-1" style={{ backgroundColor: 'white', position: 'relative', zIndex: 1 }}> 
+        <ContentWrapper>
           <Routes location={location}>
             {/* Auth route - doesn't use the main layout */}
             <Route path="/auth" element={<AuthPage />} />
@@ -76,7 +96,7 @@ const AppRoutes = () => {
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
-        </div>
+        </ContentWrapper>
       </div>
     </SidebarProvider>
   );

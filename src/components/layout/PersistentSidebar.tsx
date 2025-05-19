@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import Sidebar from './Sidebar';
 import { useSidebar } from '@/context/SidebarContext';
-import { X } from 'lucide-react';
+import { X, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const PersistentSidebar: React.FC = () => {
@@ -17,7 +17,7 @@ const PersistentSidebar: React.FC = () => {
       toggleSidebar();
     }
   };
-  
+
   return (
     <>
       {/* Mobile overlay when sidebar is open */}
@@ -29,11 +29,24 @@ const PersistentSidebar: React.FC = () => {
         />
       )}
       
+      {/* Mobile toggle button - only shown when sidebar is closed */}
+      {isMobile && !isSidebarOpen && (
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={toggleSidebar}
+          className="fixed top-4 left-4 z-20 bg-background/80 backdrop-blur-sm shadow-sm"
+        >
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Open sidebar</span>
+        </Button>
+      )}
+      
       <div 
         className="fixed top-0 left-0 h-full z-40 bg-sidebar transition-all duration-300 ease-in-out shadow-md"
         style={{ 
           width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
-          transform: isSidebarOpen || !isMobile ? 'translateX(0)' : 'translateX(-100%)',
+          transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
           isolation: 'isolate',
         }}
       >
