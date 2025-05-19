@@ -13,6 +13,7 @@ import NavigationService from "./services/navigationService";
 
 // Import the new AppRoutes component that will handle all routing
 import AppRoutes from "./AppRoutes";
+import "./App.css";
 
 // Initialize the query client with improved settings
 const queryClient = new QueryClient({
@@ -36,6 +37,12 @@ const InitApp = () => {
   useEffect(() => {
     // Initialize pause/unpause detection at the app root level
     initPauseUnpauseDetection();
+    
+    // Force the body background to white
+    document.body.style.backgroundColor = '#ffffff';
+    
+    // Additional safety measure: set background color via class
+    document.documentElement.classList.add('bg-white');
   }, []);
   
   return null;
@@ -45,18 +52,20 @@ const InitApp = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <AuthProvider>
-        <AppProvider>
-          <TooltipProvider>
-            <ModalManager>
-              <Toaster />
-              <ModalReset />
-              <InitApp />
-              <AppRoutes />
-            </ModalManager>
-          </TooltipProvider>
-        </AppProvider>
-      </AuthProvider>
+      <div style={{ backgroundColor: '#ffffff' }} className="bg-white">
+        <AuthProvider>
+          <AppProvider>
+            <TooltipProvider>
+              <ModalManager>
+                <Toaster />
+                <ModalReset />
+                <InitApp />
+                <AppRoutes />
+              </ModalManager>
+            </TooltipProvider>
+          </AppProvider>
+        </AuthProvider>
+      </div>
     </BrowserRouter>
   </QueryClientProvider>
 );

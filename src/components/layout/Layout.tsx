@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import { Loader, RefreshCw } from 'lucide-react';
@@ -22,8 +22,22 @@ const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
+  const location = useLocation();
+  
+  // Track page transitions
+  useEffect(() => {
+    setIsPageTransitioning(true);
+    
+    // Short timeout to allow animation to begin
+    const timer = setTimeout(() => {
+      setIsPageTransitioning(false);
+    }, 400); // Slightly longer than animation duration
+    
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
   
   // Calculate content margin based on sidebar state
   const contentMarginLeft = isMobile
@@ -83,7 +97,7 @@ const Layout = () => {
   // If loading or initial session state, show a loading indicator with explicit white background
   if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col bg-white" style={{ backgroundColor: 'white' }}>
+      <div className="flex items-center justify-center min-h-screen flex-col" style={{ backgroundColor: '#ffffff' }}>
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="mb-4 text-gray-700">Loading application...</p>
         {isPauseRecovery && (
@@ -129,7 +143,7 @@ const Layout = () => {
   // If no session and not authenticated, show an error state with explicit white background
   if (!session && !isAuthenticated && !loading && !bypassActive && !forceShow) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col bg-white" style={{ backgroundColor: 'white' }}>
+      <div className="flex items-center justify-center min-h-screen flex-col" style={{ backgroundColor: '#ffffff' }}>
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
         <div className="flex gap-2">
           <Button 
@@ -157,13 +171,13 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
+    <div className="flex min-h-screen w-full" style={{ backgroundColor: '#ffffff' }}>
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
-        className="flex-1 flex flex-col transition-all duration-300 bg-white"
+        className="flex-1 flex flex-col transition-all duration-300"
         style={{ 
           marginLeft: contentMarginLeft,
-          backgroundColor: 'white' // Explicit style
+          backgroundColor: '#ffffff' // Explicit style
         }}
       >
         <Header />
@@ -186,11 +200,18 @@ const Layout = () => {
           </div>
         )}
         
+        {/* Page transition overlay - shows during transitions */}
+        {isPageTransitioning && (
+          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: '#ffffff' }}>
+            <Loader className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+        
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
-          <div className="bg-white w-full h-full"> {/* Additional wrapper */}
+        <main className="flex-1 overflow-x-hidden py-6 w-full" style={{ backgroundColor: '#ffffff' }}>
+          <div className="w-full h-full" style={{ backgroundColor: '#ffffff' }}> 
             <AnimatePresence mode="wait">
-              <div className="bg-white w-full h-full"> {/* Additional wrapper inside AnimatePresence */}
+              <div className="w-full h-full" style={{ backgroundColor: '#ffffff' }}> 
                 <PageTransition key={location.pathname}>
                   <Container>
                     <Outlet />

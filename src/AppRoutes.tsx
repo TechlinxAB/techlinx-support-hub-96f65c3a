@@ -40,20 +40,27 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-white" style={{ backgroundColor: 'white' }}>
+      <div className="flex min-h-screen" style={{ backgroundColor: '#ffffff' }}>
         {/* Persistent Sidebar - COMPLETELY outside of animation context */}
         <PersistentSidebar />
 
-        <div className="bg-white w-full"> {/* Added wrapper with explicit background */}
+        {/* Main content wrapper with explicit white background */}
+        <div className="w-full" style={{ backgroundColor: '#ffffff', position: 'relative' }}> 
           <Routes location={location}>
             {/* Auth route - doesn't use the main layout */}
-            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/auth" element={
+              <div style={{ backgroundColor: '#ffffff' }}>
+                <AuthPage />
+              </div>
+            } />
             
             {/* All protected routes */}
             <Route path="/*" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
+              <div style={{ backgroundColor: '#ffffff' }}>
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              </div>
             }>
               <Route index element={<Dashboard />} />
               <Route path="cases" element={<CasesPage />} />
