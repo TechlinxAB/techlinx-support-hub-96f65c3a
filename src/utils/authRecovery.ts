@@ -1,5 +1,5 @@
 
-import { clearAuthState, resetCircuitBreaker as resetSupabaseCircuitBreaker, isCircuitBreakerActive as checkCircuitBreakerActive, supabase } from '@/integrations/supabase/client';
+import { clearAuthState, resetCircuitBreaker as resetSupabaseCircuitBreaker, isCircuitBreakerActive as checkCircuitBreakerActive, supabase, STORAGE_KEY } from '@/integrations/supabase/client';
 
 /**
  * Comprehensive authentication recovery utilities
@@ -16,6 +16,72 @@ const LAST_ACTIVE_KEY = 'auth-last-active';
 const PAUSE_DETECTED_KEY = 'auth-pause-detected';
 const FORCE_BYPASS_KEY = 'auth-force-bypass';
 const RECOVERY_ATTEMPT_KEY = 'auth-recovery-attempt-count';
+
+/**
+ * Detect potential authentication loops by analyzing redirects
+ * @returns Information about detected auth loops
+ */
+export const detectAuthLoops = (): boolean => {
+  // Check for rapid redirects (potential auth loop)
+  const redirectCount = parseInt(sessionStorage.getItem('redirect_count') || '0', 10);
+  const lastRedirect = parseInt(sessionStorage.getItem('last_redirect') || '0', 10);
+  const now = Date.now();
+  
+  // IMPROVEMENTS:
+  // 1. Much more lenient detection: require 10+ redirects in under 10 seconds to trigger
+  // 2. Be even more lenient if we've detected a pause/unpause scenario
+  const redirectThreshold = wasPauseDetected() ? 15 : 10;
+  const timeThreshold = wasPauseDetected() ? 15000 : 10000;
+  
+  if (redirectCount > redirectThreshold && (now - lastRedirect) < timeThreshold) {
+    console.log(`Auth loop detected: ${redirectCount} redirects in ${now - lastRedirect}ms`);
+    return true;
+  }
+  
+  // Update redirect counter for next check
+  sessionStorage.setItem('redirect_count', (redirectCount + 1).toString());
+  sessionStorage.setItem('last_redirect', now.toString());
+  
+  // Reset counter after 60 seconds of no redirects (increased from 30)
+  setTimeout(() => {
+    sessionStorage.setItem('redirect_count', '0');
+  }, 60000);
+  
+  return false;
+};
+
+/**
+ * Check if the auth token might be stale based on its age
+ * This helps detect potential token expiration or validity issues
+ */
+export const isTokenPotentiallyStale = (): boolean => {
+  try {
+    const rawToken = localStorage.getItem(STORAGE_KEY);
+    if (!rawToken) return true;
+    
+    // Try to parse the token
+    const tokenData = JSON.parse(rawToken);
+    const expiresAt = tokenData.expires_at;
+    const createdAt = tokenData.created_at;
+    
+    if (!expiresAt) return true;
+    
+    // Check if token is about to expire (within 5 minutes)
+    const expiryTime = expiresAt * 1000; // convert to milliseconds
+    const now = Date.now();
+    
+    // If token expires in less than 5 minutes, consider it stale
+    if (expiryTime - now < 300000) return true;
+    
+    // If token is very old (more than 23 hours), consider it potentially stale
+    if (createdAt && now - createdAt * 1000 > 82800000) return true;
+    
+    return false;
+  } catch (e) {
+    // If we can't parse the token, consider it stale
+    return true;
+  }
+};
 
 /**
  * Track when the app becomes visible (returns from background)
@@ -109,39 +175,6 @@ export const isForceBypassActive = (): boolean => {
   }
   
   return isActive;
-};
-
-/**
- * Detect potential authentication loops by analyzing redirects
- * @returns Information about detected auth loops
- */
-export const detectAuthLoops = (): boolean => {
-  // Check for rapid redirects (potential auth loop)
-  const redirectCount = parseInt(sessionStorage.getItem('redirect_count') || '0', 10);
-  const lastRedirect = parseInt(sessionStorage.getItem('last_redirect') || '0', 10);
-  const now = Date.now();
-  
-  // IMPROVEMENTS:
-  // 1. Much more lenient detection: require 10+ redirects in under 10 seconds to trigger
-  // 2. Be even more lenient if we've detected a pause/unpause scenario
-  const redirectThreshold = wasPauseDetected() ? 15 : 10;
-  const timeThreshold = wasPauseDetected() ? 15000 : 10000;
-  
-  if (redirectCount > redirectThreshold && (now - lastRedirect) < timeThreshold) {
-    console.log(`Auth loop detected: ${redirectCount} redirects in ${now - lastRedirect}ms`);
-    return true;
-  }
-  
-  // Update redirect counter for next check
-  sessionStorage.setItem('redirect_count', (redirectCount + 1).toString());
-  sessionStorage.setItem('last_redirect', now.toString());
-  
-  // Reset counter after 60 seconds of no redirects (increased from 30)
-  setTimeout(() => {
-    sessionStorage.setItem('redirect_count', '0');
-  }, 60000);
-  
-  return false;
 };
 
 /**
