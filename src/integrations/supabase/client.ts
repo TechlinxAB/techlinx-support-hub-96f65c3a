@@ -109,7 +109,7 @@ export const supabase = createClient<Database>(
       flowType: 'pkce'
     },
     global: {
-      fetch: (...args) => {
+      fetch: (...args: Parameters<typeof fetch>) => {
         // Mark the timestamp of the last API request
         try {
           localStorage.setItem(SESSION_CHECK_TIMESTAMP, Date.now().toString());
