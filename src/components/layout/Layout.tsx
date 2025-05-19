@@ -82,9 +82,9 @@ const Layout = () => {
   // If loading or initial session state, show a loading indicator
   if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col bg-sidebar">
+      <div className="flex items-center justify-center min-h-screen flex-col bg-white">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="mb-4 text-white">Loading application...</p>
+        <p className="mb-4 text-gray-700">Loading application...</p>
         {isPauseRecovery && (
           <p className="text-sm text-amber-500 mb-4">
             Recovering from app pause/background state...
@@ -95,7 +95,7 @@ const Layout = () => {
             variant="link" 
             onClick={() => setForceShow(true)}
             size="sm"
-            className="text-white"
+            className="text-gray-700"
           >
             Continue anyway
           </Button>
@@ -128,7 +128,7 @@ const Layout = () => {
   // If no session and not authenticated, but not loading, show an error state
   if (!session && !isAuthenticated && !loading && !bypassActive && !forceShow) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col bg-sidebar">
+      <div className="flex items-center justify-center min-h-screen flex-col bg-white">
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
         <div className="flex gap-2">
           <Button 
