@@ -63,7 +63,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     }
   }, []);
 
-  // IMPORTANT: Fixed signature to accept only one optional boolean parameter
+  // Define fetchNewsBlocks with a clear, explicit signature
   const fetchNewsBlocks = useCallback(async (force: boolean = false) => {
     if (!companyId) {
       setLoading(false);
@@ -208,12 +208,12 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     }
   }, [companyId, fetchNewsBlocks]);
 
-  // Public API
+  // Public API - Make sure refetch is correctly exported with the same signature
   return { 
     blocks, 
     loading, 
     error, 
-    refetch: fetchNewsBlocks,
+    refetch: fetchNewsBlocks, // Correctly pass the fetchNewsBlocks function as refetch
     updateLocalBlock,
     lastFetchTime: lastFetchTime.current,
     isCacheValid: cachedData.current && Date.now() - cachedData.current.timestamp < CACHE_TTL

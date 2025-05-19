@@ -23,6 +23,7 @@ import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Slider } from '@/components/ui/slider';
+import { supabase } from '@/lib/supabase';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -270,28 +271,47 @@ const CompanyNewsBuilderPage = () => {
 
   // Handle toggle publish - fixed by removing the incorrect argument to refetchCompanyNewsBlocks
   const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
-    setLoading(true);
     try {
-      // Optimistic update
-      updateLocalBlock({
-        id: blockId,
-        isPublished
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from('company_news_blocks')
+        .update({
+          is_published: !isPublished,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', blockId);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update local state
+      if (updateLocalBlock) {
+        updateLocalBlock({
+          id: blockId,
+          isPublished: !isPublished
+        });
+      }
+      
+      toast({
+        title: `Block ${!isPublished ? 'published' : 'unpublished'}`,
+        description: `The block has been ${!isPublished ? 'published' : 'unpublished'}`
       });
       
-      // Database update
-      await publishCompanyNewsBlock(blockId, isPublished);
-      
-      toast.success(isPublished ? "Published" : "Unpublished", {
-        description: `Block ${isPublished ? 'published' : 'unpublished'} successfully`
-      });
-    } catch (error) {
-      console.error('Error toggling publish status:', error);
-      toast.error("Error", {
+      // This line had the problem - we need to pass the right number of arguments
+      // Calling with single boolean parameter to force refresh
+      await refetchCompanyNewsBlocks(true);
+    } catch (error: any) {
+      console.error('Error toggling publish state:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // THIS IS THE FIX: No second argument to refetchCompanyNewsBlocks
-      await refetchCompanyNewsBlocks();
+      // Here too we use the proper signature with one argument
+      await refetchCompanyNewsBlocks(true);
     } finally {
       setLoading(false);
     }
