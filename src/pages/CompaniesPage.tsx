@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -173,6 +172,16 @@ const CompaniesPage = () => {
     company.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
+  // Sort companies: Techlinx Internal goes to the end, others are sorted alphabetically
+  const sortedCompanies = [...filteredCompanies].sort((a, b) => {
+    // If a is Techlinx Internal, it should always come last
+    if (a.name === TECHLINX_NAME) return 1;
+    // If b is Techlinx Internal, it should always come last
+    if (b.name === TECHLINX_NAME) return -1;
+    // Otherwise, sort alphabetically
+    return a.name.localeCompare(b.name);
+  });
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -198,7 +207,7 @@ const CompaniesPage = () => {
       </div>
       
       <div className="grid grid-cols-1 gap-4">
-        {filteredCompanies.map(company => {
+        {sortedCompanies.map(company => {
           // Find cases for this company
           const companyCases = cases.filter(c => c.companyId === company.id);
           const activeCases = companyCases.filter(c => c.status !== 'completed').length;
@@ -340,7 +349,7 @@ const CompaniesPage = () => {
           );
         })}
 
-        {filteredCompanies.length === 0 && (
+        {sortedCompanies.length === 0 && (
           <div className="text-center py-8">
             <p className="text-muted-foreground">No companies found matching "{searchQuery}"</p>
           </div>
