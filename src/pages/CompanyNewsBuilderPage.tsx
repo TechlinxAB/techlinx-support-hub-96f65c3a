@@ -74,7 +74,7 @@ const CompanyNewsBuilderPage = () => {
     onSaveError: (error) => {
       console.error('Error during save:', error);
       // Only refetch on error to recover correct state
-      refetchCompanyNewsBlocks(true);
+      refetchCompanyNewsBlocks();
     }
   });
 
@@ -118,7 +118,7 @@ const CompanyNewsBuilderPage = () => {
         };
         
         // Only refetch when adding a new block - we need the server-generated ID
-        await refetchCompanyNewsBlocks(true);
+        await refetchCompanyNewsBlocks();
         
         // After refetch, select the new block
         setSelectedBlockId(newBlockId);
@@ -152,7 +152,7 @@ const CompanyNewsBuilderPage = () => {
       await deleteCompanyNewsBlock(blockId);
       
       // Trigger refetch to ensure local state is consistent
-      refetchCompanyNewsBlocks(true);
+      await refetchCompanyNewsBlocks();
       
       toast.success("Block deleted successfully");
     } catch (error) {
@@ -162,7 +162,7 @@ const CompanyNewsBuilderPage = () => {
       });
       
       // Refetch to ensure state is correct after error
-      refetchCompanyNewsBlocks(true);
+      await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
     }
@@ -208,7 +208,7 @@ const CompanyNewsBuilderPage = () => {
         await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
         
         // Force a refetch to ensure server and client state are in sync
-        await refetchCompanyNewsBlocks(true);
+        await refetchCompanyNewsBlocks();
         
         toast.success("Block position updated", { id: toastId });
       } catch (error: any) {
@@ -218,7 +218,7 @@ const CompanyNewsBuilderPage = () => {
         });
         
         // Always refetch on error or success to ensure state consistency
-        refetchCompanyNewsBlocks(true);
+        await refetchCompanyNewsBlocks();
       } finally {
         setLoading(false);
       }
@@ -251,7 +251,7 @@ const CompanyNewsBuilderPage = () => {
         await updateCompanyNewsBlock(targetBlock.id, { position: targetBlock.position });
         
         // Force a refetch to ensure server and client state are in sync
-        await refetchCompanyNewsBlocks(true);
+        await refetchCompanyNewsBlocks();
         
         toast.success("Block position updated", { id: toastId });
       } catch (error: any) {
@@ -261,38 +261,10 @@ const CompanyNewsBuilderPage = () => {
         });
         
         // Always refetch on error to ensure state consistency
-        refetchCompanyNewsBlocks(true);
+        await refetchCompanyNewsBlocks();
       } finally {
         setLoading(false);
       }
-    }
-  };
-
-  const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
-    setLoading(true);
-    try {
-      // Optimistic update
-      updateLocalBlock({
-        id: blockId,
-        isPublished
-      });
-      
-      // Database update
-      await publishCompanyNewsBlock(blockId, isPublished);
-      
-      toast.success(isPublished ? "Published" : "Unpublished", {
-        description: `Block ${isPublished ? 'published' : 'unpublished'} successfully`
-      });
-    } catch (error) {
-      console.error('Error toggling publish status:', error);
-      toast.error("Error", {
-        description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
-      });
-      
-      // Only refetch on error
-      refetchCompanyNewsBlocks(true);
-    } finally {
-      setLoading(false);
     }
   };
 

@@ -102,8 +102,9 @@ const UserManagementPage = () => {
         setEmail(user.email);
         setPhone(user.phone || '');
         setCompanyId(user.companyId || '');
-        setRole(user.role);
-        setPreferredLanguage(user.preferredLanguage);
+        // Ensure we explicitly cast the string values to the correct types
+        setRole(user.role as UserRole);
+        setPreferredLanguage(user.preferredLanguage as Language);
         setUserStatus('active'); // Assuming all users in the list are active
       }
     } else if (mode === 'reset') {
