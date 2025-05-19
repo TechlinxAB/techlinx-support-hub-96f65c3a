@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -20,7 +21,11 @@ import { formatDistanceToNow } from 'date-fns';
 import TechlinxTestZone from './TechlinxTestZone';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
-import { ensureTechlinxCompanyExists, assignConsultantToTechlinx, createTechlinxSampleContent } from '@/utils/techlinxTestCompany';
+import { 
+  ensureTechlinxCompanyExists, 
+  assignConsultantToTechlinx, 
+  createTechlinxSampleContent 
+} from '@/utils/techlinxTestCompany';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { Switch } from '@/components/ui/switch';
 

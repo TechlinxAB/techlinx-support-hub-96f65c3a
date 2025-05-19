@@ -192,12 +192,177 @@ export const ensureTechlinxCompanyExists = async () => {
 };
 
 /**
+ * Assigns a consultant to Techlinx company
+ * @param consultantId The consultant user ID
+ * @param companyId The Techlinx company ID
+ */
+export const assignConsultantToTechlinx = async (consultantId: string, companyId: string) => {
+  try {
+    logger.info(`Assigning consultant ${consultantId} to Techlinx ${companyId}`);
+    
+    // Check if already assigned
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", consultantId)
+      .single();
+    
+    if (profileError) {
+      throw profileError;
+    }
+    
+    // If already assigned to this company, no need to update
+    if (profile.company_id === companyId) {
+      logger.info("Consultant already assigned to Techlinx");
+      return profile;
+    }
+    
+    // Update the consultant's company_id
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ company_id: companyId })
+      .eq("id", consultantId)
+      .select()
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    logger.error("Error assigning consultant to Techlinx:", error);
+    throw error;
+  }
+};
+
+/**
+ * Creates sample content for Techlinx
+ * @param companyId The Techlinx company ID
+ * @param userId The current user ID
+ */
+export const createTechlinxSampleContent = async (companyId: string, userId: string) => {
+  try {
+    // Check if sample content was already created
+    const contentCreated = sessionStorage.getItem(`techlinx_content_created_${companyId}`);
+    if (contentCreated) {
+      logger.info("Sample content already created for Techlinx");
+      return;
+    }
+    
+    logger.info(`Creating sample content for Techlinx company ${companyId}...`);
+    
+    // Create default categories
+    const categories = ["Technical Support", "Billing", "Features"];
+    for (const categoryName of categories) {
+      const { data: existingCategory } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("name", categoryName)
+        .maybeSingle();
+      
+      if (!existingCategory) {
+        await supabase
+          .from("categories")
+          .insert({ name: categoryName });
+      }
+    }
+    
+    // Create sample dashboard blocks if none exist
+    const { data: existingBlocks } = await supabase
+      .from("dashboard_blocks")
+      .select("*")
+      .eq("company_id", companyId);
+    
+    if (!existingBlocks || existingBlocks.length === 0) {
+      const welcomeBlock = {
+        company_id: companyId,
+        title: "Welcome to Techlinx Solutions",
+        type: "welcome",
+        position: 0,
+        content: JSON.stringify({
+          message: "Welcome to our support portal. Find documentation and create support cases here.",
+          image: "/placeholder.svg"
+        }),
+        created_by: userId
+      };
+      
+      await supabase.from("dashboard_blocks").insert(welcomeBlock);
+    }
+    
+    // Create sample announcements if none exist
+    const { data: existingAnnouncements } = await supabase
+      .from("announcements")
+      .select("*")
+      .eq("company_id", companyId);
+    
+    if (!existingAnnouncements || existingAnnouncements.length === 0) {
+      const announcements = [
+        {
+          company_id: companyId,
+          title: "New Support Portal",
+          content: "Welcome to our new support portal. We're excited to help you with any questions!",
+          is_active: true
+        },
+        {
+          company_id: companyId,
+          title: "Scheduled Maintenance",
+          content: "There will be scheduled maintenance this weekend. Please plan accordingly.",
+          is_active: true
+        }
+      ];
+      
+      await supabase.from("announcements").insert(announcements);
+    }
+    
+    // Create sample documentation if none exists
+    const { data: existingDocs } = await supabase
+      .from("documentation")
+      .select("*")
+      .eq("company_id", companyId);
+    
+    if (!existingDocs || existingDocs.length === 0) {
+      const docs = [
+        {
+          company_id: companyId,
+          title: "Getting Started",
+          content: "# Getting Started\nThis guide will help you get started with our product.",
+        },
+        {
+          company_id: companyId,
+          title: "Frequently Asked Questions",
+          content: "# FAQs\n## How do I reset my password?\nYou can reset your password from the login page.",
+        }
+      ];
+      
+      await supabase.from("documentation").insert(docs);
+    }
+    
+    // Mark as created to avoid duplicating content
+    sessionStorage.setItem(`techlinx_content_created_${companyId}`, 'true');
+    
+  } catch (error) {
+    logger.error("Error creating Techlinx sample content:", error);
+    // Don't throw, just log the error
+  }
+};
+
+/**
  * Clears Techlinx data from session storage
  * Useful for troubleshooting
  */
 export const clearTechlinxCache = () => {
   sessionStorage.removeItem('techlinx_company');
   sessionStorage.removeItem('techlinx_content_checked');
+  
+  // Also clear content creation flags
+  const keys = Object.keys(sessionStorage);
+  keys.forEach(key => {
+    if (key.startsWith('techlinx_content_created_')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+  
   lastTechlinxCheckTime = 0;
   toast.success("Techlinx cache cleared");
 };
