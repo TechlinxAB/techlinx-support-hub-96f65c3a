@@ -30,8 +30,10 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, signIn, forceRecovery, authState, authError } = useAuth();
   
-  // Get redirect path from state or default to home
-  const from = location.state?.from || '/';
+  // Get redirect path from state or query param or default to home
+  const urlParams = new URLSearchParams(location.search);
+  const redirectParam = urlParams.get('redirect');
+  const from = location.state?.from || redirectParam || '/';
   
   // Check for auth issues on mount
   useEffect(() => {
@@ -78,7 +80,7 @@ const AuthPage = () => {
       // Use a short timeout to ensure all state updates have processed
       setTimeout(() => {
         navigate(from, { replace: true });
-      }, 100);
+      }, 200);
     }
   }, [isAuthenticated, navigate, from, redirectAttempted]);
   
@@ -187,7 +189,7 @@ const AuthPage = () => {
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 flex flex-col items-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-center">You are logged in. Redirecting...</p>
+            <p className="text-center">You are logged in. Redirecting to {from}...</p>
           </CardContent>
         </Card>
       </div>

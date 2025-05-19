@@ -19,6 +19,55 @@ export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 // Increment this when making changes to auth logic
 export const CURRENT_AUTH_VERSION = '1.2.2';
 
+// Create a custom storage object with debugging
+const createStorage = () => {
+  try {
+    return {
+      getItem: (key: string) => {
+        const value = localStorage.getItem(key);
+        if (key === STORAGE_KEY && !value) {
+          console.log("⚠️ Auth token not found in storage");
+        }
+        return value;
+      },
+      setItem: (key: string, value: string) => {
+        if (key === STORAGE_KEY) {
+          console.log("✅ Setting auth token in storage");
+          // When setting the auth token, also mark that we had a successful auth
+          try {
+            localStorage.setItem(SUCCESSFUL_AUTH_KEY, Date.now().toString());
+            // Reset error count when token is set
+            resetAuthErrorCount();
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+        localStorage.setItem(key, value);
+      },
+      removeItem: (key: string) => {
+        if (key === STORAGE_KEY) {
+          console.log("🗑️ Removing auth token from storage");
+        }
+        localStorage.removeItem(key);
+      },
+      clear: () => {
+        console.log("🧹 Clearing all storage");
+        localStorage.clear();
+      }
+    };
+  } catch (error) {
+    // Fallback for environments where localStorage isn't available
+    console.warn("Using in-memory storage fallback");
+    const storage = new Map<string, string>();
+    return {
+      getItem: (key: string) => storage.get(key) || null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+      clear: () => storage.clear()
+    };
+  }
+};
+
 // Function to check if circuit breaker is active with details
 export const isCircuitBreakerActive = (): { active: boolean, reason?: string, remainingSeconds?: number } => {
   try {
@@ -102,55 +151,6 @@ export const trackAuthError = (): number => {
   }
 };
 
-// Create a custom storage object with debugging
-const createStorage = () => {
-  try {
-    return {
-      getItem: (key: string) => {
-        const value = localStorage.getItem(key);
-        if (key === STORAGE_KEY && !value) {
-          console.log("⚠️ Auth token not found in storage");
-        }
-        return value;
-      },
-      setItem: (key: string, value: string) => {
-        if (key === STORAGE_KEY) {
-          console.log("✅ Setting auth token in storage");
-          // When setting the auth token, also mark that we had a successful auth
-          try {
-            localStorage.setItem(SUCCESSFUL_AUTH_KEY, Date.now().toString());
-            // Reset error count when token is set
-            resetAuthErrorCount();
-          } catch (e) {
-            // Ignore errors
-          }
-        }
-        localStorage.setItem(key, value);
-      },
-      removeItem: (key: string) => {
-        if (key === STORAGE_KEY) {
-          console.log("🗑️ Removing auth token from storage");
-        }
-        localStorage.removeItem(key);
-      },
-      clear: () => {
-        console.log("🧹 Clearing all storage");
-        localStorage.clear();
-      }
-    };
-  } catch (error) {
-    // Fallback for environments where localStorage isn't available
-    console.warn("Using in-memory storage fallback");
-    const storage = new Map<string, string>();
-    return {
-      getItem: (key: string) => storage.get(key) || null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-      removeItem: (key: string) => storage.delete(key),
-      clear: () => storage.clear()
-    };
-  }
-};
-
 // Initialize the version in storage if it doesn't exist
 const initAuthVersion = () => {
   try {
@@ -178,59 +178,23 @@ const initAuthVersion = () => {
       const oldVersion = localStorage.getItem(VERSION_KEY);
       console.log(`🔄 Updating auth version from ${oldVersion} to ${CURRENT_AUTH_VERSION}`);
       localStorage.setItem(VERSION_KEY, CURRENT_AUTH_VERSION);
-      clearAuthState();
+      
+      // We'll clear auth state but without trying to sign out from supabase yet
+      // (since the client might not be initialized)
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(AUTH_ERROR_KEY);
+        localStorage.removeItem(CIRCUIT_BREAKER_KEY);
+        localStorage.removeItem(SESSION_CHECK_TIMESTAMP);
+        localStorage.removeItem(SUCCESSFUL_AUTH_KEY);
+        
+        console.log("🧹 Basic auth state cleared due to version mismatch");
+      } catch (e) {
+        console.error("Failed to clean up during version update", e);
+      }
     }
   } catch (e) {
     console.error("Failed to initialize auth version", e);
-  }
-};
-
-// Enhanced function to clear auth state
-export const clearAuthState = async () => {
-  try {
-    console.log("🧹 Clearing all auth state...");
-    
-    // Step 1: Clean all auth-related localStorage items
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(VERSION_KEY);
-    localStorage.removeItem(AUTH_ERROR_KEY);
-    localStorage.removeItem(CIRCUIT_BREAKER_KEY);
-    localStorage.removeItem(AUTH_INIT_COUNT);
-    localStorage.removeItem(AUTH_LAST_INIT);
-    localStorage.removeItem(SESSION_CHECK_TIMESTAMP);
-    localStorage.removeItem(SUCCESSFUL_AUTH_KEY);
-    
-    // Step 2: Clear any session cookies
-    document.cookie.split(';').forEach(c => {
-      document.cookie = c
-        .replace(/^ +/, '')
-        .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
-    });
-    
-    // Step 3: Try to sign out from Supabase
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-    } catch (signOutError) {
-      console.error('Error during sign out:', signOutError);
-      // Continue with cleanup even if sign out fails
-    }
-    
-    // Step 4: Reset auth version to current
-    localStorage.setItem(VERSION_KEY, CURRENT_AUTH_VERSION);
-    
-    console.log("✅ Auth state cleared successfully");
-    return true;
-  } catch (error) {
-    console.error('Error clearing auth state:', error);
-    
-    // Step 5: Last resort - try to remove the token directly
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {
-      // Silent fail
-    }
-    
-    return false;
   }
 };
 
@@ -308,7 +272,8 @@ export const activateCircuitBreaker = (timeoutMinutes = 5, reason = "Unknown"): 
   }
 };
 
-// Call this on application start - AFTER all functions are defined
+// First initialize auth version - it's important this happens before client creation
+// to avoid the "Cannot access before initialization" error
 initAuthVersion();
 
 // Create and export the Supabase client with enhanced options
@@ -336,3 +301,52 @@ export const supabase = createClient<Database>(
     }
   }
 );
+
+// Enhanced function to clear auth state - moved AFTER client is initialized
+export const clearAuthState = async () => {
+  try {
+    console.log("🧹 Clearing all auth state...");
+    
+    // Step 1: Clean all auth-related localStorage items
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(VERSION_KEY);
+    localStorage.removeItem(AUTH_ERROR_KEY);
+    localStorage.removeItem(CIRCUIT_BREAKER_KEY);
+    localStorage.removeItem(AUTH_INIT_COUNT);
+    localStorage.removeItem(AUTH_LAST_INIT);
+    localStorage.removeItem(SESSION_CHECK_TIMESTAMP);
+    localStorage.removeItem(SUCCESSFUL_AUTH_KEY);
+    
+    // Step 2: Clear any session cookies
+    document.cookie.split(';').forEach(c => {
+      document.cookie = c
+        .replace(/^ +/, '')
+        .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+    });
+    
+    // Step 3: Try to sign out from Supabase
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch (signOutError) {
+      console.error('Error during sign out:', signOutError);
+      // Continue with cleanup even if sign out fails
+    }
+    
+    // Step 4: Reset auth version to current
+    localStorage.setItem(VERSION_KEY, CURRENT_AUTH_VERSION);
+    
+    console.log("✅ Auth state cleared successfully");
+    return true;
+  } catch (error) {
+    console.error('Error clearing auth state:', error);
+    
+    // Step 5: Last resort - try to remove the token directly
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      // Silent fail
+    }
+    
+    return false;
+  }
+};

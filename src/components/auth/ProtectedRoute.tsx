@@ -29,7 +29,7 @@ const ProtectedRoute = () => {
   const circuitBreakerInfo = isCircuitBreakerActive();
   const authLoopDetected = detectAuthLoops();
 
-  // Add a useEffect to handle auth retries
+  // Add a useEffect to handle auth retries with a limit
   useEffect(() => {
     if (!isAuthenticated && !loading && authState !== 'ERROR' && authAttempts < 2) {
       // Try to wait a bit and let auth complete, in case of race conditions
@@ -41,7 +41,7 @@ const ProtectedRoute = () => {
     }
   }, [isAuthenticated, loading, authState, authAttempts]);
   
-  // Handle recovery action - with better error handling
+  // Handle recovery action
   const handleRecovery = async () => {
     setIsRecovering(true);
     try {
@@ -132,7 +132,8 @@ const ProtectedRoute = () => {
   if (!isAuthenticated) {
     // Use a more reliable hard redirect for auth issues
     if (process.env.NODE_ENV !== 'development') {
-      window.location.href = `/auth?redirect=${encodeURIComponent(location.pathname)}`;
+      const redirectPath = encodeURIComponent(location.pathname);
+      window.location.href = `/auth?redirect=${redirectPath}`;
       return null;
     }
     
