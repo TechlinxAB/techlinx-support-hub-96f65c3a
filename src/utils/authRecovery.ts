@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -33,13 +34,13 @@ export const detectAuthLoops = (): boolean => {
  * Checks if the current auth token might be stale
  * @returns true if the token might be stale
  */
-export const isTokenPotentiallyStale = (): boolean => {
+export const isTokenPotentiallyStale = async (): Promise<boolean> => {
   try {
-    const { data } = supabase.auth.getSession();
-    if (!data.session) return false;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) return false;
     
     // If the token expires in less than 10 minutes, consider it stale
-    const expiresAt = data.session.expires_at;
+    const expiresAt = sessionData.session.expires_at;
     if (!expiresAt) return false;
     
     const expirationDate = new Date(expiresAt * 1000);

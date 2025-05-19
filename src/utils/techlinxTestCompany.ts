@@ -1,5 +1,165 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// Techlinx test company name constant
+export const TECHLINX_NAME = "Techlinx Solutions";
+
+/**
+ * Ensures that the Techlinx test company exists
+ * @returns The company object
+ */
+export const ensureTechlinxCompanyExists = async () => {
+  try {
+    console.log("Checking if Techlinx company exists...");
+    
+    // Check if company already exists
+    const { data: existingCompany, error: searchError } = await supabase
+      .from("companies")
+      .select("*")
+      .eq("name", TECHLINX_NAME)
+      .single();
+    
+    if (searchError && searchError.code !== "PGRST116") {
+      console.error("Error searching for Techlinx:", searchError);
+      throw searchError;
+    }
+    
+    // If company exists, return it
+    if (existingCompany) {
+      console.log("Techlinx company already exists:", existingCompany);
+      return existingCompany;
+    }
+    
+    // Otherwise, create it
+    console.log("Creating Techlinx test company...");
+    
+    const newCompany = {
+      name: TECHLINX_NAME,
+      logo: "/placeholder.svg",
+      industry: "Technology",
+      description: "A test company for demo purposes",
+      website: "https://example.com",
+      size: "50-100",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    const { data: createdCompany, error: createError } = await supabase
+      .from("companies")
+      .insert(newCompany)
+      .select()
+      .single();
+    
+    if (createError) {
+      console.error("Error creating Techlinx:", createError);
+      throw createError;
+    }
+    
+    console.log("Created Techlinx company:", createdCompany);
+    return createdCompany;
+  } catch (error) {
+    console.error("Error in ensureTechlinxCompanyExists:", error);
+    throw error;
+  }
+};
+
+/**
+ * Assigns a consultant to the Techlinx company
+ * @param consultantId The ID of the consultant user
+ * @param companyId The ID of the Techlinx company
+ */
+export const assignConsultantToTechlinx = async (consultantId: string, companyId: string) => {
+  try {
+    console.log(`Assigning consultant ${consultantId} to Techlinx company ${companyId}...`);
+    
+    // Update the user's company ID
+    const { error } = await supabase
+      .from("profiles")
+      .update({ company_id: companyId })
+      .eq("id", consultantId);
+    
+    if (error) {
+      console.error("Error assigning consultant to Techlinx:", error);
+      throw error;
+    }
+    
+    console.log("Successfully assigned consultant to Techlinx");
+  } catch (error) {
+    console.error("Error in assignConsultantToTechlinx:", error);
+    throw error;
+  }
+};
+
+/**
+ * Creates sample content for the Techlinx company
+ * @param companyId The ID of the Techlinx company
+ * @param userId The ID of the user creating the content
+ */
+export const createTechlinxSampleContent = async (companyId: string, userId: string) => {
+  try {
+    console.log(`Creating sample content for Techlinx company ${companyId}...`);
+    
+    // Check if sample content already exists
+    const { data: existingCases } = await supabase
+      .from("cases")
+      .select("*")
+      .eq("company_id", companyId)
+      .limit(1);
+    
+    if (existingCases && existingCases.length > 0) {
+      console.log("Sample content already exists for Techlinx");
+      return;
+    }
+    
+    // Create sample cases
+    const sampleCases = [
+      {
+        title: "Configure SSO for our domain",
+        description: "We need help setting up Single Sign-On for our company domain",
+        status: "new",
+        priority: "medium",
+        company_id: companyId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        title: "Dashboard showing stale data",
+        description: "Our analytics dashboard appears to be showing data from last week",
+        status: "ongoing",
+        priority: "high",
+        company_id: companyId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        title: "Need to add new team member",
+        description: "We have a new employee starting next week who needs access to the platform",
+        status: "resolved",
+        priority: "low",
+        company_id: companyId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    
+    const { error } = await supabase
+      .from("cases")
+      .insert(sampleCases);
+    
+    if (error) {
+      console.error("Error creating sample cases:", error);
+      throw error;
+    }
+    
+    console.log("Successfully created sample content for Techlinx");
+  } catch (error) {
+    console.error("Error in createTechlinxSampleContent:", error);
+    throw error;
+  }
+};
+
 /**
  * Detects potential auth loops by tracking login attempts
  * @returns true if an auth loop is detected
@@ -33,13 +193,13 @@ export const detectAuthLoops = (): boolean => {
  * Checks if the current auth token might be stale
  * @returns true if the token might be stale
  */
-export const isTokenPotentiallyStale = (): boolean => {
+export const isTokenPotentiallyStale = async (): Promise<boolean> => {
   try {
-    const { data } = supabase.auth.getSession();
-    if (!data.session) return false;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) return false;
     
     // If the token expires in less than 10 minutes, consider it stale
-    const expiresAt = data.session.expires_at;
+    const expiresAt = sessionData.session.expires_at;
     if (!expiresAt) return false;
     
     const expirationDate = new Date(expiresAt * 1000);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +22,30 @@ import {
   performFullAuthRecovery, 
   emergencyAuthReset 
 } from '@/utils/authRecovery';
+
+/**
+ * Records a successful authentication
+ */
+const recordSuccessfulAuth = () => {
+  try {
+    // Reset any error counters
+    localStorage.setItem('auth-error-count', '0');
+    
+    // Record successful login timestamp
+    const successfulLogins = JSON.parse(localStorage.getItem('successful-logins') || '[]');
+    successfulLogins.push(Date.now());
+    
+    // Keep only recent logins (last 10)
+    if (successfulLogins.length > 10) {
+      successfulLogins.splice(0, successfulLogins.length - 10);
+    }
+    
+    localStorage.setItem('successful-logins', JSON.stringify(successfulLogins));
+    console.log('Successful authentication recorded');
+  } catch (error) {
+    console.error('Error recording successful auth:', error);
+  }
+};
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');
