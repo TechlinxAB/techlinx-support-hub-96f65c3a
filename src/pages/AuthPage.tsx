@@ -1,24 +1,28 @@
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from '@/components/ui/use-toast';
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   clearAuthState, 
   isCircuitBreakerActive, 
-  resetCircuitBreaker,
+  resetCircuitBreaker 
+} from '@/integrations/supabase/client';
+import { 
   detectAuthLoops,
   isTokenPotentiallyStale,
-  recordSuccessfulAuth
-} from '@/integrations/supabase/client';
-import { performFullAuthRecovery, emergencyAuthReset } from '@/utils/authRecovery';
+  performFullAuthRecovery, 
+  emergencyAuthReset 
+} from '@/utils/authRecovery';
 
 const AuthPage = () => {
   const [email, setEmail] = useState<string>('');

@@ -1,289 +1,359 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Company } from "@/context/AppContext";
 
 /**
- * Constants for Techlinx test company
+ * Detects potential auth loops by tracking login attempts
+ * @returns true if an auth loop is detected
  */
-export const TECHLINX_NAME = "Techlinx";
-export const TECHLINX_LOGO = "https://i.imgur.com/XqpQbMQ.png"; // Placeholder logo URL
-
-/**
- * Ensures the Techlinx test company exists in the database
- * @returns The Techlinx company object or null if creation failed
- */
-export const ensureTechlinxCompanyExists = async (): Promise<Company | null> => {
+export const detectAuthLoops = (): boolean => {
   try {
-    // Check if Techlinx already exists
-    const { data: existingCompanies, error: fetchError } = await supabase
-      .from('companies')
-      .select('*')
-      .eq('name', TECHLINX_NAME);
+    // Get current time
+    const now = Date.now();
     
-    if (fetchError) {
-      console.error("Error fetching Techlinx company:", fetchError.message);
-      return null;
-    }
+    // Get auth attempts from session storage
+    const authAttempts = JSON.parse(sessionStorage.getItem('authAttempts') || '[]');
     
-    // If Techlinx already exists, return it
-    if (existingCompanies && existingCompanies.length > 0) {
-      return {
-        id: existingCompanies[0].id,
-        name: existingCompanies[0].name,
-        logo: existingCompanies[0].logo,
-        createdAt: new Date(existingCompanies[0].created_at) // Add createdAt property
-      };
-    }
+    // Add current attempt
+    authAttempts.push(now);
     
-    // Create Techlinx company if it doesn't exist
-    const { data: newCompany, error: createError } = await supabase
-      .from('companies')
-      .insert({
-        name: TECHLINX_NAME,
-        logo: TECHLINX_LOGO
-      })
-      .select()
-      .single();
+    // Keep only attempts from the last minute
+    const recentAttempts = authAttempts.filter((time: number) => now - time < 60000);
     
-    if (createError) {
-      console.error("Error creating Techlinx company:", createError.message);
-      return null;
-    }
+    // Store updated attempts
+    sessionStorage.setItem('authAttempts', JSON.stringify(recentAttempts));
     
-    return {
-      id: newCompany.id,
-      name: newCompany.name,
-      logo: newCompany.logo,
-      createdAt: new Date(newCompany.created_at) // Add createdAt property
-    };
+    // If there are more than 5 attempts in the last minute, it's probably a loop
+    return recentAttempts.length > 5;
   } catch (error) {
-    console.error("Unexpected error ensuring Techlinx exists:", error);
-    return null;
-  }
-};
-
-/**
- * Assigns a consultant user to the Techlinx company
- * @param userId The ID of the consultant user to assign
- * @param techlinxCompanyId The ID of the Techlinx company
- * @returns True if successful, false otherwise
- */
-export const assignConsultantToTechlinx = async (userId: string, techlinxCompanyId: string): Promise<boolean> => {
-  try {
-    // Update the user's company_id to Techlinx
-    const { error } = await supabase
-      .from('profiles')
-      .update({ company_id: techlinxCompanyId })
-      .eq('id', userId)
-      .eq('role', 'consultant');
-    
-    if (error) {
-      console.error("Error assigning consultant to Techlinx:", error.message);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("Unexpected error assigning consultant to Techlinx:", error);
+    console.error('Error detecting auth loops:', error);
     return false;
   }
 };
 
 /**
- * Creates sample content for the Techlinx test company
- * @param techlinxCompanyId The ID of the Techlinx company
- * @param createdBy The ID of the user creating the sample content
+ * Checks if the current auth token might be stale
+ * @returns true if the token might be stale
  */
-export const createTechlinxSampleContent = async (techlinxCompanyId: string, createdBy: string): Promise<void> => {
+export const isTokenPotentiallyStale = (): boolean => {
   try {
-    // Check if dashboard blocks already exist for Techlinx
-    const { data: existingBlocks } = await supabase
-      .from('dashboard_blocks')
-      .select('*')
-      .eq('company_id', techlinxCompanyId);
+    const { data } = supabase.auth.getSession();
+    if (!data.session) return false;
     
-    // Only create sample blocks if none exist
-    if (!existingBlocks || existingBlocks.length === 0) {
-      // Create some sample dashboard blocks
-      await supabase
-        .from('dashboard_blocks')
-        .insert([
-          {
-            company_id: techlinxCompanyId,
-            title: 'Welcome to Techlinx Test Zone',
-            content: JSON.stringify({
-              text: 'This is a test environment for consultants to try out features safely.'
-            }),
-            type: 'welcome',
-            position: 0,
-            created_by: createdBy
-          },
-          {
-            company_id: techlinxCompanyId,
-            title: 'Test Dashboard Block',
-            content: JSON.stringify({
-              text: 'This is a sample dashboard block you can experiment with.'
-            }),
-            type: 'text',
-            position: 1,
-            created_by: createdBy
-          }
-        ]);
-    }
-
-    // Check if news blocks already exist for Techlinx
-    const { data: existingNews } = await supabase
-      .from('company_news_blocks')
-      .select('*')
-      .eq('company_id', techlinxCompanyId);
+    // If the token expires in less than 10 minutes, consider it stale
+    const expiresAt = data.session.expires_at;
+    if (!expiresAt) return false;
     
-    // Only create sample news if none exist
-    if (!existingNews || existingNews.length === 0) {
-      // Create some sample news blocks
-      await supabase
-        .from('company_news_blocks')
-        .insert([
-          {
-            company_id: techlinxCompanyId,
-            title: 'Welcome to Techlinx News',
-            content: JSON.stringify({
-              text: 'This is the test news section where you can try creating and publishing company news.'
-            }),
-            type: 'text',
-            position: 0,
-            created_by: createdBy,
-            is_published: true
-          }
-        ]);
-    }
+    const expirationDate = new Date(expiresAt * 1000);
+    const now = new Date();
+    
+    // If token expires in less than 10 minutes, it's considered stale
+    return (expirationDate.getTime() - now.getTime()) < 600000;
   } catch (error) {
-    console.error("Error creating sample content for Techlinx:", error);
+    console.error('Error checking token staleness:', error);
+    return false;
   }
 };
 
 /**
- * Checks if a company is the protected Techlinx test company
- * @param companyName The name of the company to check
- * @returns True if the company is Techlinx, false otherwise
+ * Activates the circuit breaker to temporarily disable auth checks
+ * @param minutes Number of minutes to disable auth checks
+ * @param reason Reason for activation
  */
-export const isTechlinxCompany = (companyName: string): boolean => {
-  return companyName === TECHLINX_NAME;
-};
-
-/**
- * Retrieves the Techlinx company object
- * @returns The Techlinx company object
- */
-export const getTechlinxCompany = async (): Promise<Company> => {
-  // Check if Techlinx already exists
-  const { data: companyData, error: fetchError } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('name', TECHLINX_NAME);
+export const activateCircuitBreaker = (minutes: number = 5, reason: string = 'Unknown'): void => {
+  console.warn(`Activating auth circuit breaker for ${minutes} minutes. Reason: ${reason}`);
   
-  if (fetchError) {
-    console.error("Error fetching Techlinx company:", fetchError.message);
-    return {
-      id: 'techlinx-test',
-      name: 'Techlinx Test',
-      logo: '/placeholder.svg',
-      createdAt: new Date()
-    };
-  }
-  
-  // If Techlinx already exists, return it
-  if (companyData && companyData.length > 0) {
-    return {
-      id: companyData[0].id,
-      name: companyData[0].name,
-      logo: companyData[0].logo,
-      createdAt: new Date(companyData[0].created_at)
-    };
-  }
-  
-  // Create Techlinx company if it doesn't exist
-  const { data: newCompany, error: createError } = await supabase
-    .from('companies')
-    .insert({
-      name: TECHLINX_NAME,
-      logo: TECHLINX_LOGO
-    })
-    .select()
-    .single();
-  
-  if (createError) {
-    console.error("Error creating Techlinx company:", createError.message);
-    return {
-      id: 'techlinx-test',
-      name: 'Techlinx Test',
-      logo: '/placeholder.svg',
-      createdAt: new Date()
-    };
-  }
-  
-  return {
-    id: newCompany.id,
-    name: newCompany.name,
-    logo: newCompany.logo,
-    createdAt: new Date(newCompany.created_at)
+  const expiryTime = Date.now() + (minutes * 60 * 1000);
+  const circuitBreakerData = {
+    active: true,
+    expiry: expiryTime,
+    reason: reason,
+    activated: Date.now()
   };
+  
+  localStorage.setItem('auth-circuit-breaker', JSON.stringify(circuitBreakerData));
 };
 
 /**
- * Retrieves the test company object
- * @returns The test company object
+ * Check if the circuit breaker is active
  */
-export const getTestCompanyObject = async (): Promise<Company> => {
-  // Check if Techlinx already exists
-  const { data: companyData, error: fetchError } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('name', TECHLINX_NAME);
+export const isCircuitBreakerActive = (): { 
+  active: boolean; 
+  reason?: string; 
+  remainingSeconds?: number;
+} => {
+  const circuitBreakerJson = localStorage.getItem('auth-circuit-breaker');
   
-  if (fetchError) {
-    console.error("Error fetching Techlinx company:", fetchError.message);
-    return {
-      id: 'techlinx-test',
-      name: 'Techlinx Test',
-      logo: '/placeholder.svg',
-      createdAt: new Date()
-    };
+  if (!circuitBreakerJson) {
+    return { active: false };
   }
   
-  // If Techlinx already exists, return it
-  if (companyData && companyData.length > 0) {
-    return {
-      id: companyData[0].id,
-      name: companyData[0].name,
-      logo: companyData[0].logo,
-      createdAt: new Date(companyData[0].created_at)
-    };
+  try {
+    const circuitBreaker = JSON.parse(circuitBreakerJson);
+    const now = Date.now();
+    
+    // Check if the circuit breaker is still active
+    if (circuitBreaker.expiry > now) {
+      const remainingSeconds = Math.floor((circuitBreaker.expiry - now) / 1000);
+      return { 
+        active: true, 
+        reason: circuitBreaker.reason,
+        remainingSeconds
+      };
+    } else {
+      // Clear expired circuit breaker
+      localStorage.removeItem('auth-circuit-breaker');
+      return { active: false };
+    }
+  } catch (e) {
+    // If there's an error parsing the circuit breaker data, reset it
+    localStorage.removeItem('auth-circuit-breaker');
+    return { active: false };
+  }
+};
+
+/**
+ * Reset the circuit breaker
+ */
+export const resetCircuitBreaker = (): void => {
+  localStorage.removeItem('auth-circuit-breaker');
+  console.info('🔓 Circuit breaker reset');
+};
+
+/**
+ * Track authentication errors
+ * Returns the current error count
+ */
+export const trackAuthError = (): number => {
+  const currentCount = parseInt(localStorage.getItem('auth-error-count') || '0', 10);
+  const newCount = currentCount + 1;
+  localStorage.setItem('auth-error-count', newCount.toString());
+  
+  return newCount;
+};
+
+/**
+ * Reset the auth error counter
+ */
+export const resetAuthErrorCount = (): void => {
+  localStorage.setItem('auth-error-count', '0');
+};
+
+/**
+ * Full auth recovery - performs a complete reset of auth state
+ */
+export const performFullAuthRecovery = async (): Promise<void> => {
+  try {
+    console.log('Performing full auth recovery...');
+    
+    // Sign out from Supabase
+    await supabase.auth.signOut({ scope: 'global' });
+    
+    // Reset error counter and circuit breaker
+    resetAuthErrorCount();
+    resetCircuitBreaker();
+    
+    // Clear auth-related storage items
+    localStorage.removeItem('auth-token-version');
+    localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+    
+    // Clear session storage items
+    sessionStorage.removeItem('authAttempts');
+    sessionStorage.removeItem('authDetectionPaused');
+    
+    console.log('Auth recovery completed successfully');
+  } catch (error) {
+    console.error('Failed to perform auth recovery:', error);
+    throw error;
+  }
+};
+
+/**
+ * Emergency auth reset - nuclear option that clears all storage
+ */
+export const emergencyAuthReset = (): void => {
+  try {
+    console.warn('Performing emergency auth reset (clearing all storage)');
+    
+    // Clear all of localStorage (except critical items)
+    const itemsToPreserve = ['theme', 'color-mode'];
+    const preservedItems: Record<string, string> = {};
+    
+    // Save items we want to keep
+    itemsToPreserve.forEach(key => {
+      const value = localStorage.getItem(key);
+      if (value) preservedItems[key] = value;
+    });
+    
+    // Clear storage
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Restore preserved items
+    Object.entries(preservedItems).forEach(([key, value]) => {
+      localStorage.setItem(key, value);
+    });
+    
+    console.log('Emergency auth reset completed');
+    
+    // Reload page to ensure clean state
+    window.location.reload();
+  } catch (error) {
+    console.error('Failed to perform emergency reset:', error);
+    throw error;
+  }
+};
+
+/**
+ * Initialize pause/unpause detection
+ */
+export const initPauseUnpauseDetection = (): void => {
+  // Only run in browser environment
+  if (typeof window === 'undefined') return;
+
+  let lastActivity = Date.now();
+  let wasHidden = false;
+  
+  // Handle document visibility changes (tab switching, etc)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      wasHidden = true;
+      lastActivity = Date.now();
+    } else if (wasHidden) {
+      const now = Date.now();
+      const timeDiff = now - lastActivity;
+      
+      // If hidden for more than 30 seconds, mark as paused
+      if (timeDiff > 30000) {
+        localStorage.setItem('pause_detected', 'true');
+        console.log(`App was in background for ${Math.round(timeDiff / 1000)}s, marking as paused`);
+      }
+      
+      wasHidden = false;
+    }
+  });
+  
+  // Also track page focus/blur events
+  window.addEventListener('blur', () => {
+    wasHidden = true;
+    lastActivity = Date.now();
+  });
+  
+  window.addEventListener('focus', () => {
+    if (wasHidden) {
+      const now = Date.now();
+      const timeDiff = now - lastActivity;
+      
+      // If hidden for more than 30 seconds, mark as paused
+      if (timeDiff > 30000) {
+        localStorage.setItem('pause_detected', 'true');
+        console.log(`App was unfocused for ${Math.round(timeDiff / 1000)}s, marking as paused`);
+      }
+      
+      wasHidden = false;
+    }
+  });
+};
+
+/**
+ * Checks if a pause was detected
+ */
+export const wasPauseDetected = (): boolean => {
+  return localStorage.getItem('pause_detected') === 'true';
+};
+
+/**
+ * Clears the pause detected flag
+ */
+export const clearPauseDetected = (): void => {
+  localStorage.removeItem('pause_detected');
+};
+
+/**
+ * Set force bypass mode to skip auth checks
+ * @param durationMs optional duration in ms (defaults to 4 hours)
+ */
+export const setForceBypass = (durationMs: number = 14400000): void => {
+  const expiresAt = Date.now() + durationMs;
+  localStorage.setItem('force_bypass', expiresAt.toString());
+};
+
+/**
+ * Check if force bypass mode is active
+ */
+export const isForceBypassActive = (): boolean => {
+  const bypass = localStorage.getItem('force_bypass');
+  if (!bypass) return false;
+  
+  const expiresAt = parseInt(bypass, 10);
+  const now = Date.now();
+  
+  // If expired, clear it
+  if (now > expiresAt) {
+    localStorage.removeItem('force_bypass');
+    return false;
   }
   
-  // Create Techlinx company if it doesn't exist
-  const { data: newCompany, error: createError } = await supabase
-    .from('companies')
-    .insert({
-      name: TECHLINX_NAME,
-      logo: TECHLINX_LOGO
-    })
-    .select()
-    .single();
-  
-  if (createError) {
-    console.error("Error creating Techlinx company:", createError.message);
-    return {
-      id: 'techlinx-test',
-      name: 'Techlinx Test',
-      logo: '/placeholder.svg',
-      createdAt: new Date()
-    };
-  }
-  
-  return {
-    id: newCompany.id,
-    name: newCompany.name,
-    logo: newCompany.logo,
-    createdAt: new Date(newCompany.created_at)
-  };
+  return true;
+};
+
+/**
+ * Pauses auth detection temporarily
+ */
+export const pauseAuthDetection = (): void => {
+  sessionStorage.setItem('authDetectionPaused', 'true');
+};
+
+/**
+ * Unpauses auth detection
+ */
+export const unpauseAuthDetection = (): void => {
+  sessionStorage.removeItem('authDetectionPaused');
+};
+
+/**
+ * Checks if auth detection is currently paused
+ * @returns true if auth detection is paused
+ */
+export const isAuthDetectionPaused = (): boolean => {
+  return sessionStorage.getItem('authDetectionPaused') === 'true';
+};
+
+/**
+ * Keep track of recovery attempts to prevent loops
+ */
+const RECOVERY_ATTEMPTS_KEY = 'auth_recovery_attempts';
+
+/**
+ * Check if too many recovery attempts have been made
+ */
+export const hasTooManyRecoveryAttempts = (): boolean => {
+  const attempts = parseInt(localStorage.getItem(RECOVERY_ATTEMPTS_KEY) || '0', 10);
+  return attempts >= 3;
+};
+
+/**
+ * Increment recovery attempts counter
+ */
+export const incrementRecoveryAttempts = (): number => {
+  const attempts = parseInt(localStorage.getItem(RECOVERY_ATTEMPTS_KEY) || '0', 10);
+  const newAttempts = attempts + 1;
+  localStorage.setItem(RECOVERY_ATTEMPTS_KEY, newAttempts.toString());
+  return newAttempts;
+};
+
+/**
+ * Reset recovery attempts counter
+ */
+export const resetRecoveryAttempts = (): void => {
+  localStorage.setItem(RECOVERY_ATTEMPTS_KEY, '0');
+};
+
+/**
+ * Resets all auth recovery state
+ */
+export const resetAuthRecovery = (): void => {
+  sessionStorage.removeItem('authAttempts');
+  sessionStorage.removeItem('authDetectionPaused');
+  localStorage.removeItem('pause_detected');
+  localStorage.removeItem('force_bypass');
+  localStorage.removeItem(RECOVERY_ATTEMPTS_KEY);
 };
