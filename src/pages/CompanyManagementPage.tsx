@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { 
   Table, 
@@ -34,11 +34,14 @@ import {
   Pencil, 
   Trash2, 
   Plus,
-  Settings
+  Settings,
+  AlertCircle
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const CompanyManagementPage = () => {
   const { companies, currentUser, addCompany, updateCompany, deleteCompany } = useAppContext();
@@ -48,6 +51,8 @@ const CompanyManagementPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasRelatedData, setHasRelatedData] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Form state
@@ -83,9 +88,85 @@ const CompanyManagementPage = () => {
     setIsDialogOpen(true);
   };
 
-  const handleConfirmDelete = (companyId: string) => {
+  const checkCompanyDependencies = async (companyId: string) => {
+    try {
+      // Check for news blocks
+      const { data: newsBlocks, error: newsError } = await supabase
+        .from('company_news_blocks')
+        .select('id')
+        .eq('company_id', companyId)
+        .limit(1);
+      
+      if (newsError) throw newsError;
+      
+      // Check for users
+      const { data: users, error: usersError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('company_id', companyId)
+        .limit(1);
+      
+      if (usersError) throw usersError;
+      
+      // Check for cases
+      const { data: cases, error: casesError } = await supabase
+        .from('cases')
+        .select('id')
+        .eq('company_id', companyId)
+        .limit(1);
+      
+      if (casesError) throw casesError;
+      
+      // Check for other dependencies here...
+      
+      // If any dependencies exist, set the flag and error message
+      const hasNewsBlocks = newsBlocks && newsBlocks.length > 0;
+      const hasUsers = users && users.length > 0;
+      const hasCases = cases && cases.length > 0;
+      
+      const hasDependencies = hasNewsBlocks || hasUsers || hasCases;
+      setHasRelatedData(hasDependencies);
+      
+      if (hasDependencies) {
+        let message = "Cannot delete company because it has:";
+        if (hasNewsBlocks) message += " news content,";
+        if (hasUsers) message += " associated users,";
+        if (hasCases) message += " active cases,";
+        
+        // Remove the trailing comma and add period
+        message = message.slice(0, -1) + ".";
+        message += " Please remove these dependencies first or contact support.";
+        
+        setErrorMessage(message);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Error checking company dependencies:", error);
+      setErrorMessage("An error occurred while checking company dependencies. Please try again later.");
+      return true;
+    }
+  };
+
+  const handleConfirmDelete = async (companyId: string) => {
     setCompanyToDelete(companyId);
-    setIsDeleteDialogOpen(true);
+    setLoading(true);
+    setErrorMessage(null);
+    
+    try {
+      const hasDependencies = await checkCompanyDependencies(companyId);
+      
+      if (!hasDependencies) {
+        setErrorMessage(null);
+      }
+    } catch (error) {
+      console.error("Error in delete confirmation:", error);
+      setErrorMessage("Failed to check company dependencies. Please try again.");
+    } finally {
+      setLoading(false);
+      setIsDeleteDialogOpen(true);
+    }
   };
   
   const handleDeleteCompany = async () => {
@@ -93,13 +174,33 @@ const CompanyManagementPage = () => {
     
     setLoading(true);
     try {
-      await deleteCompany(companyToDelete);
-    } catch (error) {
+      // If there are no dependencies, proceed with deletion
+      if (!hasRelatedData) {
+        await deleteCompany(companyToDelete);
+        toast.success("Company deleted successfully");
+      } else {
+        toast.error(errorMessage || "Cannot delete company with dependencies");
+      }
+    } catch (error: any) {
       console.error('Error deleting company:', error);
+      let errorMsg = "Failed to delete company";
+      
+      // Extract more detailed error message if available
+      if (error.message) {
+        errorMsg += `: ${error.message}`;
+      }
+      
+      if (error.details) {
+        setErrorMessage(error.details);
+      }
+      
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
       setIsDeleteDialogOpen(false);
       setCompanyToDelete(null);
+      setHasRelatedData(false);
+      setErrorMessage(null);
     }
   };
   
@@ -113,16 +214,19 @@ const CompanyManagementPage = () => {
           name,
           logo: logo || undefined
         });
+        toast.success("Company created successfully");
       } else if (dialogMode === 'edit' && selectedCompany) {
         await updateCompany(selectedCompany, {
           name,
           logo: logo || undefined
         });
+        toast.success("Company updated successfully");
       }
       
       setIsDialogOpen(false);
     } catch (error) {
       console.error('Error submitting form:', error);
+      toast.error("Error saving company information");
     } finally {
       setLoading(false);
     }
@@ -238,21 +342,35 @@ const CompanyManagementPage = () => {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {hasRelatedData ? (
+                <div className="flex items-center text-red-600">
+                  <AlertCircle className="h-5 w-5 mr-2" />
+                  Cannot Delete Company
+                </div>
+              ) : "Are you absolutely sure?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the company
-              and may affect users associated with this company.
+              {hasRelatedData ? (
+                <div className="text-red-600">
+                  {errorMessage || "This company has related data that prevents deletion."}
+                </div>
+              ) : (
+                "This action cannot be undone. This will permanently delete the company and may affect users associated with this company."
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteCompany}
-              disabled={loading}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {loading ? 'Deleting...' : 'Delete Company'}
-            </AlertDialogAction>
+            {!hasRelatedData && (
+              <AlertDialogAction 
+                onClick={handleDeleteCompany}
+                disabled={loading || hasRelatedData}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {loading ? 'Deleting...' : 'Delete Company'}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { UserProfile } from './AuthContext';
@@ -120,7 +119,7 @@ type AppContextType = {
   companies: Company[];
   addCompany: (data: Partial<Company>) => Promise<Company | null>;
   updateCompany: (id: string, data: Partial<Company>) => Promise<Company | null>;
-  deleteCompany: (id: string) => Promise<boolean>;
+  deleteCompany: (companyId: string) => Promise<boolean>;
   refetchCompanies: () => Promise<Company[]>;
   
   // Users
@@ -405,25 +404,40 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   // Implementation for deleting a company
-  const deleteCompany = async (id: string): Promise<boolean> => {
+  const deleteCompany = async (companyId: string) => {
     try {
+      // First try to delete any related data that doesn't have cascading deletes
+      // You may need to implement a more comprehensive deletion approach
+      // in a production environment
+
+      // Then delete the company
       const { error } = await supabase
         .from('companies')
         .delete()
-        .eq('id', id);
-      
+        .eq('id', companyId);
+
       if (error) {
-        console.error("Error deleting company:", error);
-        toast.error("Failed to delete company");
-        return false;
+        console.error('Error deleting company:', error);
+        
+        // Handle foreign key constraint error
+        if (error.code === '23503') {
+          throw new Error(
+            'This company has dependent records. Please delete all related data first.'
+          );
+        }
+        
+        throw error;
       }
-      
-      await refetchCompanies();
+
+      // Update local state
+      setCompanies(prevCompanies => 
+        prevCompanies.filter(company => company.id !== companyId)
+      );
+
       return true;
     } catch (error) {
-      console.error("Error in deleteCompany:", error);
-      toast.error("Failed to delete company");
-      return false;
+      console.error('Error in deleteCompany:', error);
+      throw error;
     }
   };
   
