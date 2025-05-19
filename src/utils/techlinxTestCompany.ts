@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 // Techlinx test company name constant
-export const TECHLINX_NAME = "Techlinx Solutions";
+export const TECHLINX_NAME = "Techlinx Internal";
 
 // Track last check time to prevent frequent checks
 let lastTechlinxCheckTime = 0;
@@ -277,7 +277,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
     if (!existingBlocks || existingBlocks.length === 0) {
       const welcomeBlock = {
         company_id: companyId,
-        title: "Welcome to Techlinx Solutions",
+        title: "Welcome to Techlinx Internal",
         type: "welcome",
         position: 0,
         content: JSON.stringify({
