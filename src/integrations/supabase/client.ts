@@ -17,7 +17,90 @@ export const SUCCESSFUL_AUTH_KEY = 'last-successful-auth';
 
 // Set a version for the current auth implementation
 // Increment this when making changes to auth logic
-export const CURRENT_AUTH_VERSION = '1.2.1';
+export const CURRENT_AUTH_VERSION = '1.2.2';
+
+// Function to check if circuit breaker is active with details
+export const isCircuitBreakerActive = (): { active: boolean, reason?: string, remainingSeconds?: number } => {
+  try {
+    // Check if we recently had a successful auth - if so, don't activate circuit breaker
+    const lastSuccessfulAuth = parseInt(localStorage.getItem(SUCCESSFUL_AUTH_KEY) || '0', 10);
+    const now = Date.now();
+    
+    // If we've had a successful auth in the last 30 seconds, bypass circuit breaker
+    if (lastSuccessfulAuth > 0 && (now - lastSuccessfulAuth < 30000)) {
+      resetCircuitBreaker(); // Auto-reset circuit breaker on recent successful auth
+      return { active: false };
+    }
+    
+    const circuitBreakerData = localStorage.getItem(CIRCUIT_BREAKER_KEY);
+    if (!circuitBreakerData) return { active: false };
+    
+    try {
+      const { expiry, reason } = JSON.parse(circuitBreakerData);
+      
+      if (now < expiry) {
+        const remainingSeconds = Math.round((expiry - now) / 1000);
+        return { 
+          active: true,
+          reason,
+          remainingSeconds
+        };
+      }
+      
+      // Auto-reset if expired
+      resetCircuitBreaker();
+      return { active: false };
+    } catch (e) {
+      // If JSON parse fails, assume it's the old format
+      const expiryTime = parseInt(circuitBreakerData, 10);
+      if (Date.now() < expiryTime) {
+        return { 
+          active: true,
+          reason: "Legacy circuit breaker format",
+          remainingSeconds: Math.round((expiryTime - Date.now()) / 1000)
+        };
+      }
+      resetCircuitBreaker();
+      return { active: false };
+    }
+  } catch (e) {
+    console.error("Failed to check circuit breaker", e);
+    return { active: false };
+  }
+};
+
+// Reset the circuit breaker
+export const resetCircuitBreaker = (): void => {
+  try {
+    localStorage.removeItem(CIRCUIT_BREAKER_KEY);
+    console.log("🔓 Circuit breaker reset");
+  } catch (e) {
+    console.error("Failed to reset circuit breaker", e);
+  }
+};
+
+// Reset the error counter
+export const resetAuthErrorCount = (): void => {
+  try {
+    localStorage.removeItem(AUTH_ERROR_KEY);
+    console.log("✅ Auth error count reset");
+  } catch (e) {
+    // Silent fail
+  }
+};
+
+// Function to detect and reset authentication errors
+export const trackAuthError = (): number => {
+  try {
+    const currentCount = parseInt(localStorage.getItem(AUTH_ERROR_KEY) || '0', 10);
+    const newCount = currentCount + 1;
+    localStorage.setItem(AUTH_ERROR_KEY, newCount.toString());
+    console.log(`⚠️ Auth error count: ${newCount}`);
+    return newCount;
+  } catch (e) {
+    return 1; // Default to 1 if we can't access localStorage
+  }
+};
 
 // Create a custom storage object with debugging
 const createStorage = () => {
@@ -102,35 +185,6 @@ const initAuthVersion = () => {
   }
 };
 
-// Call this on application start
-initAuthVersion();
-
-// Create and export the Supabase client with enhanced options
-export const supabase = createClient<Database>(
-  SUPABASE_URL, 
-  SUPABASE_PUBLISHABLE_KEY,
-  {
-    auth: {
-      storage: createStorage(),
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
-      flowType: 'pkce'
-    },
-    global: {
-      fetch: (...args: Parameters<typeof fetch>) => {
-        // Mark the timestamp of the last API request
-        try {
-          localStorage.setItem(SESSION_CHECK_TIMESTAMP, Date.now().toString());
-        } catch (e) {
-          // Ignore errors
-        }
-        return fetch(...args);
-      }
-    }
-  }
-);
-
 // Enhanced function to clear auth state
 export const clearAuthState = async () => {
   try {
@@ -191,104 +245,6 @@ export const isAuthVersionCurrent = (): boolean => {
   }
 };
 
-// Function to detect and reset authentication errors
-export const trackAuthError = (): number => {
-  try {
-    const currentCount = parseInt(localStorage.getItem(AUTH_ERROR_KEY) || '0', 10);
-    const newCount = currentCount + 1;
-    localStorage.setItem(AUTH_ERROR_KEY, newCount.toString());
-    console.log(`⚠️ Auth error count: ${newCount}`);
-    return newCount;
-  } catch (e) {
-    return 1; // Default to 1 if we can't access localStorage
-  }
-};
-
-// Reset the error counter
-export const resetAuthErrorCount = (): void => {
-  try {
-    localStorage.removeItem(AUTH_ERROR_KEY);
-    console.log("✅ Auth error count reset");
-  } catch (e) {
-    // Silent fail
-  }
-};
-
-// Advanced circuit breaker pattern with diagnostic info
-export const activateCircuitBreaker = (timeoutMinutes = 5, reason = "Unknown"): void => {
-  try {
-    const expiryTime = Date.now() + (timeoutMinutes * 60 * 1000);
-    localStorage.setItem(CIRCUIT_BREAKER_KEY, JSON.stringify({
-      expiry: expiryTime,
-      reason: reason,
-      activated: Date.now()
-    }));
-    console.log(`🔒 Circuit breaker activated for ${timeoutMinutes} minutes. Reason: ${reason}`);
-  } catch (e) {
-    console.error("Failed to activate circuit breaker", e);
-  }
-};
-
-// Check if circuit breaker is active with details
-export const isCircuitBreakerActive = (): { active: boolean, reason?: string, remainingSeconds?: number } => {
-  try {
-    // Check if we recently had a successful auth - if so, don't activate circuit breaker
-    const lastSuccessfulAuth = parseInt(localStorage.getItem(SUCCESSFUL_AUTH_KEY) || '0', 10);
-    const now = Date.now();
-    
-    // If we've had a successful auth in the last 30 seconds, bypass circuit breaker
-    if (lastSuccessfulAuth > 0 && (now - lastSuccessfulAuth < 30000)) {
-      resetCircuitBreaker(); // Auto-reset circuit breaker on recent successful auth
-      return { active: false };
-    }
-    
-    const circuitBreakerData = localStorage.getItem(CIRCUIT_BREAKER_KEY);
-    if (!circuitBreakerData) return { active: false };
-    
-    try {
-      const { expiry, reason } = JSON.parse(circuitBreakerData);
-      
-      if (now < expiry) {
-        const remainingSeconds = Math.round((expiry - now) / 1000);
-        return { 
-          active: true,
-          reason,
-          remainingSeconds
-        };
-      }
-      
-      // Auto-reset if expired
-      resetCircuitBreaker();
-      return { active: false };
-    } catch (e) {
-      // If JSON parse fails, assume it's the old format
-      const expiryTime = parseInt(circuitBreakerData, 10);
-      if (Date.now() < expiryTime) {
-        return { 
-          active: true,
-          reason: "Legacy circuit breaker format",
-          remainingSeconds: Math.round((expiryTime - Date.now()) / 1000)
-        };
-      }
-      resetCircuitBreaker();
-      return { active: false };
-    }
-  } catch (e) {
-    console.error("Failed to check circuit breaker", e);
-    return { active: false };
-  }
-};
-
-// Reset the circuit breaker
-export const resetCircuitBreaker = (): void => {
-  try {
-    localStorage.removeItem(CIRCUIT_BREAKER_KEY);
-    console.log("🔓 Circuit breaker reset");
-  } catch (e) {
-    console.error("Failed to reset circuit breaker", e);
-  }
-};
-
 // Detect authentication initialization loops
 export const detectAuthLoops = (): boolean => {
   try {
@@ -336,3 +292,47 @@ export const recordSuccessfulAuth = (): void => {
     // Silent fail
   }
 };
+
+// Advanced circuit breaker pattern with diagnostic info
+export const activateCircuitBreaker = (timeoutMinutes = 5, reason = "Unknown"): void => {
+  try {
+    const expiryTime = Date.now() + (timeoutMinutes * 60 * 1000);
+    localStorage.setItem(CIRCUIT_BREAKER_KEY, JSON.stringify({
+      expiry: expiryTime,
+      reason: reason,
+      activated: Date.now()
+    }));
+    console.log(`🔒 Circuit breaker activated for ${timeoutMinutes} minutes. Reason: ${reason}`);
+  } catch (e) {
+    console.error("Failed to activate circuit breaker", e);
+  }
+};
+
+// Call this on application start - AFTER all functions are defined
+initAuthVersion();
+
+// Create and export the Supabase client with enhanced options
+export const supabase = createClient<Database>(
+  SUPABASE_URL, 
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      storage: createStorage(),
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      flowType: 'pkce'
+    },
+    global: {
+      fetch: (...args: Parameters<typeof fetch>) => {
+        // Mark the timestamp of the last API request
+        try {
+          localStorage.setItem(SESSION_CHECK_TIMESTAMP, Date.now().toString());
+        } catch (e) {
+          // Ignore errors
+        }
+        return fetch(...args);
+      }
+    }
+  }
+);

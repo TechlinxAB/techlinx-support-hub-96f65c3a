@@ -130,7 +130,13 @@ const ProtectedRoute = () => {
   
   // If not authenticated, redirect to login - with location state preserved
   if (!isAuthenticated) {
-    // Clear any potential stale state to ensure fresh authentication attempt
+    // Use a more reliable hard redirect for auth issues
+    if (process.env.NODE_ENV !== 'development') {
+      window.location.href = `/auth?redirect=${encodeURIComponent(location.pathname)}`;
+      return null;
+    }
+    
+    // Use React Router in development
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
   
