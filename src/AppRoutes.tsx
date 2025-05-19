@@ -40,38 +40,40 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-white">
+      <div className="flex min-h-screen bg-white" style={{ backgroundColor: 'white' }}>
         {/* Persistent Sidebar - COMPLETELY outside of animation context */}
         <PersistentSidebar />
 
-        <Routes location={location}>
-          {/* Auth route - doesn't use the main layout */}
-          <Route path="/auth" element={<AuthPage />} />
-          
-          {/* All protected routes */}
-          <Route path="/*" element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }>
-            <Route index element={<Dashboard />} />
-            <Route path="cases" element={<CasesPage />} />
-            <Route path="cases/new" element={<NewCasePage />} />
-            <Route path="cases/:id" element={<CaseDetailPage />} />
-            <Route path="companies" element={<CompaniesPage />} />
-            <Route path="companies/:id" element={<CompaniesPage />} />
-            <Route path="company/:id/settings" element={<CompanySettingsPage />} />
-            <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-            <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-            <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
-            <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-            <Route path="users" element={<UserManagementPage />} />
-            <Route path="company-management" element={<CompanyManagementPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="search" element={<SearchPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+        <div className="bg-white w-full"> {/* Added wrapper with explicit background */}
+          <Routes location={location}>
+            {/* Auth route - doesn't use the main layout */}
+            <Route path="/auth" element={<AuthPage />} />
+            
+            {/* All protected routes */}
+            <Route path="/*" element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Dashboard />} />
+              <Route path="cases" element={<CasesPage />} />
+              <Route path="cases/new" element={<NewCasePage />} />
+              <Route path="cases/:id" element={<CaseDetailPage />} />
+              <Route path="companies" element={<CompaniesPage />} />
+              <Route path="companies/:id" element={<CompaniesPage />} />
+              <Route path="company/:id/settings" element={<CompanySettingsPage />} />
+              <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+              <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+              <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
+              <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
+              <Route path="users" element={<UserManagementPage />} />
+              <Route path="company-management" element={<CompanyManagementPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="search" element={<SearchPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </div>
       </div>
     </SidebarProvider>
   );

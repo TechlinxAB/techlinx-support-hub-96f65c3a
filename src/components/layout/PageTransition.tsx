@@ -22,11 +22,13 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
         position: 'relative',
         width: '100%',
         height: '100%',
-        backgroundColor: 'white',
+        backgroundColor: 'white', // Explicit white background
       }}
-      className={className || "w-full h-full bg-white"}
+      className={`${className || "w-full h-full"} bg-white`} // Adding bg-white class
     >
-      {children}
+      <div className="bg-white w-full h-full"> {/* Additional white wrapper */}
+        {children}
+      </div>
     </motion.div>
   );
 };

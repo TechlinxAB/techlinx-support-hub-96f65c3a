@@ -54,8 +54,8 @@
   opacity: 1 !important;
 }
 
-/* Prevent white flash during transitions */
-html, body, #root {
+/* Prevent white flash during transitions - APPLY TO ALL ELEMENTS */
+html, body, #root, #__next, .root-container {
   height: 100%;
   background-color: white !important;
 }
@@ -89,7 +89,9 @@ html, body, #root {
   }
 }
 
-/* Ensure no green flash during transitions - enforce white backgrounds */
+/* COMPREHENSIVE WHITE BACKGROUND FIXES - HIGH SPECIFICITY RULES */
+
+/* Target ALL elements that could potentially show green during transitions */
 .route-content,
 .main-content,
 .content-area,
@@ -99,12 +101,23 @@ html, body, #root {
 .layout-container,
 .app-container,
 [data-motion],
-[data-framer-motion] {
+[data-framer-motion],
+div[style*="transform"],
+div[style*="opacity"],
+div[style*="transition"],
+main > div,
+main > *,
+.flex-1,
+[role="main"],
+[data-radix-aspect-ratio-wrapper],
+html body #root main,
+main div {
   background-color: white !important;
 }
 
 /* Extra rules to prevent any green flashing */
-.sidebar-container + div {
+.sidebar-container + div,
+.sidebar-container ~ div {
   background-color: white !important;
 }
 
@@ -115,9 +128,31 @@ main,
   background-color: white !important;
 }
 
+/* Critical framer motion targeting */
+[data-framer-component-type],
+[data-framer],
+[data-motion],
+.framer-motion,
+.motion-div,
+[style*="animation"],
+.animated,
+div[style*="transform"] {
+  background-color: white !important;
+  z-index: 1;
+  position: relative;
+}
+
 /* Fix for animations */
 * {
   transform-style: flat;
+  backface-visibility: hidden;
+}
+
+/* Override any transitions that might show green */
+*[class*="transition"],
+*[style*="transition"],
+*[style*="transform"] {
+  background-color: white !important;
 }
 
 /* Dark mode fixes */
@@ -166,6 +201,47 @@ main .container {
 /* Ensuring all transitions have white backgrounds */
 .layout-transition > div,
 .page-transition > div,
-[data-transition-container] > div {
+[data-transition-container] > div,
+div[style*="position: relative"] > div,
+.AnimatePresence > div,
+[data-motion] > div {
+  background-color: white !important;
+}
+
+/* Ensure any loading screens or spinners have white backgrounds */
+div:has(.animate-spin),
+div:has(svg[class*="animate-"]),
+div:has(.loader),
+.loading-wrapper {
+  background-color: white !important;
+}
+
+/* Fix for framer-motion AnimatePresence container and children */
+div:has([initial]),
+div:has([animate]),
+div:has([exit]),
+div:has([transition]) {
+  background-color: white !important;
+}
+
+/* Force white background during transitions */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: white;
+  z-index: -1;
+}
+
+/* Force white background for flex-1 divs which are often main content areas */
+.flex-1, div.flex-1 {
+  background-color: white !important;
+}
+
+/* Ensure outlet containers have white bg */
+div:has(> .outlet) {
   background-color: white !important;
 }
