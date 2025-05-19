@@ -80,10 +80,13 @@ const Layout = () => {
     setForceShow(true);
   };
 
-  // If loading or initial session state, show a loading indicator with explicit white background
+  // If loading or initial session state, show a loading indicator with WHITE background
   if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col bg-white" style={{ backgroundColor: 'white' }}>
+      <div 
+        className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
+        style={{ backgroundColor: 'white' }}
+      >
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="mb-4 text-gray-700">Loading application...</p>
         {isPauseRecovery && (
@@ -126,10 +129,13 @@ const Layout = () => {
     );
   }
 
-  // If no session and not authenticated, show an error state with explicit white background
+  // If no session and not authenticated, show an error state with WHITE background
   if (!session && !isAuthenticated && !loading && !bypassActive && !forceShow) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col bg-white" style={{ backgroundColor: 'white' }}>
+      <div 
+        className="fixed inset-0 flex items-center justify-center min-h-screen flex-col bg-white z-50" 
+        style={{ backgroundColor: 'white' }}
+      >
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
         <div className="flex gap-2">
           <Button 
@@ -163,7 +169,9 @@ const Layout = () => {
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
         style={{ 
           marginLeft: contentMarginLeft,
-          backgroundColor: 'white' // Explicit style
+          backgroundColor: 'white', // Explicit style
+          position: 'relative',
+          zIndex: 1
         }}
       >
         <Header />

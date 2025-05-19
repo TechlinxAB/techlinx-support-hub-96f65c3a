@@ -23,6 +23,7 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
         width: '100%',
         height: '100%',
         backgroundColor: 'white', // Explicit white background
+        zIndex: 1, // Ensure this is above any green elements
       }}
       className={`${className || "w-full h-full"} bg-white`} // Adding bg-white class
     >

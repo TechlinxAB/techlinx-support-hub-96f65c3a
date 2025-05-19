@@ -7,7 +7,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
 import useModalManager from "./hooks/use-modal-manager";
 import ModalReset from "./components/ui/modal-reset";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { initPauseUnpauseDetection } from "./utils/authRecovery";
 import NavigationService from "./services/navigationService";
 
@@ -33,9 +33,25 @@ const ModalManager = ({ children }: { children: React.ReactNode }) => {
 
 // Init App Component to set up pause/unpause detection
 const InitApp = () => {
+  const [appReady, setAppReady] = useState(false);
+  
   useEffect(() => {
     // Initialize pause/unpause detection at the app root level
     initPauseUnpauseDetection();
+    
+    // Add loading class to body initially
+    document.body.classList.add('loading');
+    
+    // Remove loading class after a short delay to ensure white background during initial load
+    const timer = setTimeout(() => {
+      document.body.classList.remove('loading');
+      setAppReady(true);
+    }, 500);
+    
+    return () => {
+      clearTimeout(timer);
+      document.body.classList.remove('loading');
+    };
   }, []);
   
   return null;
@@ -45,18 +61,22 @@ const InitApp = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <AuthProvider>
-        <AppProvider>
-          <TooltipProvider>
-            <ModalManager>
-              <Toaster />
-              <ModalReset />
-              <InitApp />
-              <AppRoutes />
-            </ModalManager>
-          </TooltipProvider>
-        </AppProvider>
-      </AuthProvider>
+      <div className="bg-white w-full h-full" style={{ position: 'relative' }}>
+        <AuthProvider>
+          <AppProvider>
+            <TooltipProvider>
+              <ModalManager>
+                <Toaster />
+                <ModalReset />
+                <InitApp />
+                <div className="bg-white w-full h-full"> {/* Extra white wrapper */}
+                  <AppRoutes />
+                </div>
+              </ModalManager>
+            </TooltipProvider>
+          </AppProvider>
+        </AuthProvider>
+      </div>
     </BrowserRouter>
   </QueryClientProvider>
 );

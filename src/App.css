@@ -245,3 +245,50 @@ body::before {
 div:has(> .outlet) {
   background-color: white !important;
 }
+
+/* NEW FIXES FOR LOADING STATE */
+/* Fix specifically for the PersistentSidebar */
+.sidebar-container {
+  z-index: 40; /* Lower than loading overlay */
+}
+
+/* Global loading overlay */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: white !important;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure the sidebar NEVER shows through during loading */
+body.loading::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-color: white;
+  z-index: 100;
+}
+
+/* Fix for Framer Motion initial/animate states */
+[data-motion="true"],
+.framer-motion-container,
+[data-framer-component-type],
+.AnimatePresence > div {
+  background-color: white !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* Fix for any potential layout issues with the sidebar and main content */
+#root > div {
+  background-color: white !important;
+  position: relative;
+}
+
+/* The sidebar has a specific color that needs to be contained */
+.sidebar-container {
+  isolation: isolate;
+}
