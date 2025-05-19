@@ -23,7 +23,7 @@ import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Slider } from '@/components/ui/slider';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -294,8 +294,7 @@ const CompanyNewsBuilderPage = () => {
         });
       }
       
-      toast({
-        title: `Block ${!isPublished ? 'published' : 'unpublished'}`,
+      toast.success(`Block ${!isPublished ? 'published' : 'unpublished'}`, {
         description: `The block has been ${!isPublished ? 'published' : 'unpublished'}`
       });
       
@@ -304,9 +303,7 @@ const CompanyNewsBuilderPage = () => {
       await refetchCompanyNewsBlocks(true);
     } catch (error: any) {
       console.error('Error toggling publish state:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast.error("Error", {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
