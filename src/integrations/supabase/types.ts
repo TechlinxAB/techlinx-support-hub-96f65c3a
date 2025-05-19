@@ -626,6 +626,10 @@ export type Database = {
         Args: { company_id: string }
         Returns: boolean
       }
+      handle_company_deletion: {
+        Args: { company_id_param: string }
+        Returns: undefined
+      }
       is_consultant: {
         Args: Record<PropertyKey, never>
         Returns: boolean

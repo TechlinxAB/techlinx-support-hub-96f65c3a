@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -122,64 +123,30 @@ const CompaniesPage = () => {
     
     setLoading(true);
     try {
-      // First check for dependencies in company_news_blocks
-      const { data: newsBlocks, error: newsError } = await supabase
-        .from('company_news_blocks')
-        .select('id')
-        .eq('company_id', companyToDelete)
-        .limit(1);
-        
-      if (newsError) throw newsError;
+      // Call the database function to perform cascading delete
+      const { error } = await supabase.rpc('handle_company_deletion', {
+        company_id_param: companyToDelete
+      });
       
-      // Check for users
-      const { data: users, error: usersError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('company_id', companyToDelete)
-        .limit(1);
-        
-      if (usersError) throw usersError;
+      if (error) throw error;
       
-      // Check for cases
-      const { data: cases, error: casesError } = await supabase
-        .from('cases')
-        .select('id')
-        .eq('company_id', companyToDelete)
-        .limit(1);
-        
-      if (casesError) throw casesError;
-      
-      const hasDependencies = 
-        (newsBlocks && newsBlocks.length > 0) || 
-        (users && users.length > 0) ||
-        (cases && cases.length > 0);
-      
-      if (hasDependencies) {
-        let message = "Cannot delete company because it has:";
-        if (newsBlocks && newsBlocks.length > 0) message += " news content,";
-        if (users && users.length > 0) message += " associated users,";
-        if (cases && cases.length > 0) message += " active cases,";
-        
-        // Remove the trailing comma and add period
-        message = message.slice(0, -1) + ".";
-        message += " Please remove these dependencies first.";
-        
-        toast.error(message);
-        return;
-      }
-      
-      // If no dependencies, proceed with deletion
+      // Update local state using the context
       await deleteCompany(companyToDelete);
+      
       setIsDeleteDialogOpen(false);
       setCompanyToDelete(null);
+      
       uiToast({
         title: "Success",
-        description: "Company deleted successfully",
+        description: "Company and all associated data deleted successfully",
       });
+      
+      // Give additional feedback about users
+      toast.success("Users have been detached from the deleted company");
     } catch (error: any) {
       console.error('Error deleting company:', error);
-      let errorMsg = "Failed to delete company";
       
+      let errorMsg = "Failed to delete company";
       if (error.details) {
         errorMsg = `${errorMsg}: ${error.details}`;
       } else if (error.message) {
@@ -429,8 +396,9 @@ const CompaniesPage = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the company
-              and all associated data including users and cases.
+              This will permanently delete the company and all associated data including news content and dashboard blocks.
+              <br /><br />
+              <strong>Note:</strong> Users will be detached from this company but not deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -440,7 +408,7 @@ const CompaniesPage = () => {
               disabled={loading}
               className="bg-red-600 hover:bg-red-700"
             >
-              {loading ? 'Deleting...' : 'Delete Company'}
+              {loading ? 'Deleting...' : 'Delete Company & Associated Data'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
