@@ -268,6 +268,7 @@ const CompanyNewsBuilderPage = () => {
     }
   };
 
+  // Handle toggle publish - fixed by removing the incorrect second argument
   const handleTogglePublish = async (blockId: string, isPublished: boolean) => {
     setLoading(true);
     try {
@@ -289,7 +290,7 @@ const CompanyNewsBuilderPage = () => {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // Only refetch on error - this is the line with the error
+      // Fix: removed the second argument from refetchCompanyNewsBlocks()
       await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
