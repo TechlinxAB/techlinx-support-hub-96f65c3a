@@ -63,7 +63,8 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     }
   }, []);
 
-  const fetchNewsBlocks = useCallback(async (force = false) => {
+  // IMPORTANT: Fixed signature to accept only one optional boolean parameter
+  const fetchNewsBlocks = useCallback(async (force: boolean = false) => {
     if (!companyId) {
       setLoading(false);
       return;
@@ -212,7 +213,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     blocks, 
     loading, 
     error, 
-    refetch: (force = true) => fetchNewsBlocks(force),
+    refetch: fetchNewsBlocks,
     updateLocalBlock,
     lastFetchTime: lastFetchTime.current,
     isCacheValid: cachedData.current && Date.now() - cachedData.current.timestamp < CACHE_TTL

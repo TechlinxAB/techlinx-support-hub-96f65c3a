@@ -290,7 +290,7 @@ const CompanyNewsBuilderPage = () => {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // Fixed: call refetchCompanyNewsBlocks without any arguments
+      // THIS IS THE FIX: No second argument to refetchCompanyNewsBlocks
       await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
