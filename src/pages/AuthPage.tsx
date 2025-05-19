@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, validateTokenIntegrity } from "@/integrations/supabase/client";
@@ -102,7 +101,14 @@ const AuthPage = () => {
       // Clean auth state before checking availability
       await cleanAuthState({ signOut: false, preserveTheme: true });
       
-      setTimeout(checkSupabaseService, 1000);
+      setTimeout(() => probeSupabaseService().then(isAvailable => {
+        if (isAvailable) {
+          setServiceStatus('available');
+          setPauseRecoveryNeeded(false);
+        } else {
+          setServiceStatus('unavailable');
+        }
+      }), 1000);
     } catch (err) {
       console.error("Auto-recovery failed:", err);
     }
@@ -110,7 +116,7 @@ const AuthPage = () => {
   
   // Force clear pause recovery flags if we're on auth page
   useEffect(() => {
-    const checkSupabaseService = async () => {
+    const checkSupabaseServiceStatus = async () => {
       // Prevent hammering the service
       const now = Date.now();
       if (now - lastProbeTime < 2000) {
@@ -145,14 +151,14 @@ const AuthPage = () => {
         // Set up a retry after 3 seconds
         setTimeout(() => {
           if (serviceStatus !== 'available') {
-            checkSupabaseService();
+            checkSupabaseServiceStatus();
           }
         }, 3000);
       }
     };
     
     // Initial check
-    checkSupabaseService();
+    checkSupabaseServiceStatus();
   }, []);
   
   // Add a diagnostics run on page load

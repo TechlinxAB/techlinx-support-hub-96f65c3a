@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   supabase, 
@@ -13,7 +12,8 @@ import {
   STORAGE_KEY,
   validateTokenIntegrity,
   isPauseRecoveryRequired,
-  markPauseRecoveryRequired
+  markPauseRecoveryRequired,
+  clearPauseRecoveryRequired
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
