@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -48,6 +49,8 @@ const ProtectedRoute = () => {
   const [sessionTestResult, setSessionTestResult] = useState<{valid?: boolean; error?: string}>({});
   const [authCheckComplete, setAuthCheckComplete] = useState(false);
   const [redirectStarted, setRedirectStarted] = useState(false);
+  const [recoveryInProgress, setRecoveryInProgress] = useState(false);
+  const [lastRedirectAttempt, setLastRedirectAttempt] = useState(0);
   
   // Check if we need to use force bypass mode (completely skip auth checks)
   const bypassActive = isForceBypassActive();
@@ -63,6 +66,13 @@ const ProtectedRoute = () => {
     if (loading) return;
     
     const loopCheck = () => {
+      // Skip loop detection if we just loaded the page or are in recovery mode
+      if (recoveryInProgress || document.hidden || 
+          new URLSearchParams(window.location.search).get('justLoggedIn') === 'true') {
+        console.log("Skipping auth loop detection - ignoring initial checks or recovery in progress");
+        return;
+      }
+      
       const isLoop = detectAuthLoops();
       if (isLoop) {
         console.warn("Authentication loop detected - taking mitigation actions");
@@ -73,10 +83,10 @@ const ProtectedRoute = () => {
       setAuthLoopDetected(isLoop);
     };
     
-    // Increased from 2s to 3s for more stability and to ensure auth process completes
-    const timer = setTimeout(loopCheck, 3000);
+    // Increased from 3s to 5s for more stability and to allow for auth initialization
+    const timer = setTimeout(loopCheck, 5000);
     return () => clearTimeout(timer);
-  }, [loading]);
+  }, [loading, recoveryInProgress]);
   
   // Reset auth loop detection on navigation changes
   useEffect(() => {
@@ -154,7 +164,7 @@ const ProtectedRoute = () => {
     return () => clearTimeout(timer);
   }, [redirecting, authCheckComplete, session, location.pathname]);
   
-  // Add new effect to handle the updated auth flow with raw token check
+  // Modified: Add debounce to routing logic
   useEffect(() => {
     if (loading) return;
     
@@ -167,10 +177,27 @@ const ProtectedRoute = () => {
     // Only proceed with routing decisions when auth check is complete
     if (!isSessionValid && !bypassActive) {
       console.warn('Invalid session or missing token. Routing to /auth.');
-      if (location.pathname !== '/auth' && !redirectStarted) {
+      
+      // ONLY redirect if the URL doesn't already contain 'recovery' or 'reset'
+      // This prevents redirect loops
+      const isAlreadyInRecovery = window.location.href.includes("recovery") || 
+                                window.location.href.includes("reset") ||
+                                window.location.href.includes("mode=recovery");
+      
+      // Add debounce for redirect attempts with a 3-second cooldown
+      const now = Date.now();
+      const shouldSkipRedirect = (now - lastRedirectAttempt) < 3000;
+      
+      if (location.pathname !== '/auth' && !redirectStarted && !isAlreadyInRecovery && !shouldSkipRedirect) {
+        setLastRedirectAttempt(now);
         setRedirectStarted(true);
         setRedirecting(true);
-        navigate('/auth', { replace: true, state: { from: location.pathname } });
+        
+        // Include state for redirect back
+        navigate('/auth', { 
+          replace: true, 
+          state: { from: location.pathname } 
+        });
       }
       return;
     }
@@ -181,12 +208,21 @@ const ProtectedRoute = () => {
       setRedirecting(true);
       navigate('/', { replace: true });
     }
-  }, [loading, session, location.pathname, navigate, bypassActive, redirectStarted]);
+  }, [loading, session, location.pathname, navigate, bypassActive, redirectStarted, lastRedirectAttempt]);
   
   // Handle recovery action - enhanced for pause recovery
   const handleRecovery = async () => {
     // Check if we're already in recovery mode
     if (isRecovering) return;
+    
+    // Add debounce for recovery attempts
+    const now = Date.now();
+    if ((now - lastRedirectAttempt) < 3000) {
+      console.log("Recovery recently attempted, enforcing cooldown");
+      return;
+    }
+    
+    setLastRedirectAttempt(now);
     
     // Track reset attempts to prevent endless recovery loops
     const newResetCount = resetAttempts + 1;
@@ -201,6 +237,7 @@ const ProtectedRoute = () => {
     }
     
     setIsRecovering(true);
+    setRecoveryInProgress(true);
     
     try {
       // First check if Supabase is available 
@@ -214,11 +251,12 @@ const ProtectedRoute = () => {
       await cleanAuthState({ signOut: true });
       
       setRedirecting(true);
-      // Add a cache-busting parameter
-      window.location.href = '/auth?recovery=' + Date.now();
+      // Add a cache-busting parameter AND recovery mode flag
+      window.location.href = '/auth?recovery=' + Date.now() + '&mode=recovery';
     } catch (err) {
       console.error("Recovery failed:", err);
       setIsRecovering(false);
+      setRecoveryInProgress(false);
       
       if (hasTooManyRecoveryAttempts()) {
         // If we've tried multiple times, activate bypass
@@ -229,9 +267,23 @@ const ProtectedRoute = () => {
     }
   };
   
-  // Handle forcing auth page navigation
+  // Handle forcing auth page navigation with debounce
   const handleNavigateToAuth = () => {
     if (redirectStarted) return; // Prevent duplicate redirects
+    
+    // Check for debounce based on window location
+    if (window.location.href.includes("recovery") || window.location.href.includes("reset")) {
+      console.log("Recovery already in progress, not repeating redirect.");
+      return;
+    }
+    
+    // Add debounce for navigation attempts
+    const now = Date.now();
+    if ((now - lastRedirectAttempt) < 3000) {
+      console.log("Recent navigation attempt, enforcing cooldown");
+      return;
+    }
+    setLastRedirectAttempt(now);
     
     setRedirectStarted(true);
     setRedirecting(true);
@@ -244,9 +296,17 @@ const ProtectedRoute = () => {
     window.location.href = '/auth?redirect=' + encodeURIComponent(location.pathname) + '&t=' + Date.now();
   };
   
-  // Handle force dashboard navigation
+  // Handle force dashboard navigation with debounce
   const handleForceDashboard = () => {
     if (redirectStarted) return; // Prevent duplicate redirects
+    
+    // Add debounce logic
+    const now = Date.now();
+    if ((now - lastRedirectAttempt) < 3000) {
+      console.log("Recent navigation attempt, enforcing cooldown");
+      return;
+    }
+    setLastRedirectAttempt(now);
     
     setRedirectStarted(true);
     setRedirecting(true);
@@ -274,6 +334,7 @@ const ProtectedRoute = () => {
     try {
       console.log("Performing hard auth reset");
       setRedirecting(true);
+      setRecoveryInProgress(true);
       
       // Clear all auth state
       await supabase.auth.signOut({ scope: 'global' });
@@ -296,7 +357,10 @@ const ProtectedRoute = () => {
       clearPauseDetected();
       resetRecoveryAttempts();
       
-      // Add a cache-busting parameter
+      // Add a forced cooldown delay before redirecting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Add a cache-busting parameter and reset flag
       window.location.href = '/auth?reset=' + Date.now();
     } catch (err) {
       console.error("Hard reset failed:", err);
@@ -460,6 +524,19 @@ const ProtectedRoute = () => {
   
   // If definitely not authenticated, redirect to login with cache busting
   if (!loading && !redirecting && authCheckComplete && !redirectStarted) {
+    // Add debounce check
+    const now = Date.now();
+    if ((now - lastRedirectAttempt) < 3000) {
+      console.log("Recent redirect attempt, showing loading instead");
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-sm text-muted-foreground">Preparing login page...</p>
+        </div>
+      );
+    }
+    
+    setLastRedirectAttempt(now);
     setRedirectStarted(true);
     const redirectPath = encodeURIComponent(location.pathname);
     const cacheBuster = Date.now();

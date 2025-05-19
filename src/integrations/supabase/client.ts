@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Create a single supabase client for interacting with your database
@@ -252,6 +251,34 @@ export function validateTokenIntegrity(): boolean {
  * Clear all authentication state
  */
 export async function clearAuthState(): Promise<boolean> {
+  // Check if we're in recovery mode - be more careful about clearing
+  const inRecovery = localStorage.getItem('pause_recovery_active') === 'true' || 
+                    localStorage.getItem('pause_detected') === 'true';
+  
+  // If in recovery and token is still valid, don't aggressively sign out
+  if (inRecovery && validateTokenIntegrity()) {
+    console.log("In recovery mode with valid token, performing gentle reset");
+    
+    // Reset error counter and circuit breaker
+    localStorage.setItem('auth-error-count', '0');
+    localStorage.removeItem('auth-circuit-breaker');
+    
+    // Reset auth version to force re-check on next init
+    localStorage.removeItem('AUTH_VERSION_KEY');
+    
+    // Clear any auth loop detection state
+    sessionStorage.removeItem('authAttempts');
+    
+    console.log('Gentle auth state reset during recovery');
+    return Promise.resolve(true);
+  }
+  
+  // Standard reset for non-recovery scenarios
+  return standardClearAuthState();
+}
+
+// Original clearAuthState renamed to standardClearAuthState
+async function standardClearAuthState(): Promise<boolean> {
   try {
     console.log('Clearing auth state...');
     
@@ -268,15 +295,15 @@ export async function clearAuthState(): Promise<boolean> {
     resetCircuitBreaker();
     
     // Reset auth version to force re-check on next init
-    localStorage.removeItem(AUTH_VERSION_KEY);
+    localStorage.removeItem('AUTH_VERSION_KEY');
     
     // Special handling for auth token
     localStorage.removeItem(STORAGE_KEY);
     
     // Clear pause recovery flags
-    clearPauseRecoveryRequired();
-    localStorage.removeItem(PAUSE_DETECTED_KEY);
-    localStorage.removeItem(PAUSE_RECOVERY_ATTEMPTS_KEY);
+    localStorage.removeItem('pause_recovery_active');
+    localStorage.removeItem('pause_detected');
+    localStorage.removeItem('pause-recovery-attempts');
     
     // Clear any auth loop detection state
     sessionStorage.removeItem('authAttempts');

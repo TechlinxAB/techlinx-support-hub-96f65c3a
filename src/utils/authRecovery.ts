@@ -110,18 +110,23 @@ export const isTokenPotentiallyStale = async (): Promise<boolean> => {
       return true;
     }
     
-    // If the token expires in less than 10 minutes, consider it stale
+    // Modified: More lenient check - only consider tokens stale if they expire in less than 2 minutes
+    // instead of 10 minutes, to avoid unnecessary token refreshes
     const expiresAt = sessionData.session.expires_at;
     if (!expiresAt) return true;
     
     const expirationDate = new Date(expiresAt * 1000);
     const now = new Date();
     
-    // If token expires in less than 10 minutes, it's considered stale
-    const isStale = (expirationDate.getTime() - now.getTime()) < 600000;
+    // If token expires in less than 2 minutes, it's considered stale
+    const isStale = (expirationDate.getTime() - now.getTime()) < 120000; // 2 minutes (reduced from 10)
     
     if (isStale) {
       console.log('Token is stale - expires soon or has expired');
+    } else {
+      // Log remaining time for debugging
+      const remainingMins = Math.floor((expirationDate.getTime() - now.getTime()) / 60000);
+      console.log(`Token valid for ${remainingMins} more minutes`);
     }
     
     return isStale;
@@ -198,11 +203,40 @@ export const cleanAuthState = async (options: {
 // NEW: Enhanced session testing with backoff
 export const testSessionWithBackoff = async (
   initialDelayMs = 0, 
-  maxAttempts = 3
+  maxAttempts = 3,
+  skipIfJustLoggedIn = false
 ): Promise<{ valid: boolean; session: any | null; error?: string }> => {
+  // Check if we just logged in based on URL parameter
+  if (skipIfJustLoggedIn && new URLSearchParams(window.location.search).get('justLoggedIn') === 'true') {
+    console.log("Skipping session test since we just logged in");
+    // Assume session is valid for now
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        return { valid: true, session: data.session };
+      }
+    } catch (err) {
+      // Silently continue to regular test if this fails
+    }
+  }
+  
   // Start with optional delay to prevent hammering Supabase
   if (initialDelayMs > 0) {
     await new Promise(resolve => setTimeout(resolve, initialDelayMs));
+  }
+  
+  // Check if we're in pause recovery - don't run aggressive validation
+  if (isPauseRecoveryRequired()) {
+    console.log("In pause recovery mode - being more lenient with session test");
+    try {
+      const { data } = await supabase.auth.getSession();
+      // Just check if we have any session at all, skip detailed validation
+      if (data?.session) {
+        return { valid: true, session: data.session };
+      }
+    } catch (err) {
+      // Fall through to regular test if this fails
+    }
   }
   
   let attempt = 0;
@@ -678,6 +712,40 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
   let attempts = 0;
   let lastError: any = null;
   
+  // Add cooldown tracking to prevent duplicate session tests in rapid succession
+  const now = Date.now();
+  const lastTestTime = parseInt(sessionStorage.getItem('last_session_test_time') || '0', 10);
+  
+  // If we tested recently (within last 2 seconds), use cached result
+  if ((now - lastTestTime) < 2000) {
+    const cachedResult = sessionStorage.getItem('last_session_test_result');
+    if (cachedResult) {
+      console.log("Using cached session test result (within 2s)");
+      return JSON.parse(cachedResult);
+    }
+  }
+  
+  // Store test time
+  sessionStorage.setItem('last_session_test_time', now.toString());
+  
+  // Check if we're in pause recovery or just logged in - be more lenient
+  const inRecovery = isPauseRecoveryRequired() || wasPauseDetected();
+  const justLoggedIn = new URLSearchParams(window.location.search).get('justLoggedIn') === 'true';
+  
+  if (justLoggedIn) {
+    console.log("Just logged in, being lenient with session test");
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        const result = { valid: true, session: data.session };
+        sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+        return result;
+      }
+    } catch (err) {
+      // Fall through to regular test
+    }
+  }
+  
   while (attempts < maxRetries) {
     try {
       // Progressive backoff delay - 0ms, 1000ms, 3000ms
@@ -699,7 +767,11 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
       
       if (!data.session) {
         console.log('No session found in getSession response');
-        return { valid: false, session: null };
+        
+        // Cache result for 2 seconds
+        const result = { valid: false, session: null };
+        sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+        return result;
       }
       
       // Additional validation
@@ -708,14 +780,32 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
       
       if (!user) {
         console.log('Session missing user information');
-        return { valid: false, session: null, error: 'Session missing user data' };
+        const result = { valid: false, session: null, error: 'Session missing user data' };
+        sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+        return result;
+      }
+      
+      // Be more lenient during recovery
+      if (inRecovery) {
+        console.log("In recovery mode - skipping expiry check");
+        const result = { valid: true, session: data.session };
+        sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+        
+        // Clear pause flags if test succeeds during recovery
+        clearPauseRecoveryRequired();
+        clearPauseDetected();
+        resetAuthLoopState();
+        
+        return result;
       }
       
       if (expiresAt) {
         const now = Math.floor(Date.now() / 1000);
         if (expiresAt < now) {
           console.log('Session is expired');
-          return { valid: false, session: null, error: 'Session expired' };
+          const result = { valid: false, session: null, error: 'Session expired' };
+          sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+          return result;
         }
       }
       
@@ -724,7 +814,10 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
       clearPauseRecoveryRequired();
       clearPauseDetected();
       resetAuthLoopState();
-      return { valid: true, session: data.session };
+      
+      const result = { valid: true, session: data.session };
+      sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+      return result;
     } catch (error) {
       lastError = error;
       console.error(`Unexpected error testing session on attempt ${attempts + 1}:`, error);
@@ -733,11 +826,13 @@ export const testSessionWithRetries = async (maxRetries = 3): Promise<{
   }
   
   // All attempts failed
-  return {
+  const result = {
     valid: false,
     session: null,
     error: lastError ? String(lastError) : 'Failed to test session after multiple attempts'
   };
+  sessionStorage.setItem('last_session_test_result', JSON.stringify(result));
+  return result;
 };
 
 /**

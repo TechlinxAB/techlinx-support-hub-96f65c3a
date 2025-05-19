@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   supabase, 
@@ -107,10 +106,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   
+  // New state for tracking recovery cooldowns
+  const [recoveryInProgress, setRecoveryInProgress] = useState(false);
+  const [lastRecoveryAttempt, setLastRecoveryAttempt] = useState(0);
+  
   // Simple derived state
   const isAuthenticated = !!session && !!user;
 
-  // New improved session restore function with retries and backoff
+  // New improved session restore function with retries, backoff and cooldown
   const restoreSession = async (): Promise<boolean> => {
     try {
       console.log('Attempting to restore session');
@@ -121,6 +124,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAuthError("Too many authentication attempts. Please login manually.");
         setAuthState('ERROR');
         return false;
+      }
+      
+      // Check if recovery is in cooldown period (1.5 seconds)
+      const now = Date.now();
+      if ((now - lastRecoveryAttempt) < 1500) {
+        console.log("Recovery cooldown active, delaying restore attempt");
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
       
       // Increment retry counter
@@ -246,8 +256,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Force recovery function - nuclear option to reset auth state
+  // Force recovery function - with added cooldown
   const forceRecovery = async () => {
+    // Add cooldown check to prevent repeated recovery attempts
+    const now = Date.now();
+    if ((now - lastRecoveryAttempt) < 3000) {
+      console.log("Recovery cooldown active, skipping duplicate recovery");
+      return;
+    }
+    
+    // Set recovery state and update last attempt timestamp
+    setRecoveryInProgress(true);
+    setLastRecoveryAttempt(now);
+    
     setLoading(true);
     setAuthState('RECOVERY');
     setAuthError(null);
@@ -264,6 +285,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthState('ERROR');
       setAuthError("Recovery failed after multiple attempts. Please clear your browser cache manually.");
       setLoading(false);
+      setRecoveryInProgress(false);
       return;
     }
     
@@ -294,6 +316,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setImpersonatedProfile(null);
       setOriginalProfile(null);
       
+      // Add cooldown delay to prevent immediate retries
+      console.log("Adding post-recovery cooldown delay");
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
       toast.success("Authentication reset successful", {
         description: "Please log in again to continue."
       });
@@ -308,6 +334,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
     } finally {
       setLoading(false);
+      setRecoveryInProgress(false);
     }
   };
 
@@ -374,8 +401,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 
                 setAuthState('SIGNED_IN');
                 
-                // If we've had too many errors, activate circuit breaker
-                if (errorCount >= MAX_AUTH_ERRORS) {
+                // Modified: Don't immediately trigger circuit breaker on profile fetch failure
+                // Allow a grace period for Supabase to wake up
+                if (errorCount >= MAX_AUTH_ERRORS + 2) { // Increased tolerance
                   console.warn("Too many auth errors, activating circuit breaker");
                   activateCircuitBreaker(5, "Failed to fetch user profile"); // 5 minutes timeout
                   setAuthError("Authentication temporarily disabled due to repeated errors");
@@ -445,9 +473,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     };
     
-    // Only try to check session once auth is initialized and not already done
+    // Run immediately rather than with setTimeout to avoid race conditions
     if (authInitialized && !sessionCheckDone && !sessionRestoreAttempted) {
-      // Execute immediately with no delay to avoid race condition
       checkSession();
     }
     
@@ -459,7 +486,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState, sessionRestoreAttempted, authInitialized]);
 
-  // Add an effect to run session check once auth is initialized that runs immediately
+  // Modified: Run session check immediately without delay when auth is initialized
   useEffect(() => {
     if (!authInitialized) return;
     
@@ -475,6 +502,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.warn("Supabase not available for initial session check");
             setLoading(false);
             setAuthState('SIGNED_OUT');
+            return;
+          }
+          
+          // Skip session test immediately after login to avoid race conditions
+          if (new URLSearchParams(window.location.search).get('justLoggedIn') === 'true') {
+            console.log("Just logged in, skipping immediate session test");
+            setSessionCheckDone(true);
+            setLoading(false);
             return;
           }
           
@@ -580,7 +615,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Sign in with email and password - with enhanced error handling and retry logic
+  // Sign in with email and password - with enhanced error handling and less aggressive error detection
   const signIn = async (email: string, password: string) => {
     // Reset circuit breaker on explicit sign in attempt
     resetCircuitBreaker();
@@ -637,15 +672,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(data.session.user || null);
             setAuthState('AUTHENTICATED');
             
-            // Fetch profile immediately to speed up the process
+            // Modified: More lenient profile fetch after login
+            // Don't trigger full reset if profile fetch fails initially
+            // Supabase might still be waking up
             if (data.session.user) {
               setTimeout(async () => {
-                const fetchedProfile = await fetchProfile(data.session.user.id);
-                if (fetchedProfile) {
-                  setProfile(fetchedProfile);
+                try {
+                  // Try to fetch profile up to 2 times with longer delays
+                  let profileAttempt = 0;
+                  let fetchedProfile = null;
+                  
+                  while (profileAttempt < 2 && !fetchedProfile) {
+                    if (profileAttempt > 0) {
+                      // Wait longer between attempts after login
+                      await new Promise(resolve => setTimeout(resolve, 1500));
+                    }
+                    
+                    fetchedProfile = await fetchProfile(data.session.user.id);
+                    
+                    if (fetchedProfile) {
+                      setProfile(fetchedProfile);
+                      break;
+                    }
+                    
+                    profileAttempt++;
+                  }
+                  
+                  // Even if profile fetch fails, don't trigger recovery
+                  // Just mark as SIGNED_IN instead of AUTHENTICATED
+                  if (!fetchedProfile) {
+                    console.warn("Profile not available yet after multiple attempts. User can still use the app.");
+                    setAuthState('SIGNED_IN');
+                  }
+                } catch (err) {
+                  console.error("Error fetching profile after login:", err);
+                  // Don't trigger recovery, just stay in SIGNED_IN state
+                  setAuthState('SIGNED_IN');
                 }
               }, 0);
             }
+            
+            // Add URL param to indicate we just logged in
+            const url = new URL(window.location.href);
+            url.searchParams.set('justLoggedIn', 'true');
+            window.history.replaceState({}, '', url.toString());
           }
           
           return { error: null };
