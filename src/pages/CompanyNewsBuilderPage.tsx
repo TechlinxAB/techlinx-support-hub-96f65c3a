@@ -114,7 +114,7 @@ const CompanyNewsBuilderPage = () => {
           isPublished: false,
           createdAt: new Date(),
           updatedAt: new Date(),
-          createdBy: currentUser?.id || '' // Fixed: added createdBy field
+          createdBy: currentUser?.id || ''
         };
         
         // Only refetch when adding a new block - we need the server-generated ID
