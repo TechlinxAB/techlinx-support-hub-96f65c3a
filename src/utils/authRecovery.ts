@@ -42,8 +42,9 @@ export const initPauseUnpauseDetection = (): void => {
         // Set pause detected flag
         sessionStorage.setItem(PAUSE_DETECTED_KEY, 'true');
         
-        // New code: Actively clear session when pause is detected to prevent using stale tokens
-        console.warn('Supabase was paused and resumed. Clearing session and forcing re-auth.');
+        // New code: Instead of redirecting here, we set a flag for AuthContext to handle
+        console.warn('Supabase was paused and resumed. Setting flag for auth recovery.');
+        localStorage.setItem('pause_recovery_required', 'true');
         
         // Execute this in an IIFE to use async/await
         (async () => {
@@ -51,16 +52,11 @@ export const initPauseUnpauseDetection = (): void => {
             // Sign out from Supabase
             await supabase.auth.signOut();
             
-            // Clear storage
-            localStorage.clear();
+            // Clear storage but don't redirect - AuthContext will handle this
+            localStorage.removeItem(STORAGE_KEY);
             sessionStorage.clear();
-            
-            // Redirect to auth page with timestamp to prevent caching
-            window.location.href = `/auth?pause_recovery=${Date.now()}`;
           } catch (e) {
             console.error('Error during pause recovery:', e);
-            // Still redirect even if error occurs
-            window.location.href = `/auth?emergency_recovery=${Date.now()}`;
           }
         })();
         
@@ -217,6 +213,7 @@ export const performFullAuthRecovery = async (): Promise<boolean> => {
       localStorage.removeItem('auth-last-init');
       localStorage.removeItem('last-session-check');
       localStorage.removeItem('last-successful-auth');
+      localStorage.removeItem('pause_recovery_required');
       
       // Also clear force bypass in recovery
       localStorage.removeItem(FORCE_BYPASS_KEY);

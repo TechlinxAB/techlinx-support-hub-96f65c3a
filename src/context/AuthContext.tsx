@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   supabase, 
@@ -278,6 +279,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (sessionCheckDone) return;
       setSessionCheckDone(true);
       
+      // FIX 5: Prevent duplicate session restoration in AuthContext.tsx
+      if (session || authState === 'AUTHENTICATED') {
+        console.log('Session already initialized, skipping checkSession.');
+        return;
+      }
+
+      // FIX 3: Check for pause recovery flag and handle it here instead of in authRecovery.ts
+      const needsPauseRecovery = localStorage.getItem('pause_recovery_required') === 'true';
+      
+      if (needsPauseRecovery) {
+        console.warn('Pause recovery flag detected. Forcing full auth reset.');
+        localStorage.removeItem('pause_recovery_required');
+        await clearAuthState();
+        location.href = '/auth?pause_recovery=' + Date.now();
+        return;
+      }
+      
       // Add the new check for raw token existence before attempting to restore session
       const rawToken = localStorage.getItem(STORAGE_KEY);
       if (!rawToken) {
@@ -339,7 +357,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [initialized, profile, isImpersonating, sessionCheckDone]);
+  }, [initialized, profile, isImpersonating, sessionCheckDone, session, authState]);
 
   // Start impersonation function
   const startImpersonation = async (userId: string) => {

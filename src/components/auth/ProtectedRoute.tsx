@@ -88,12 +88,12 @@ const ProtectedRoute = () => {
   useEffect(() => {
     if (loading) return;
     
-    const hasValidSession = session && session.user;
     const rawTokenInStorage = localStorage.getItem(STORAGE_KEY);
+    const isSessionValid = session?.user && rawTokenInStorage;
     
-    // If we have no valid session and no token, stay on auth page
-    if (!hasValidSession && !rawTokenInStorage) {
-      console.warn('No valid session and no token. Staying on auth page.');
+    // If we don't have a valid session or token, stay on auth page
+    if (!isSessionValid) {
+      console.warn('Invalid session or missing token. Routing to /auth.');
       if (location.pathname !== '/auth') {
         setRedirecting(true);
         navigate('/auth', { replace: true });
@@ -102,11 +102,9 @@ const ProtectedRoute = () => {
     }
     
     // If we have a valid session, navigate away from auth page
-    if (hasValidSession) {
-      if (location.pathname === '/auth') {
-        setRedirecting(true);
-        navigate('/', { replace: true });
-      }
+    if (isSessionValid && location.pathname === '/auth') {
+      setRedirecting(true);
+      navigate('/', { replace: true });
     }
   }, [loading, session, location.pathname, navigate]);
   
@@ -278,9 +276,11 @@ const ProtectedRoute = () => {
     );
   }
   
-  // IMPROVED CHECK: If we have a session OR isAuthenticated flag OR we're in force timeout,
-  // OR we've detected a pause/unpause and want to be lenient, allow access
-  if (session || isAuthenticated || forceTimeout || (isPauseRecovery && session)) {
+  // Use our improved check - if we have a valid session AND token, allow access
+  const rawTokenInStorage = localStorage.getItem(STORAGE_KEY);
+  const isSessionValid = session?.user && rawTokenInStorage;
+  
+  if (isSessionValid || forceTimeout || (isPauseRecovery && session)) {
     return <Outlet />;
   }
   
