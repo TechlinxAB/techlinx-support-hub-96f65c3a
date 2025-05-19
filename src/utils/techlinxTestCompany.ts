@@ -3,13 +3,27 @@ import { supabase } from "@/integrations/supabase/client";
 // Techlinx test company name constant
 export const TECHLINX_NAME = "Techlinx Solutions";
 
+// Track last check time to prevent frequent checks
+let lastTechlinxCheckTime = 0;
+const CHECK_INTERVAL = 3600000; // 1 hour in milliseconds
+
 /**
  * Ensures that the Techlinx test company exists
  * @returns The company object
  */
 export const ensureTechlinxCompanyExists = async () => {
   try {
-    console.log("Checking if Techlinx company exists...");
+    // Check if we've checked recently
+    const now = Date.now();
+    if (now - lastTechlinxCheckTime < CHECK_INTERVAL) {
+      // Use cached result if available
+      const cachedCompany = sessionStorage.getItem('techlinx_company');
+      if (cachedCompany) {
+        return JSON.parse(cachedCompany);
+      }
+    }
+    
+    lastTechlinxCheckTime = now;
     
     // Check if company already exists
     const { data: existingCompany, error: searchError } = await supabase
@@ -25,12 +39,12 @@ export const ensureTechlinxCompanyExists = async () => {
     
     // If company exists, return it
     if (existingCompany) {
-      console.log("Techlinx company already exists:", existingCompany);
+      // Cache the result
+      sessionStorage.setItem('techlinx_company', JSON.stringify(existingCompany));
       return existingCompany;
     }
     
     // Otherwise, create it
-    console.log("Creating Techlinx test company...");
     
     // Only include fields that exist in the database schema
     const newCompany = {
@@ -50,7 +64,8 @@ export const ensureTechlinxCompanyExists = async () => {
       throw createError;
     }
     
-    console.log("Created Techlinx company:", createdCompany);
+    // Cache the result
+    sessionStorage.setItem('techlinx_company', JSON.stringify(createdCompany));
     return createdCompany;
   } catch (error) {
     console.error("Error in ensureTechlinxCompanyExists:", error);
@@ -65,8 +80,6 @@ export const ensureTechlinxCompanyExists = async () => {
  */
 export const assignConsultantToTechlinx = async (consultantId: string, companyId: string) => {
   try {
-    console.log(`Assigning consultant ${consultantId} to Techlinx company ${companyId}...`);
-    
     // Update the user's company ID
     const { error } = await supabase
       .from("profiles")
@@ -77,13 +90,14 @@ export const assignConsultantToTechlinx = async (consultantId: string, companyId
       console.error("Error assigning consultant to Techlinx:", error);
       throw error;
     }
-    
-    console.log("Successfully assigned consultant to Techlinx");
   } catch (error) {
     console.error("Error in assignConsultantToTechlinx:", error);
     throw error;
   }
 };
+
+// Track last content check time
+let lastContentCheckTime = 0;
 
 /**
  * Creates sample content for the Techlinx company
@@ -92,7 +106,18 @@ export const assignConsultantToTechlinx = async (consultantId: string, companyId
  */
 export const createTechlinxSampleContent = async (companyId: string, userId: string) => {
   try {
-    console.log(`Creating sample content for Techlinx company ${companyId}...`);
+    // Check if we've checked recently
+    const now = Date.now();
+    if (now - lastContentCheckTime < CHECK_INTERVAL) {
+      // Skip if checked recently
+      const hasChecked = sessionStorage.getItem('techlinx_content_checked');
+      if (hasChecked) {
+        return;
+      }
+    }
+    
+    lastContentCheckTime = now;
+    sessionStorage.setItem('techlinx_content_checked', 'true');
     
     // Check if sample content already exists
     const { data: existingCases } = await supabase
@@ -102,7 +127,6 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
       .limit(1);
     
     if (existingCases && existingCases.length > 0) {
-      console.log("Sample content already exists for Techlinx");
       return;
     }
     
@@ -145,8 +169,6 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
       console.error("Error creating sample cases:", error);
       throw error;
     }
-    
-    console.log("Successfully created sample content for Techlinx");
   } catch (error) {
     console.error("Error in createTechlinxSampleContent:", error);
     throw error;

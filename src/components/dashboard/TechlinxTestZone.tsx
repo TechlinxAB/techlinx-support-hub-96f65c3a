@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Beaker, Layout, Newspaper, FileText, Users, Settings, Star } from 'lucide-react';
+import { AlertCircle, Beaker, Layout, Newspaper, FileText, Users, Settings, Star } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
-import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
+import { TECHLINX_NAME, ensureTechlinxCompanyExists } from '@/utils/techlinxTestCompany';
 import { toast } from 'sonner';
 
 const TechlinxTestZone: React.FC = () => {
@@ -15,23 +14,63 @@ const TechlinxTestZone: React.FC = () => {
   const navigate = useNavigate();
   const [techlinxId, setTechlinxId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
   
-  // Find Techlinx company ID
+  // Find Techlinx company ID using either local state or API if needed
   useEffect(() => {
+    // First try to find in the app context
     const techlinx = companies.find(company => company.name === TECHLINX_NAME);
     if (techlinx) {
       setTechlinxId(techlinx.id);
+      setHasError(false);
+      return;
     }
+    
+    // If not found in context, try to get from session storage
+    const cachedCompany = sessionStorage.getItem('techlinx_company');
+    if (cachedCompany) {
+      try {
+        const parsedCompany = JSON.parse(cachedCompany);
+        setTechlinxId(parsedCompany.id);
+        setHasError(false);
+        return;
+      } catch (e) {
+        // Invalid JSON, continue to API call
+      }
+    }
+    
+    // If not in context or session storage, make API call (only once)
+    const fetchTechlinx = async () => {
+      if (isLoading) return;
+      
+      setIsLoading(true);
+      try {
+        const company = await ensureTechlinxCompanyExists();
+        setTechlinxId(company.id);
+        setHasError(false);
+      } catch (error) {
+        console.error("Failed to ensure Techlinx exists:", error);
+        setHasError(true);
+        toast.error("Error Setting Up Test Zone", {
+          description: "There was an error setting up the Techlinx test zone. Please try again later."
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchTechlinx();
   }, [companies]);
 
   // Force direct URL navigation for dashboard builder
   const handleDashboardNavigation = (companyId: string) => {
     const path = `/company-dashboard-builder/${companyId}`;
     console.log(`Direct navigation to: ${path}`);
-    // Force direct URL navigation to avoid routing issues
-    window.location.href = path;
     // Show toast before navigating
     toast.info("Opening dashboard builder...");
+    // Force direct URL navigation to avoid routing issues
+    window.location.href = path;
     // Prevent event bubbling
     return false;
   };
@@ -46,6 +85,72 @@ const TechlinxTestZone: React.FC = () => {
       window.location.href = path;
     }
   };
+
+  if (isLoading) {
+    return (
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Beaker className="h-5 w-5 text-purple-500" />
+            Techlinx Test Zone
+          </CardTitle>
+          <CardDescription>
+            Setting up the test environment...
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">
+            The Techlinx test company is being created. Please wait a moment.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <Card className="mb-6 border-amber-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-500" />
+            Techlinx Test Zone - Connection Error
+          </CardTitle>
+          <CardDescription>
+            Unable to connect to the test environment
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              There was an error connecting to the Techlinx test environment. This could be due to:
+            </p>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+              <li>Temporary network issues</li>
+              <li>Database connection problems</li>
+              <li>Service maintenance</li>
+            </ul>
+            <Button 
+              onClick={() => {
+                setHasError(false);
+                setIsLoading(true);
+                // Clear session storage
+                sessionStorage.removeItem('techlinx_company');
+                sessionStorage.removeItem('techlinx_content_checked');
+                // Retry in 1 second
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1000);
+              }}
+              variant="outline"
+              className="mt-2"
+            >
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!techlinxId) {
     return (
