@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import ModalReset from "./components/ui/modal-reset";
 import SearchPage from "./pages/SearchPage";
 import { useEffect } from "react";
 import { initPauseUnpauseDetection } from "./utils/authRecovery";
+import NavigationService from "./services/navigationService";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -49,6 +50,18 @@ const ModalManager = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Navigation Service Configurator
+const NavigationConfigurator = () => {
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    // Configure the navigation service with the current navigate function
+    NavigationService.setNavigateFunction(navigate);
+  }, [navigate]);
+  
+  return null;
+};
+
 // Init App Component to set up pause/unpause detection
 const InitApp = () => {
   useEffect(() => {
@@ -70,6 +83,7 @@ const App = () => (
               <Toaster />
               <ModalReset />
               <InitApp />
+              <NavigationConfigurator />
               <Routes>
                 {/* Public route - accessible without authentication */}
                 <Route path="/auth" element={<AuthPage />} />

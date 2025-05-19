@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -14,14 +14,18 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ 
-        duration: 0.4,
+        duration: 0.5, // Increased for smoother transitions
         ease: "easeInOut",
         // Use longer exit duration to ensure smooth crossfade
-        enter: { duration: 0.4 },
-        exit: { duration: 0.3 }
+        enter: { duration: 0.5 },
+        exit: { duration: 0.2 }
       }}
-      style={{ willChange: 'opacity' }}
-      className={className || "w-full h-full bg-white"}
+      style={{ 
+        willChange: 'opacity',
+        position: 'relative',
+        background: 'white' // Force white background
+      }}
+      className={className || "w-full h-full"}
     >
       {children}
     </motion.div>

@@ -57,6 +57,7 @@
 /* Prevent white flash during transitions */
 html, body, #root {
   height: 100%;
+  background-color: white;
 }
 
 /* Persistent sidebar style to prevent flickering */
@@ -69,6 +70,9 @@ html, body, #root {
   will-change: transform;
   transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
   background-color: var(--sidebar);
+  /* Prevent flash and maintain visibility during page transitions */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Layout container that holds both sidebar and content */
@@ -85,6 +89,8 @@ html, body, #root {
   min-height: 100vh;
   transition: margin-left 0.3s ease-in-out;
   will-change: margin-left;
+  position: relative;
+  z-index: 1;
 }
 
 /* Improve animation performance */
@@ -108,6 +114,14 @@ html, body, #root {
 .dark .custom-toast {
   background-color: hsl(224 71% 4%) !important;
   border-color: hsl(216 34% 17%) !important;
+}
+
+/* Content transition wrapper */
+.content-transition-wrapper {
+  background-color: white;
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
 }
 
 /* Fix for navigation service to use React Router */

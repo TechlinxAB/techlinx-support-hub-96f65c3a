@@ -4,7 +4,7 @@ import { useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import { Loader, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { AnimatePresence } from 'framer-motion';
@@ -31,6 +31,24 @@ const Layout = () => {
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
+
+  // Calculate sidebar margin based on screen size
+  const [sidebarMargin, setSidebarMargin] = useState('16rem');
+
+  // Update margin based on screen size and sidebar state
+  useEffect(() => {
+    const updateMargin = () => {
+      if (window.innerWidth < 768) {
+        setSidebarMargin(isSidebarOpen ? '16rem' : '0');
+      } else {
+        setSidebarMargin(isSidebarOpen ? '16rem' : '4rem');
+      }
+    };
+
+    updateMargin();
+    window.addEventListener('resize', updateMargin);
+    return () => window.removeEventListener('resize', updateMargin);
+  }, [isSidebarOpen]);
 
   useEffect(() => {
     // Load sidebar state from localStorage if available
@@ -186,7 +204,7 @@ const Layout = () => {
 
   return (
     <div className="layout-container">
-      {/* Sidebar - positioned outside the animation flow */}
+      {/* Fixed position sidebar - completely outside the animation flow */}
       <div 
         className={`sidebar-persistent ${isSidebarOpen ? 'w-64' : 'w-0 -translate-x-full md:translate-x-0 md:w-16'}`}
       >
@@ -195,13 +213,8 @@ const Layout = () => {
       
       {/* Main content area that adjusts based on sidebar state */}
       <div 
-        className="main-content"
-        style={{ 
-          marginLeft: isSidebarOpen ? '16rem' : '4rem',
-          '@media (max-width: 768px)': {
-            marginLeft: isSidebarOpen ? '16rem' : '0'
-          } 
-        }}
+        className="main-content bg-white"
+        style={{ marginLeft: sidebarMargin }}
       >
         <Header toggleSidebar={toggleSidebar} />
         
@@ -220,7 +233,7 @@ const Layout = () => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="p-4 bg-white flex-1">
+        <main className="p-4 bg-white flex-1 content-transition-wrapper">
           <AnimatePresence mode="wait" initial={false}>
             <PageTransition key={location.pathname}>
               <Outlet />
