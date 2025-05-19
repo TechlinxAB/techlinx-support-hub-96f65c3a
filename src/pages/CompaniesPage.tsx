@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -14,7 +15,8 @@ import {
   Edit,
   Eye,
   Search,
-  Beaker
+  Beaker,
+  FlaskConical
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -39,6 +41,7 @@ import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const CompaniesPage = () => {
   const { companies, cases, currentUser, addCompany, deleteCompany } = useAppContext();
@@ -224,11 +227,19 @@ const CompaniesPage = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                      {company.logo ? (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center">
+                      {isTechlinx ? (
+                        <Avatar className="bg-purple-100 border border-purple-200">
+                          <AvatarFallback className="bg-purple-100 text-purple-700">
+                            <FlaskConical className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : company.logo ? (
                         <img src={company.logo} alt={company.name} className="h-10 w-10 rounded-full object-cover" />
                       ) : (
-                        <Building className="h-5 w-5 text-muted-foreground" />
+                        <div className="bg-muted w-10 h-10 rounded-full flex items-center justify-center">
+                          <Building className="h-5 w-5 text-muted-foreground" />
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-2">

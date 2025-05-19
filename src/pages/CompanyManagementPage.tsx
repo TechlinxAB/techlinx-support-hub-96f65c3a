@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { 
@@ -35,13 +34,17 @@ import {
   Trash2, 
   Plus,
   Settings,
-  AlertCircle
+  AlertCircle,
+  FlaskConical
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { TECHLINX_NAME } from '@/utils/techlinxTestCompany';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 
 const CompanyManagementPage = () => {
   const { companies, currentUser, addCompany, updateCompany, deleteCompany } = useAppContext();
@@ -65,6 +68,16 @@ const CompanyManagementPage = () => {
       </div>
     );
   }
+  
+  // Sort companies: Techlinx Internal goes to the end, others are sorted alphabetically
+  const sortedCompanies = [...companies].sort((a, b) => {
+    // If a is Techlinx Internal, it should always come last
+    if (a.name === TECHLINX_NAME) return 1;
+    // If b is Techlinx Internal, it should always come last
+    if (b.name === TECHLINX_NAME) return -1;
+    // Otherwise, sort alphabetically
+    return a.name.localeCompare(b.name);
+  });
   
   const handleOpenDialog = (mode: 'create' | 'edit', companyId?: string) => {
     setDialogMode(mode);
@@ -168,51 +181,74 @@ const CompanyManagementPage = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {companies.map(company => (
-          <Card key={company.id} className="relative overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                  {company.logo ? (
+        {sortedCompanies.map(company => {
+          const isTechlinx = company.name === TECHLINX_NAME;
+          return (
+            <Card 
+              key={company.id} 
+              className={`relative overflow-hidden ${isTechlinx ? "border-purple-200 bg-gradient-to-r from-purple-50 to-white" : ""}`}
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  {isTechlinx ? (
+                    <Avatar className="bg-purple-100 border border-purple-200">
+                      <AvatarFallback className="bg-purple-100 text-purple-700">
+                        <FlaskConical className="h-5 w-5" />
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : company.logo ? (
                     <img src={company.logo} alt={company.name} className="w-10 h-10 rounded-full object-cover" />
                   ) : (
-                    <Building className="h-5 w-5 text-muted-foreground" />
+                    <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
+                      <Building className="h-5 w-5 text-muted-foreground" />
+                    </div>
                   )}
+                  <div className="flex flex-col">
+                    <h2 className="text-lg font-semibold">{company.name}</h2>
+                    {isTechlinx && (
+                      <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-200 self-start mt-1">
+                        <FlaskConical className="h-3 w-3 mr-1" /> Test Zone
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <h2 className="text-lg font-semibold">{company.name}</h2>
+                
+                <div className="flex justify-end mt-4">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleGoToSettings(company.id)}>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenDialog('edit', company.id)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      {!isTechlinx && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleConfirmDelete(company.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-              
-              <div className="flex justify-end mt-4">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => handleGoToSettings(company.id)}>
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleOpenDialog('edit', company.id)}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => handleConfirmDelete(company.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
