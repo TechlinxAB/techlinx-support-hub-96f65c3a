@@ -1,5 +1,4 @@
-
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, STORAGE_KEY, isPauseRecoveryRequired, clearPauseRecoveryRequired, markPauseRecoveryRequired, validateTokenIntegrity } from "@/integrations/supabase/client";
 
 /**
  * Detects potential auth loops by tracking login attempts
@@ -7,6 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export const detectAuthLoops = (): boolean => {
   try {
+    // Skip during pause recovery to avoid false positives
+    if (isPauseRecoveryRequired()) return false;
+    
     // Get current time
     const now = Date.now();
     
@@ -31,26 +33,67 @@ export const detectAuthLoops = (): boolean => {
 };
 
 /**
+ * Probes the Supabase service to check if it's responsive
+ * @returns true if Supabase is responding
+ */
+export const probeSupabaseService = async (): Promise<boolean> => {
+  try {
+    // Use a lightweight API call to test Supabase availability
+    const startTime = Date.now();
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    const endTime = Date.now();
+    
+    // If response time is very fast, service is likely active
+    const responseTime = endTime - startTime;
+    console.log(`Supabase probe response time: ${responseTime}ms`);
+    
+    // If response time is over 2 seconds, service might be waking up
+    if (responseTime > 2000) {
+      console.log('Supabase service seems to be waking up from pause');
+      markPauseRecoveryRequired();
+    }
+    
+    return !error;
+  } catch (error) {
+    console.error('Supabase service probe failed:', error);
+    return false;
+  }
+};
+
+/**
  * Checks if the current auth token might be stale
  * @returns true if the token might be stale
  */
 export const isTokenPotentiallyStale = async (): Promise<boolean> => {
   try {
+    // First, check for token integrity issues
+    if (!validateTokenIntegrity()) {
+      console.log('Token integrity check failed - token might be corrupted');
+      return true;
+    }
+    
     const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) return false;
+    if (!sessionData.session) return true;
     
     // If the token expires in less than 10 minutes, consider it stale
     const expiresAt = sessionData.session.expires_at;
-    if (!expiresAt) return false;
+    if (!expiresAt) return true;
     
     const expirationDate = new Date(expiresAt * 1000);
     const now = new Date();
     
     // If token expires in less than 10 minutes, it's considered stale
-    return (expirationDate.getTime() - now.getTime()) < 600000;
+    const isStale = (expirationDate.getTime() - now.getTime()) < 600000;
+    
+    if (isStale) {
+      console.log('Token is stale - expires soon or has expired');
+    }
+    
+    return isStale;
   } catch (error) {
     console.error('Error checking token staleness:', error);
-    return false;
+    // If we get an error checking staleness, assume token is stale as a precaution
+    return true;
   }
 };
 
@@ -60,6 +103,12 @@ export const isTokenPotentiallyStale = async (): Promise<boolean> => {
  * @param reason Reason for activation
  */
 export const activateCircuitBreaker = (minutes: number = 5, reason: string = 'Unknown'): void => {
+  // Skip during pause recovery to avoid conflicts
+  if (isPauseRecoveryRequired()) {
+    console.log('Pause recovery in progress - skipping circuit breaker activation');
+    return;
+  }
+  
   console.warn(`Activating auth circuit breaker for ${minutes} minutes. Reason: ${reason}`);
   
   const expiryTime = Date.now() + (minutes * 60 * 1000);
@@ -81,6 +130,11 @@ export const isCircuitBreakerActive = (): {
   reason?: string; 
   remainingSeconds?: number;
 } => {
+  // Skip during pause recovery to avoid conflicts
+  if (isPauseRecoveryRequired()) {
+    return { active: false };
+  }
+  
   const circuitBreakerJson = localStorage.getItem('auth-circuit-breaker');
   
   if (!circuitBreakerJson) {
@@ -140,17 +194,34 @@ export const resetAuthErrorCount = (): void => {
 
 /**
  * Full auth recovery - performs a complete reset of auth state
+ * Enhanced with specific handling for pause recovery scenarios
  */
 export const performFullAuthRecovery = async (): Promise<void> => {
   try {
     console.log('Performing full auth recovery...');
     
-    // Sign out from Supabase
-    await supabase.auth.signOut({ scope: 'global' });
+    // Increment recovery attempts
+    const attempts = incrementRecoveryAttempts();
+    console.log(`Recovery attempt ${attempts}`);
     
-    // Reset error counter and circuit breaker
+    // Check service availability 
+    const isServiceAvailable = await probeSupabaseService();
+    console.log(`Supabase service availability: ${isServiceAvailable ? 'OK' : 'NOT RESPONDING'}`);
+    
+    // Start with service reset
+    try {
+      // Sign out from Supabase to clear any stale sessions
+      await supabase.auth.signOut({ scope: 'global' });
+      console.log('Supabase signOut successful');
+    } catch (error) {
+      console.warn('Error during signout - continuing with recovery:', error);
+      // Continue with recovery even if signout fails
+    }
+    
+    // Reset all client-side auth state
     resetAuthErrorCount();
     resetCircuitBreaker();
+    clearPauseRecoveryRequired();
     
     // Clear auth-related storage items
     localStorage.removeItem('auth-token-version');
@@ -159,6 +230,9 @@ export const performFullAuthRecovery = async (): Promise<void> => {
     // Clear session storage items
     sessionStorage.removeItem('authAttempts');
     sessionStorage.removeItem('authDetectionPaused');
+    
+    // Clear pause detection flags
+    localStorage.removeItem('pause_detected');
     
     console.log('Auth recovery completed successfully');
   } catch (error) {
@@ -204,7 +278,7 @@ export const emergencyAuthReset = (): void => {
 };
 
 /**
- * Initialize pause/unpause detection
+ * Initialize pause/unpause detection with enhanced recovery logic
  */
 export const initPauseUnpauseDetection = (): void => {
   // Only run in browser environment
@@ -225,7 +299,14 @@ export const initPauseUnpauseDetection = (): void => {
       // If hidden for more than 30 seconds, mark as paused
       if (timeDiff > 30000) {
         localStorage.setItem('pause_detected', 'true');
-        console.log(`App was in background for ${Math.round(timeDiff / 1000)}s, marking as paused`);
+        
+        // If the pause was very long (5+ minutes), mark for special recovery
+        if (timeDiff > 300000) {
+          console.warn(`App was inactive for ${Math.round(timeDiff / 1000)}s, marking for special recovery`);
+          markPauseRecoveryRequired();
+        } else {
+          console.log(`App was in background for ${Math.round(timeDiff / 1000)}s, marking as paused`);
+        }
       }
       
       wasHidden = false;
@@ -246,12 +327,34 @@ export const initPauseUnpauseDetection = (): void => {
       // If hidden for more than 30 seconds, mark as paused
       if (timeDiff > 30000) {
         localStorage.setItem('pause_detected', 'true');
-        console.log(`App was unfocused for ${Math.round(timeDiff / 1000)}s, marking as paused`);
+        
+        // If the pause was very long (5+ minutes), mark for special recovery
+        if (timeDiff > 300000) {
+          console.warn(`App was unfocused for ${Math.round(timeDiff / 1000)}s, marking for special recovery`);
+          markPauseRecoveryRequired();
+        } else {
+          console.log(`App was unfocused for ${Math.round(timeDiff / 1000)}s, marking as paused`);
+        }
       }
       
       wasHidden = false;
     }
   });
+
+  // Run a service probe on page load to check Supabase availability
+  setTimeout(async () => {
+    try {
+      const isServiceAvailable = await probeSupabaseService();
+      console.log(`Initial Supabase service check: ${isServiceAvailable ? 'OK' : 'NOT RESPONDING'}`);
+      
+      if (!isServiceAvailable) {
+        console.warn('Supabase service not responding on initial check - may be in paused state');
+        markPauseRecoveryRequired();
+      }
+    } catch (error) {
+      console.error('Error during initial Supabase service probe:', error);
+    }
+  }, 1000);
 };
 
 /**
@@ -357,4 +460,73 @@ export const resetAuthRecovery = (): void => {
   localStorage.removeItem('pause_detected');
   localStorage.removeItem('force_bypass');
   localStorage.removeItem(RECOVERY_ATTEMPTS_KEY);
+  clearPauseRecoveryRequired();
+};
+
+/**
+ * Tests the session with progressive retries
+ * @returns an object with status and session data if available
+ */
+export const testSessionWithRetries = async (maxRetries = 3): Promise<{
+  valid: boolean;
+  session: any | null;
+  error?: string;
+}> => {
+  let attempts = 0;
+  let lastError: any = null;
+  
+  while (attempts < maxRetries) {
+    try {
+      // Progressive backoff delay - 0ms, 1000ms, 3000ms
+      if (attempts > 0) {
+        await new Promise(resolve => setTimeout(resolve, attempts === 1 ? 1000 : 3000));
+      }
+      
+      console.log(`Testing session validity, attempt ${attempts + 1}/${maxRetries}`);
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        lastError = error;
+        console.warn(`Session test error on attempt ${attempts + 1}:`, error);
+        attempts++;
+        continue;
+      }
+      
+      if (!data.session) {
+        console.log('No session found in getSession response');
+        return { valid: false, session: null };
+      }
+      
+      // Additional validation
+      const user = data.session.user;
+      const expiresAt = data.session.expires_at;
+      
+      if (!user) {
+        console.log('Session missing user information');
+        return { valid: false, session: null, error: 'Session missing user data' };
+      }
+      
+      if (expiresAt) {
+        const now = Math.floor(Date.now() / 1000);
+        if (expiresAt < now) {
+          console.log('Session is expired');
+          return { valid: false, session: null, error: 'Session expired' };
+        }
+      }
+      
+      console.log('Session is valid');
+      return { valid: true, session: data.session };
+    } catch (error) {
+      lastError = error;
+      console.error(`Unexpected error testing session on attempt ${attempts + 1}:`, error);
+      attempts++;
+    }
+  }
+  
+  // All attempts failed
+  return {
+    valid: false,
+    session: null,
+    error: lastError ? String(lastError) : 'Failed to test session after multiple attempts'
+  };
 };

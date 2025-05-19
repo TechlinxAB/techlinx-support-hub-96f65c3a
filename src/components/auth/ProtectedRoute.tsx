@@ -16,9 +16,16 @@ import {
   wasPauseDetected,
   clearPauseDetected,
   hasTooManyRecoveryAttempts,
-  resetRecoveryAttempts
+  resetRecoveryAttempts,
+  testSessionWithRetries
 } from '@/utils/authRecovery';
-import { supabase, STORAGE_KEY } from '@/integrations/supabase/client';
+import { 
+  supabase, 
+  STORAGE_KEY, 
+  isPauseRecoveryRequired, 
+  clearPauseRecoveryRequired, 
+  validateTokenIntegrity 
+} from '@/integrations/supabase/client';
 
 const ProtectedRoute = () => {
   const { 
@@ -37,6 +44,7 @@ const ProtectedRoute = () => {
   const [forceTimeout, setForceTimeout] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const [resetAttempts, setResetAttempts] = useState(0);
+  const [sessionTestResult, setSessionTestResult] = useState<{valid?: boolean; error?: string}>({});
   
   // Check if we need to use force bypass mode (completely skip auth checks)
   const bypassActive = isForceBypassActive();
@@ -45,6 +53,7 @@ const ProtectedRoute = () => {
   const circuitBreakerInfo = isCircuitBreakerActive();
   const authLoopDetected = detectAuthLoops();
   const pauseDetected = wasPauseDetected();
+  const pauseRecoveryRequired = isPauseRecoveryRequired();
   
   // Initialize pause/unpause detection on first render
   useEffect(() => {
@@ -56,20 +65,44 @@ const ProtectedRoute = () => {
     }
     
     // Display message if coming back from pause
-    if (pauseDetected) {
+    if (pauseDetected || pauseRecoveryRequired) {
       console.log("🔄 Returning from app pause/background - using lenient auth checks");
       setIsPauseRecovery(true);
       
-      // Auto-reset circuit breaker when coming back from pause
-      resetCircuitBreaker();
+      // Check if we have a valid token in local storage
+      const hasToken = validateTokenIntegrity();
+      if (!hasToken) {
+        console.warn("No valid token found after pause - immediate recovery required");
+        handleRecovery();
+      } else {
+        // Auto-reset circuit breaker when coming back from pause
+        resetCircuitBreaker();
+        
+        // Run session test with retries to ensure we have a valid session
+        testSessionWithRetries(3).then(result => {
+          setSessionTestResult(result);
+          
+          if (!result.valid) {
+            console.warn("Session test failed after pause - recovery required");
+            handleRecovery();
+          } else {
+            console.log("Session test passed after pause");
+            // Clear the pause detected flag after using it
+            clearPauseDetected();
+            clearPauseRecoveryRequired();
+          }
+        });
+      }
       
-      // Clear the pause detected flag after using it
-      setTimeout(() => {
+      // Clear the pause detected flag after a delay
+      const timer = setTimeout(() => {
         clearPauseDetected();
         setIsPauseRecovery(false);
-      }, 10000);
+      }, 15000);
+      
+      return () => clearTimeout(timer);
     }
-  }, [bypassActive, pauseDetected]);
+  }, [bypassActive, pauseDetected, pauseRecoveryRequired]);
   
   // Add a longer timeout to force progression after 8 seconds max
   useEffect(() => {
@@ -96,7 +129,7 @@ const ProtectedRoute = () => {
       console.warn('Invalid session or missing token. Routing to /auth.');
       if (location.pathname !== '/auth') {
         setRedirecting(true);
-        navigate('/auth', { replace: true });
+        navigate('/auth', { replace: true, state: { from: location.pathname } });
       }
       return;
     }
@@ -108,8 +141,11 @@ const ProtectedRoute = () => {
     }
   }, [loading, session, location.pathname, navigate]);
   
-  // Handle recovery action
+  // Handle recovery action - enhanced for pause recovery
   const handleRecovery = async () => {
+    // Check if we're already in recovery mode
+    if (isRecovering) return;
+    
     // Track reset attempts to prevent endless recovery loops
     const newResetCount = resetAttempts + 1;
     setResetAttempts(newResetCount);
@@ -136,6 +172,8 @@ const ProtectedRoute = () => {
       if (hasTooManyRecoveryAttempts()) {
         // If we've tried multiple times, activate bypass
         setForceBypass();
+        // Force reload page
+        window.location.reload();
       }
     }
   };
@@ -210,14 +248,16 @@ const ProtectedRoute = () => {
   }
   
   // Handle auth error states with recovery options
-  if (authState === 'ERROR' || circuitBreakerInfo.active || authLoopDetected) {
+  if (authState === 'ERROR' || circuitBreakerInfo.active || authLoopDetected ||
+      pauseRecoveryRequired || (sessionTestResult && !sessionTestResult.valid)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <div className="w-full max-w-md">
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Authentication Error</AlertTitle>
             <AlertDescription>
-              {authError || circuitBreakerInfo.reason || "There was a problem with authentication. This might be due to a stale session."}
+              {authError || circuitBreakerInfo.reason || sessionTestResult.error || 
+                "There was a problem with authentication. This might be due to a stale session."}
               
               {circuitBreakerInfo.active && circuitBreakerInfo.remainingSeconds && (
                 <p className="mt-2 text-sm">

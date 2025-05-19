@@ -27,7 +27,12 @@ const AUTH_VERSION_KEY = 'auth-token-version';
 const AUTH_LAST_SUCCESS_KEY = 'last-successful-auth';
 const AUTH_INIT_COUNT_KEY = 'auth-init-count';
 const AUTH_LAST_INIT_KEY = 'auth-last-init';
-const CURRENT_AUTH_VERSION = '1.0.3'; // Increment this when making breaking changes to auth logic
+const CURRENT_AUTH_VERSION = '1.0.4'; // Incremented for our new auth recovery system
+
+// New pause recovery keys
+const PAUSE_DETECTED_KEY = 'pause-detected-timestamp';
+const PAUSE_RECOVERY_ATTEMPTS_KEY = 'pause-recovery-attempts';
+const PAUSE_RECOVERY_REQUIRED_KEY = 'pause_recovery_required';
 
 /**
  * Check if the current auth version matches the stored version
@@ -44,7 +49,33 @@ export function isAuthVersionCurrent(): boolean {
 export function recordSuccessfulAuth(): void {
   localStorage.setItem(AUTH_LAST_SUCCESS_KEY, Date.now().toString());
   localStorage.setItem(AUTH_VERSION_KEY, CURRENT_AUTH_VERSION);
+  localStorage.removeItem(PAUSE_DETECTED_KEY);
+  localStorage.removeItem(PAUSE_RECOVERY_ATTEMPTS_KEY);
+  localStorage.removeItem(PAUSE_RECOVERY_REQUIRED_KEY);
   resetAuthErrorCount();
+}
+
+/**
+ * Mark that pause recovery is required
+ * Used when we detect specific Supabase pause/resume patterns
+ */
+export function markPauseRecoveryRequired(): void {
+  localStorage.setItem(PAUSE_RECOVERY_REQUIRED_KEY, 'true');
+  console.log('🚨 Marked pause recovery as required');
+}
+
+/**
+ * Check if pause recovery is required
+ */
+export function isPauseRecoveryRequired(): boolean {
+  return localStorage.getItem(PAUSE_RECOVERY_REQUIRED_KEY) === 'true';
+}
+
+/**
+ * Clear pause recovery required flag
+ */
+export function clearPauseRecoveryRequired(): void {
+  localStorage.removeItem(PAUSE_RECOVERY_REQUIRED_KEY);
 }
 
 /**
@@ -109,8 +140,11 @@ export function resetAuthErrorCount(): void {
  * @param reason Reason for activation
  */
 export function activateCircuitBreaker(minutes: number = 5, reason: string = 'Unknown'): void {
-  // FIX 4: Patch circuit breaker logic to ignore pause recovery  
-  if (localStorage.getItem('pause_recovery_required') === 'true') return;
+  // Special handling for pause recovery
+  if (isPauseRecoveryRequired()) {
+    console.log('Pause recovery required - not activating circuit breaker');
+    return;
+  }
   
   console.warn(`Activating auth circuit breaker for ${minutes} minutes. Reason: ${reason}`);
   
@@ -133,6 +167,13 @@ export function isCircuitBreakerActive(): {
   reason?: string; 
   remainingSeconds?: number;
 } {
+  // If pause recovery is required, override circuit breaker
+  if (isPauseRecoveryRequired()) {
+    return { 
+      active: false 
+    };
+  }
+
   const circuitBreakerJson = localStorage.getItem(AUTH_CIRCUIT_BREAKER_KEY);
   
   if (!circuitBreakerJson) {
@@ -171,6 +212,31 @@ export function resetCircuitBreaker(): void {
 }
 
 /**
+ * Validates token integrity - checks if the token exists and has proper format
+ * Returns true if token appears valid (doesn't verify with server)
+ */
+export function validateTokenIntegrity(): boolean {
+  try {
+    const rawToken = localStorage.getItem(STORAGE_KEY);
+    if (!rawToken) return false;
+    
+    // Basic check: try to parse the token data
+    const tokenData = JSON.parse(rawToken);
+    
+    // Check if token has minimum required fields
+    return !!(
+      tokenData &&
+      tokenData.access_token &&
+      tokenData.refresh_token &&
+      tokenData.expires_at
+    );
+  } catch (e) {
+    console.error('Token validation failed:', e);
+    return false;
+  }
+}
+
+/**
  * Clear all authentication state
  */
 export async function clearAuthState(): Promise<boolean> {
@@ -189,6 +255,11 @@ export async function clearAuthState(): Promise<boolean> {
     
     // Special handling for auth token
     localStorage.removeItem(STORAGE_KEY);
+    
+    // Clear pause recovery flags
+    clearPauseRecoveryRequired();
+    localStorage.removeItem(PAUSE_DETECTED_KEY);
+    localStorage.removeItem(PAUSE_RECOVERY_ATTEMPTS_KEY);
     
     console.log('Auth state cleared successfully');
     return true;

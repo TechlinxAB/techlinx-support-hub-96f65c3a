@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, validateTokenIntegrity } from "@/integrations/supabase/client";
 import { useToast } from '@/components/ui/use-toast';
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +21,10 @@ import {
   detectAuthLoops,
   isTokenPotentiallyStale,
   performFullAuthRecovery, 
-  emergencyAuthReset 
+  emergencyAuthReset,
+  testSessionWithRetries,
+  isPauseRecoveryRequired,
+  clearPauseRecoveryRequired
 } from '@/utils/authRecovery';
 
 /**
@@ -56,6 +60,8 @@ const AuthPage = () => {
   const [advancedTroubleshooting, setAdvancedTroubleshooting] = useState<boolean>(false);
   const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
   const [forceHomeRedirect, setForceHomeRedirect] = useState<boolean>(false);
+  const [serviceStatus, setServiceStatus] = useState<'checking' | 'available' | 'unavailable' | 'recovering'>('checking');
+  const [sessionValid, setSessionValid] = useState<boolean | null>(null);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,6 +71,55 @@ const AuthPage = () => {
   const urlParams = new URLSearchParams(location.search);
   const redirectParam = urlParams.get('redirect');
   const from = location.state?.from || redirectParam || '/';
+  
+  // Add a diagnostics run on page load
+  useEffect(() => {
+    const runDiagnostics = async () => {
+      try {
+        console.log("Running auth diagnostics...");
+        
+        // First check for pause recovery mode
+        if (isPauseRecoveryRequired()) {
+          console.log("⚠️ Pause recovery required flag detected");
+          setServiceStatus('recovering');
+          setShowRecovery(true);
+          setAdvancedTroubleshooting(true);
+          clearPauseRecoveryRequired(); // Clear it once we're on auth page
+        }
+        
+        // Check if we have a valid token in storage
+        const hasValidToken = validateTokenIntegrity();
+        console.log(`Token integrity check: ${hasValidToken ? 'VALID' : 'INVALID'}`);
+        
+        // Run a service check
+        const result = await testSessionWithRetries(2);
+        setSessionValid(result.valid);
+        
+        if (result.valid) {
+          console.log("✅ Session test: VALID");
+          setServiceStatus('available');
+          
+          // If we get here with a valid session AND token, but no authState,
+          // something is wrong - trigger recovery
+          if (!session && hasValidToken) {
+            console.warn("⚠️ Token exists but no active session. Triggering recovery.");
+            setShowRecovery(true);
+          }
+        } else {
+          console.warn("❌ Session test: INVALID", result.error);
+          setServiceStatus('unavailable');
+          setShowRecovery(true);
+        }
+      } catch (error) {
+        console.error("Error during diagnostics:", error);
+        setServiceStatus('unavailable');
+        setShowRecovery(true);
+      }
+    };
+    
+    // Run diagnostics on load
+    runDiagnostics();
+  }, [session]);
   
   // Add an emergency force redirect function
   const handleForceRedirect = () => {
@@ -254,6 +309,43 @@ const AuthPage = () => {
     );
   }
   
+  // Show service status indicator when needed
+  const renderServiceStatusIndicator = () => {
+    if (serviceStatus === 'checking') return null;
+    
+    return (
+      <div className={`mb-4 p-2 rounded border ${
+        serviceStatus === 'available' ? 'bg-green-50 border-green-200 text-green-700' :
+        serviceStatus === 'recovering' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+        'bg-red-50 border-red-200 text-red-700'
+      }`}>
+        <div className="flex items-center">
+          {serviceStatus === 'available' ? (
+            <>
+              <div className="h-2 w-2 rounded-full bg-green-500 mr-2"></div>
+              <span className="text-sm font-medium">Supabase service is operational</span>
+            </>
+          ) : serviceStatus === 'recovering' ? (
+            <>
+              <div className="h-2 w-2 rounded-full bg-amber-500 mr-2"></div>
+              <span className="text-sm font-medium">Recovery in progress</span>
+            </>
+          ) : (
+            <>
+              <div className="h-2 w-2 rounded-full bg-red-500 mr-2"></div>
+              <span className="text-sm font-medium">Supabase service may be restarting</span>
+            </>
+          )}
+        </div>
+        {serviceStatus !== 'available' && (
+          <p className="text-xs mt-1">
+            Service may be recovering from pause. Automatic reconnection in progress.
+          </p>
+        )}
+      </div>
+    );
+  };
+  
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="w-full max-w-md">
@@ -262,8 +354,10 @@ const AuthPage = () => {
           <CardDescription>Sign in to access your support dashboard</CardDescription>
         </CardHeader>
         
-        {(isAuthError || circuitBreakerInfo.active) && (
-          <CardContent>
+        <CardContent>
+          {renderServiceStatusIndicator()}
+          
+          {(isAuthError || circuitBreakerInfo.active) && (
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4 mr-2" />
               <AlertTitle>Authentication Error</AlertTitle>
@@ -279,7 +373,9 @@ const AuthPage = () => {
                 )}
               </AlertDescription>
             </Alert>
-            
+          )}
+          
+          {(isAuthError || circuitBreakerInfo.active || serviceStatus === 'recovering') && (
             <Button 
               onClick={handleRecovery} 
               variant="secondary"
@@ -293,99 +389,99 @@ const AuthPage = () => {
               )}
               Reset Authentication
             </Button>
-          </CardContent>
-        )}
-        
-        <form onSubmit={handleSignIn}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">Email</label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium">Password</label>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-          </CardContent>
+          )}
           
-          <CardFooter className="flex flex-col space-y-3">
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loading || recoveryMode || (circuitBreakerInfo.active && !advancedTroubleshooting)}
-            >
-              {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Sign In
-            </Button>
+          <form onSubmit={handleSignIn}>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium">Email</label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="text-sm font-medium">Password</label>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
             
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full" 
-              onClick={handleForceRedirect}
-            >
-              Go to Dashboard
-            </Button>
-            
-            {showRecovery && !isAuthError && (
+            <div className="flex flex-col space-y-3 mt-4">
               <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full text-sm"
-                onClick={handleRecovery}
-                disabled={loading || recoveryMode}
+                type="submit" 
+                className="w-full" 
+                disabled={loading || recoveryMode || (circuitBreakerInfo.active && !advancedTroubleshooting) || serviceStatus === 'unavailable'}
               >
-                {recoveryMode ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Troubleshoot Login
+                {loading && !recoveryMode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sign In
               </Button>
-            )}
-            
-            {advancedTroubleshooting && (
+              
               <Button
                 type="button"
-                variant="destructive"
-                className="w-full text-sm mt-3"
-                onClick={handleHardReset}
-                disabled={loading}
+                variant="outline"
+                className="w-full" 
+                onClick={handleForceRedirect}
               >
-                <Shield className="mr-2 h-4 w-4" />
-                Complete Reset (Clear All Data)
+                Go to Dashboard
               </Button>
-            )}
-            
-            {!advancedTroubleshooting && showRecovery && (
-              <Button
-                type="button"
-                variant="link"
-                className="text-xs text-muted-foreground w-full mt-1"
-                onClick={() => setAdvancedTroubleshooting(true)}
-              >
-                Advanced Troubleshooting Options
-              </Button>
-            )}
-          </CardFooter>
-        </form>
+              
+              {showRecovery && !isAuthError && (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="w-full text-sm"
+                  onClick={handleRecovery}
+                  disabled={loading || recoveryMode}
+                >
+                  {recoveryMode ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Troubleshoot Login
+                </Button>
+              )}
+              
+              {advancedTroubleshooting && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="w-full text-sm mt-3"
+                  onClick={handleHardReset}
+                  disabled={loading}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Complete Reset (Clear All Data)
+                </Button>
+              )}
+              
+              {!advancedTroubleshooting && showRecovery && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-xs text-muted-foreground w-full mt-1"
+                  onClick={() => setAdvancedTroubleshooting(true)}
+                >
+                  Advanced Troubleshooting Options
+                </Button>
+              )}
+            </div>
+          </form>
+        </CardContent>
         
         <CardFooter className="flex flex-col space-y-2 border-t border-border pt-4">
           <p className="text-sm text-muted-foreground text-center">

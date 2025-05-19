@@ -10,10 +10,14 @@ import {
   isCircuitBreakerActive,
   resetCircuitBreaker,
   recordSuccessfulAuth,
-  STORAGE_KEY
+  STORAGE_KEY,
+  validateTokenIntegrity,
+  isPauseRecoveryRequired,
+  markPauseRecoveryRequired
 } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { probeSupabaseService, testSessionWithRetries } from '@/utils/authRecovery';
 
 // Define user profile type
 export type UserProfile = {
@@ -109,10 +113,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error('Error fetching profile:', error);
         
+        // Check if this might be due to Supabase being paused
+        if (retryAttempt === 0) {
+          const serviceAvailable = await probeSupabaseService();
+          if (!serviceAvailable) {
+            console.warn('Supabase service may be paused - marking for recovery');
+            markPauseRecoveryRequired();
+          }
+        }
+        
         // If we have retries left, try again after a delay
         if (retryAttempt < MAX_AUTH_RETRIES) {
-          console.log(`Retrying profile fetch in ${(retryAttempt + 1) * 1000}ms...`);
-          await new Promise(resolve => setTimeout(resolve, (retryAttempt + 1) * 1000));
+          // Exponential backoff: 1s, 2s
+          const delay = (retryAttempt + 1) * 1000;
+          console.log(`Retrying profile fetch in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
           return fetchProfile(userId, retryAttempt + 1);
         }
         
@@ -132,8 +147,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // If we have retries left, try again after a delay
       if (retryAttempt < MAX_AUTH_RETRIES) {
-        console.log(`Retrying profile fetch after exception in ${(retryAttempt + 1) * 1000}ms...`);
-        await new Promise(resolve => setTimeout(resolve, (retryAttempt + 1) * 1000));
+        // Exponential backoff: 1s, 2s
+        const delay = (retryAttempt + 1) * 1000;
+        console.log(`Retrying profile fetch after exception in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
         return fetchProfile(userId, retryAttempt + 1);
       }
       
@@ -163,6 +180,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     try {
+      // First check if service is available
+      const isServiceAvailable = await probeSupabaseService();
+      console.log(`Service availability check: ${isServiceAvailable ? 'OK' : 'NOT RESPONDING'}`);
+      
       // Full reset of auth state
       await clearAuthState();
       
@@ -274,7 +295,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
     
-    // Check for existing session with retry logic and improved token validation
+    // Enhanced session check with retry logic and improved token validation
     const checkSession = async () => {
       if (sessionCheckDone) return;
       setSessionCheckDone(true);
@@ -285,21 +306,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // FIX 3: Check for pause recovery flag and handle it here instead of in authRecovery.ts
-      const needsPauseRecovery = localStorage.getItem('pause_recovery_required') === 'true';
-      
-      if (needsPauseRecovery) {
+      // Check for pause recovery flag and handle it here
+      if (isPauseRecoveryRequired()) {
         console.warn('Pause recovery flag detected. Forcing full auth reset.');
-        localStorage.removeItem('pause_recovery_required');
         await clearAuthState();
-        location.href = '/auth?pause_recovery=' + Date.now();
+        setAuthState('SIGNED_OUT');
+        setLoading(false);
         return;
       }
       
-      // Add the new check for raw token existence before attempting to restore session
-      const rawToken = localStorage.getItem(STORAGE_KEY);
-      if (!rawToken) {
-        console.warn('No auth token in storage, skipping session check.');
+      // First validate token integrity without making API calls
+      if (!validateTokenIntegrity()) {
+        console.warn('No valid auth token in storage, skipping session check.');
         setAuthState('SIGNED_OUT');
         setLoading(false);
         return;
@@ -307,40 +325,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       try {
         console.log(`Checking session, attempt 1`);
-        const { data, error } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error('Session check error:', error);
-          setAuthState('SIGNED_OUT');
-          setLoading(false);
-          return;
-        }
+        // Use our enhanced session test with retries
+        const result = await testSessionWithRetries(2);
         
-        setSession(data.session);
-        setUser(data.session?.user || null);
-        
-        if (data.session?.user) {
-          // Only fetch profile if we haven't done so already
-          if (!profile) {
-            const fetchedProfile = await fetchProfile(data.session.user.id);
-            if (fetchedProfile) {
-              setProfile(fetchedProfile);
-              setAuthState('AUTHENTICATED');
-              resetAuthErrorCount();
-              recordSuccessfulAuth(); // Record successful auth
-            } else {
-              const errorCount = trackAuthError();
-              setAuthState('SIGNED_IN');
-              
-              if (errorCount >= MAX_AUTH_ERRORS) {
-                console.warn("Too many auth errors, activating circuit breaker");
-                activateCircuitBreaker(5, "Failed to fetch user profile during session check");
-                setAuthError("Authentication temporarily disabled due to repeated errors");
-                setAuthState('ERROR');
+        if (result.valid && result.session) {
+          console.log('Session test successful, valid session found');
+          
+          // Update session and user
+          setSession(result.session);
+          setUser(result.session.user || null);
+          
+          if (result.session.user) {
+            // Only fetch profile if we haven't done so already
+            if (!profile) {
+              const fetchedProfile = await fetchProfile(result.session.user.id);
+              if (fetchedProfile) {
+                setProfile(fetchedProfile);
+                setAuthState('AUTHENTICATED');
+                resetAuthErrorCount();
+                recordSuccessfulAuth(); // Record successful auth
+              } else {
+                const errorCount = trackAuthError();
+                setAuthState('SIGNED_IN');
+                
+                if (errorCount >= MAX_AUTH_ERRORS) {
+                  console.warn("Too many auth errors, activating circuit breaker");
+                  activateCircuitBreaker(5, "Failed to fetch user profile during session check");
+                  setAuthError("Authentication temporarily disabled due to repeated errors");
+                  setAuthState('ERROR');
+                }
               }
             }
+          } else {
+            setAuthState('SIGNED_OUT');
           }
         } else {
+          console.warn('Session test failed:', result.error);
           setAuthState('SIGNED_OUT');
         }
       } catch (error) {
