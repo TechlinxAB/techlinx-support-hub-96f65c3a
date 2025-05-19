@@ -289,7 +289,7 @@ const CompanyNewsBuilderPage = () => {
         description: `Failed to ${isPublished ? 'publish' : 'unpublish'} block`
       });
       
-      // Only refetch on error
+      // Only refetch on error - this is the line with the error
       await refetchCompanyNewsBlocks();
     } finally {
       setLoading(false);
