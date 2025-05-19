@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import ModalReset from "./components/ui/modal-reset";
 import SearchPage from "./pages/SearchPage";
 import { useEffect } from "react";
 import { initPauseUnpauseDetection } from "./utils/authRecovery";
+import { AnimatePresence } from "framer-motion";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -59,6 +60,42 @@ const InitApp = () => {
   return null;
 };
 
+// Animation wrapper for routes
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {/* Public route - accessible without authentication */}
+        <Route path="/auth" element={<AuthPage />} />
+        
+        {/* Protected routes - require authentication */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="cases" element={<CasesPage />} />
+            <Route path="cases/new" element={<NewCasePage />} />
+            <Route path="cases/:id" element={<CaseDetailPage />} />
+            <Route path="companies" element={<CompaniesPage />} />
+            <Route path="companies/:id" element={<CompaniesPage />} />
+            <Route path="company/:id/settings" element={<CompanySettingsPage />} />
+            <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+            <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+            <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
+            <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
+            <Route path="users" element={<UserManagementPage />} />
+            <Route path="company-management" element={<CompanyManagementPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="search" element={<SearchPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Route>
+      </Routes>
+    </AnimatePresence>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
@@ -69,32 +106,7 @@ const App = () => (
               <Toaster />
               <ModalReset />
               <InitApp />
-              <Routes>
-                {/* Public route - accessible without authentication */}
-                <Route path="/auth" element={<AuthPage />} />
-                
-                {/* Protected routes - require authentication */}
-                <Route element={<ProtectedRoute />}>
-                  <Route path="/" element={<Layout />}>
-                    <Route index element={<Dashboard />} />
-                    <Route path="cases" element={<CasesPage />} />
-                    <Route path="cases/new" element={<NewCasePage />} />
-                    <Route path="cases/:id" element={<CaseDetailPage />} />
-                    <Route path="companies" element={<CompaniesPage />} />
-                    <Route path="companies/:id" element={<CompaniesPage />} />
-                    <Route path="company/:id/settings" element={<CompanySettingsPage />} />
-                    <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-                    <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-                    <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
-                    <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-                    <Route path="users" element={<UserManagementPage />} />
-                    <Route path="company-management" element={<CompanyManagementPage />} />
-                    <Route path="settings" element={<SettingsPage />} />
-                    <Route path="search" element={<SearchPage />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Route>
-                </Route>
-              </Routes>
+              <AnimatedRoutes />
             </ModalManager>
           </TooltipProvider>
         </AppProvider>

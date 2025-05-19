@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -22,21 +22,30 @@ const Layout = () => {
   const [isRecovering, setIsRecovering] = useState(false);
   const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
+    // Load sidebar state from localStorage if available
+    const savedSidebarState = localStorage.getItem('sidebarState');
+    if (savedSidebarState !== null) {
+      setIsSidebarOpen(savedSidebarState === 'open');
+    } else {
+      // Default behavior based on screen size
+      const handleResize = () => {
+        if (window.innerWidth < 768) {
+          setIsSidebarOpen(false);
+        } else {
+          setIsSidebarOpen(true);
+        }
+      };
+  
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
     
     // Set a timeout to force show content after 3 seconds
     const timer = setTimeout(() => {
@@ -59,13 +68,24 @@ const Layout = () => {
     }
     
     return () => {
-      window.removeEventListener('resize', handleResize);
       clearTimeout(timer);
     };
   }, []);
 
+  // Save sidebar state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarState', isSidebarOpen ? 'open' : 'closed');
+  }, [isSidebarOpen]);
+
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  // Close sidebar when clicked outside on mobile
+  const handleOverlayClick = () => {
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
   };
 
   // Emergency recovery helper
@@ -203,6 +223,15 @@ const Layout = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-muted/20">
+      {/* Mobile overlay to close sidebar when clicked outside */}
+      {isSidebarOpen && window.innerWidth < 768 && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-20 md:hidden transition-opacity duration-300"
+          onClick={handleOverlayClick}
+          aria-hidden="true"
+        />
+      )}
+      
       <Sidebar isOpen={isSidebarOpen} />
       
       <div className="flex-1 flex flex-col overflow-hidden">

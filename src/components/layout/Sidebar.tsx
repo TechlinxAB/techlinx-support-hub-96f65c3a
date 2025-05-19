@@ -61,9 +61,8 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
   return (
     <aside 
       className={cn(
-        "h-screen bg-sidebar z-30 flex flex-col transition-all duration-300",
-        isOpen ? "w-64" : "w-0 md:w-16",
-        "md:relative fixed left-0 top-0 bottom-0"
+        "h-screen bg-sidebar z-30 flex flex-col fixed left-0 top-0 bottom-0 transition-all duration-300 ease-in-out",
+        isOpen ? "translate-x-0 w-64" : "w-0 -translate-x-full md:translate-x-0 md:w-16",
       )}
     >
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border bg-sidebar">

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
@@ -6,6 +5,7 @@ import ConsultantDashboard from '@/components/dashboard/ConsultantDashboard';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { useAuth } from '@/context/AuthContext';
 import { Loader } from 'lucide-react';
+import PageTransition from "@/components/layout/PageTransition";
 
 const Dashboard = () => {
   const { currentUser } = useAppContext();
@@ -37,13 +37,15 @@ const Dashboard = () => {
   const showConsultantDashboard = profile.role === 'consultant';
   
   return (
-    <div className="w-full">
-      {showConsultantDashboard ? (
-        <ConsultantDashboard />
-      ) : (
-        <UserDashboard />
-      )}
-    </div>
+    <PageTransition>
+      <div className="w-full">
+        {showConsultantDashboard ? (
+          <ConsultantDashboard />
+        ) : (
+          <UserDashboard />
+        )}
+      </div>
+    </PageTransition>
   );
 };
 
