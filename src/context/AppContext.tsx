@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { UserProfile } from './AuthContext';
@@ -43,6 +42,9 @@ export type User = {
   name: string;
   email: string;
   role: string;
+  phone?: string;         // Add phone field
+  companyId?: string;     // Add companyId field
+  preferredLanguage?: string; // Add preferredLanguage field
 };
 
 // Define Reply type
@@ -78,24 +80,32 @@ export type Attachment = {
 };
 
 // Define Dashboard Block type
+export type BlockType = 'text' | 'chart' | 'stats' | 'list' | 'custom' | string;
+
+// Define Dashboard Block type
 export type DashboardBlock = {
   id: string;
   companyId: string;
   title: string;
-  type: string;
+  type: BlockType;  // Update to BlockType instead of just string
   content: any;
   position: number;
   parentId?: string;
+  showTitle?: boolean; // Add showTitle property
   createdBy: string;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
 
+// Add UserRole and Language types
+export type UserRole = 'admin' | 'user' | 'consultant';
+export type Language = 'en' | 'sv';
+
 // Type definitions for the AppContext
 type AppContextType = {
   // Basic app settings
-  language: 'en' | 'sv';
-  setLanguage: (language: 'en' | 'sv') => void;
+  language: Language;
+  setLanguage: (language: Language) => void;
   currentUser: UserProfile | null;
   
   // Cases
@@ -103,6 +113,7 @@ type AppContextType = {
   loadingCases: boolean;
   refetchCases: (caseId?: string) => Promise<Case[]>;
   updateCase: (caseId: string, data: Partial<Case>) => Promise<Case | null>;
+  addCase: (data: Partial<Case>) => Promise<Case | null>;
   
   // Companies
   companies: Company[];
@@ -113,6 +124,7 @@ type AppContextType = {
   
   // Users
   users: User[];
+  refetchUsers: () => Promise<User[]>;
   
   // Categories
   categories: Category[];
@@ -141,6 +153,12 @@ type AppContextType = {
   addDashboardBlock: (data: Partial<DashboardBlock>) => Promise<DashboardBlock | null>;
   updateDashboardBlock: (id: string, data: Partial<DashboardBlock>) => Promise<DashboardBlock | null>;
   deleteDashboardBlock: (id: string) => Promise<boolean>;
+  
+  // Company News blocks
+  addCompanyNewsBlock: (data: any) => Promise<any>;
+  updateCompanyNewsBlock: (id: string, data: any) => Promise<any>;
+  deleteCompanyNewsBlock: (id: string) => Promise<boolean>;
+  publishCompanyNewsBlock: (id: string) => Promise<boolean>;
 };
 
 // Create the context with default values
@@ -152,12 +170,14 @@ const AppContext = createContext<AppContextType>({
   loadingCases: false,
   refetchCases: async () => [],
   updateCase: async () => null,
+  addCase: async () => null,
   companies: [],
   addCompany: async () => null,
   updateCompany: async () => null,
   deleteCompany: async () => false,
   refetchCompanies: async () => [],
   users: [],
+  refetchUsers: async () => [],
   categories: [],
   replies: [],
   notes: [],
@@ -182,7 +202,7 @@ const AppContext = createContext<AppContextType>({
 
 // Provider component to wrap the app
 export const AppProvider = ({ children }: { children: React.ReactNode }) => {
-  const [language, setLanguage] = useState<'en' | 'sv'>('en');
+  const [language, setLanguage] = useState<Language>('en');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [cases, setCases] = useState<Case[] | null>(null);
   const [loadingCases, setLoadingCases] = useState<boolean>(false);
@@ -286,6 +306,36 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     // Mock implementation
     return false;
   };
+  
+  const addCase = async (data: Partial<Case>): Promise<Case | null> => {
+    // Mock implementation
+    return null;
+  };
+  
+  const refetchUsers = async (): Promise<User[]> => {
+    // Mock implementation
+    return users;
+  };
+  
+  const addCompanyNewsBlock = async (data: any): Promise<any> => {
+    // Mock implementation
+    return null;
+  };
+  
+  const updateCompanyNewsBlock = async (id: string, data: any): Promise<any> => {
+    // Mock implementation
+    return null;
+  };
+  
+  const deleteCompanyNewsBlock = async (id: string): Promise<boolean> => {
+    // Mock implementation
+    return false;
+  };
+  
+  const publishCompanyNewsBlock = async (id: string): Promise<boolean> => {
+    // Mock implementation
+    return false;
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -371,12 +421,14 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     loadingCases,
     refetchCases,
     updateCase,
+    addCase,
     companies,
     addCompany,
     updateCompany,
     deleteCompany,
     refetchCompanies,
     users,
+    refetchUsers,
     categories,
     replies,
     notes,
@@ -397,6 +449,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     addDashboardBlock,
     updateDashboardBlock,
     deleteDashboardBlock,
+    addCompanyNewsBlock,
+    updateCompanyNewsBlock,
+    deleteCompanyNewsBlock,
+    publishCompanyNewsBlock,
   };
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;

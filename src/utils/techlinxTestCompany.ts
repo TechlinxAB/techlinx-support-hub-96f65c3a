@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Company } from "@/context/AppContext";
 
@@ -166,4 +165,122 @@ export const createTechlinxSampleContent = async (techlinxCompanyId: string, cre
  */
 export const isTechlinxCompany = (companyName: string): boolean => {
   return companyName === TECHLINX_NAME;
+};
+
+/**
+ * Retrieves the Techlinx company object
+ * @returns The Techlinx company object
+ */
+export const getTechlinxCompany = async (): Promise<Company> => {
+  // Check if Techlinx already exists
+  const { data: companyData, error: fetchError } = await supabase
+    .from('companies')
+    .select('*')
+    .eq('name', TECHLINX_NAME);
+  
+  if (fetchError) {
+    console.error("Error fetching Techlinx company:", fetchError.message);
+    return {
+      id: 'techlinx-test',
+      name: 'Techlinx Test',
+      logo: '/placeholder.svg',
+      createdAt: new Date()
+    };
+  }
+  
+  // If Techlinx already exists, return it
+  if (companyData && companyData.length > 0) {
+    return {
+      id: companyData[0].id,
+      name: companyData[0].name,
+      logo: companyData[0].logo,
+      createdAt: new Date()
+    };
+  }
+  
+  // Create Techlinx company if it doesn't exist
+  const { data: newCompany, error: createError } = await supabase
+    .from('companies')
+    .insert({
+      name: TECHLINX_NAME,
+      logo: TECHLINX_LOGO
+    })
+    .select()
+    .single();
+  
+  if (createError) {
+    console.error("Error creating Techlinx company:", createError.message);
+    return {
+      id: 'techlinx-test',
+      name: 'Techlinx Test',
+      logo: '/placeholder.svg',
+      createdAt: new Date()
+    };
+  }
+  
+  return {
+    id: newCompany.id,
+    name: newCompany.name,
+    logo: newCompany.logo,
+    createdAt: new Date()
+  };
+};
+
+/**
+ * Retrieves the test company object
+ * @returns The test company object
+ */
+export const getTestCompanyObject = async (): Promise<Company> => {
+  // Check if Techlinx already exists
+  const { data: companyData, error: fetchError } = await supabase
+    .from('companies')
+    .select('*')
+    .eq('name', TECHLINX_NAME);
+  
+  if (fetchError) {
+    console.error("Error fetching Techlinx company:", fetchError.message);
+    return {
+      id: 'techlinx-test',
+      name: 'Techlinx Test',
+      logo: '/placeholder.svg',
+      createdAt: new Date()
+    };
+  }
+  
+  // If Techlinx already exists, return it
+  if (companyData && companyData.length > 0) {
+    return {
+      id: companyData[0].id,
+      name: companyData[0].name,
+      logo: companyData[0].logo,
+      createdAt: new Date()
+    };
+  }
+  
+  // Create Techlinx company if it doesn't exist
+  const { data: newCompany, error: createError } = await supabase
+    .from('companies')
+    .insert({
+      name: TECHLINX_NAME,
+      logo: TECHLINX_LOGO
+    })
+    .select()
+    .single();
+  
+  if (createError) {
+    console.error("Error creating Techlinx company:", createError.message);
+    return {
+      id: 'techlinx-test',
+      name: 'Techlinx Test',
+      logo: '/placeholder.svg',
+      createdAt: new Date()
+    };
+  }
+  
+  return {
+    id: newCompany.id,
+    name: newCompany.name,
+    logo: newCompany.logo,
+    createdAt: new Date()
+  };
 };
