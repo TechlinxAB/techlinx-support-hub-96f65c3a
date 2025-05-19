@@ -232,9 +232,17 @@ const Layout = () => {
         />
       )}
       
-      <Sidebar isOpen={isSidebarOpen} />
+      {/* Sidebar with fixed positioning and transition */}
+      <div className={`fixed inset-y-0 left-0 z-30 transition-transform duration-300 ease-in-out transform 
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+      >
+        <Sidebar isOpen={isSidebarOpen} />
+      </div>
       
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main content that adjusts its margin based on sidebar state */}
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
+        ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}
+      >
         <Header toggleSidebar={toggleSidebar} />
         {isPauseRecovery && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">

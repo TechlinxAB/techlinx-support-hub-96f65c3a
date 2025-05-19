@@ -65,34 +65,92 @@ const AnimatedRoutes = () => {
   const location = useLocation();
   
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        {/* Public route - accessible without authentication */}
-        <Route path="/auth" element={<AuthPage />} />
-        
-        {/* Protected routes - require authentication */}
-        <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="cases" element={<CasesPage />} />
-            <Route path="cases/new" element={<NewCasePage />} />
-            <Route path="cases/:id" element={<CaseDetailPage />} />
-            <Route path="companies" element={<CompaniesPage />} />
-            <Route path="companies/:id" element={<CompaniesPage />} />
-            <Route path="company/:id/settings" element={<CompanySettingsPage />} />
-            <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-            <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-            <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
-            <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-            <Route path="users" element={<UserManagementPage />} />
-            <Route path="company-management" element={<CompanyManagementPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="search" element={<SearchPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
+    <Routes location={location} key={location.pathname}>
+      {/* Public route - accessible without authentication */}
+      <Route path="/auth" element={<AuthPage />} />
+      
+      {/* Protected routes - require authentication */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<Layout />}>
+          <Route index element={
+            <AnimatePresence mode="wait" initial={false}>
+              <Dashboard key="dashboard" />
+            </AnimatePresence>
+          } />
+          <Route path="cases" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CasesPage key="cases" />
+            </AnimatePresence>
+          } />
+          <Route path="cases/new" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <NewCasePage key="new-case" />
+            </AnimatePresence>
+          } />
+          <Route path="cases/:id" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CaseDetailPage key="case-detail" />
+            </AnimatePresence>
+          } />
+          <Route path="companies" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompaniesPage key="companies" />
+            </AnimatePresence>
+          } />
+          <Route path="companies/:id" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompaniesPage key="companies-id" />
+            </AnimatePresence>
+          } />
+          <Route path="company/:id/settings" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompanySettingsPage key="company-settings" />
+            </AnimatePresence>
+          } />
+          <Route path="company-dashboard" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompanyDashboardPage key="company-dashboard" />
+            </AnimatePresence>
+          } />
+          <Route path="company-dashboard-builder/:companyId" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompanyDashboardBuilderPage key="company-dashboard-builder" />
+            </AnimatePresence>
+          } />
+          <Route path="company-news/:companyId" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompanyNewsPage key="company-news" />
+            </AnimatePresence>
+          } />
+          <Route path="company-news-builder/:companyId" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompanyNewsBuilderPage key="company-news-builder" />
+            </AnimatePresence>
+          } />
+          <Route path="users" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <UserManagementPage key="users" />
+            </AnimatePresence>
+          } />
+          <Route path="company-management" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <CompanyManagementPage key="company-management" />
+            </AnimatePresence>
+          } />
+          <Route path="settings" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <SettingsPage key="settings" />
+            </AnimatePresence>
+          } />
+          <Route path="search" element={
+            <AnimatePresence mode="wait" initial={false}>
+              <SearchPage key="search" />
+            </AnimatePresence>
+          } />
+          <Route path="*" element={<NotFound />} />
         </Route>
-      </Routes>
-    </AnimatePresence>
+      </Route>
+    </Routes>
   );
 };
 
@@ -106,7 +164,9 @@ const App = () => (
               <Toaster />
               <ModalReset />
               <InitApp />
-              <AnimatedRoutes />
+              <AnimatePresence mode="wait">
+                <AnimatedRoutes />
+              </AnimatePresence>
             </ModalManager>
           </TooltipProvider>
         </AppProvider>
