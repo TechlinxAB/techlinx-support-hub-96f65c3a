@@ -10,12 +10,12 @@ interface PageTransitionProps {
 const PageTransition = ({ children, className }: PageTransitionProps) => {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 5 }}
+      initial={{ opacity: 0, y: 0 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -5 }}
+      exit={{ opacity: 0, y: 0 }}
       transition={{ 
-        duration: 0.15,
-        ease: "easeInOut"
+        duration: 0.12,
+        ease: "linear"
       }}
       className={className || "w-full h-full"}
     >
