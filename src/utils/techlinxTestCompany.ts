@@ -32,14 +32,11 @@ export const ensureTechlinxCompanyExists = async () => {
     // Otherwise, create it
     console.log("Creating Techlinx test company...");
     
+    // Only include fields that exist in the database schema
     const newCompany = {
       name: TECHLINX_NAME,
-      logo: "/placeholder.svg",
-      industry: "Technology",
-      description: "A test company for demo purposes",
-      website: "https://example.com",
-      size: "50-100",
-      // Remove createdAt and updatedAt fields - these might be managed by the database
+      logo: "/placeholder.svg"
+      // No other fields - only use what's in the database schema (name, logo)
     };
     
     const { data: createdCompany, error: createError } = await supabase
@@ -109,7 +106,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
       return;
     }
     
-    // Create sample cases - make sure these field names match your database schema
+    // Create sample cases using only fields from the database schema
     const sampleCases = [
       {
         title: "Configure SSO for our domain",
@@ -118,7 +115,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
         priority: "medium",
         company_id: companyId,
         user_id: userId,
-        // Use fields that match your database schema
+        category_id: await getOrCreateDefaultCategory() // Get or create a default category
       },
       {
         title: "Dashboard showing stale data",
@@ -127,7 +124,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
         priority: "high",
         company_id: companyId,
         user_id: userId,
-        // Use fields that match your database schema
+        category_id: await getOrCreateDefaultCategory()
       },
       {
         title: "Need to add new team member",
@@ -136,7 +133,7 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
         priority: "low",
         company_id: companyId,
         user_id: userId,
-        // Use fields that match your database schema
+        category_id: await getOrCreateDefaultCategory()
       }
     ];
     
@@ -152,6 +149,42 @@ export const createTechlinxSampleContent = async (companyId: string, userId: str
     console.log("Successfully created sample content for Techlinx");
   } catch (error) {
     console.error("Error in createTechlinxSampleContent:", error);
+    throw error;
+  }
+};
+
+/**
+ * Helper function to get or create a default category for cases
+ * @returns The ID of the default category
+ */
+const getOrCreateDefaultCategory = async (): Promise<string> => {
+  try {
+    // Try to fetch an existing category
+    const { data: existingCategories } = await supabase
+      .from("categories")
+      .select("id")
+      .limit(1);
+    
+    // If a category exists, use the first one
+    if (existingCategories && existingCategories.length > 0) {
+      return existingCategories[0].id;
+    }
+    
+    // Otherwise create a new default category
+    const { data: newCategory, error } = await supabase
+      .from("categories")
+      .insert({ name: "General" })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Error creating default category:", error);
+      throw error;
+    }
+    
+    return newCategory.id;
+  } catch (error) {
+    console.error("Error in getOrCreateDefaultCategory:", error);
     throw error;
   }
 };
