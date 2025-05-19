@@ -67,10 +67,33 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [isSidebarOpen, isMobile]);
 
+  // Use ResizeObserver to track sidebar width changes
+  useEffect(() => {
+    if (!sidebarRef.current) return;
+
+    const updateSidebarWidth = () => {
+      if (sidebarRef.current) {
+        const width = sidebarRef.current.offsetWidth;
+        setSidebarWidth(width);
+      }
+    };
+
+    // Initial width measurement
+    updateSidebarWidth();
+
+    // Set up ResizeObserver
+    const resizeObserver = new ResizeObserver(updateSidebarWidth);
+    resizeObserver.observe(sidebarRef.current);
+
+    return () => {
+      if (sidebarRef.current) {
+        resizeObserver.unobserve(sidebarRef.current);
+      }
+    };
+  }, []);
+
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
-    // For debugging
-    console.log("Toggling sidebar, new state:", !isSidebarOpen);
   };
 
   return (
