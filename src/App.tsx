@@ -59,52 +59,7 @@ const InitApp = () => {
   return null;
 };
 
-// MainContent component - This contains all the routes that should be inside the layout
-const MainContent = () => {
-  return (
-    <Routes>
-      <Route index element={<Dashboard />} />
-      <Route path="cases" element={<CasesPage />} />
-      <Route path="cases/new" element={<NewCasePage />} />
-      <Route path="cases/:id" element={<CaseDetailPage />} />
-      <Route path="companies" element={<CompaniesPage />} />
-      <Route path="companies/:id" element={<CompaniesPage />} />
-      <Route path="company/:id/settings" element={<CompanySettingsPage />} />
-      <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-      <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-      <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
-      <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-      <Route path="users" element={<UserManagementPage />} />
-      <Route path="company-management" element={<CompanyManagementPage />} />
-      <Route path="settings" element={<SettingsPage />} />
-      <Route path="search" element={<SearchPage />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
-};
-
-// AppRoutes Component - This component handles the top-level routes
-const AppRoutes = () => {
-  return (
-    <Routes>
-      {/* Public route - accessible without authentication */}
-      <Route path="/auth" element={<AuthPage />} />
-      
-      {/* All protected routes wrapped in a single ProtectedRoute */}
-      <Route 
-        path="/*" 
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <MainContent />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
-  );
-};
-
+// The main app with proper routing structure
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
@@ -115,7 +70,36 @@ const App = () => (
               <Toaster />
               <ModalReset />
               <InitApp />
-              <AppRoutes />
+              <Routes>
+                {/* Public route - accessible without authentication */}
+                <Route path="/auth" element={<AuthPage />} />
+                
+                {/* Protected routes using a persistent layout */}
+                <Route 
+                  element={
+                    <ProtectedRoute>
+                      <Layout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<Dashboard />} />
+                  <Route path="cases" element={<CasesPage />} />
+                  <Route path="cases/new" element={<NewCasePage />} />
+                  <Route path="cases/:id" element={<CaseDetailPage />} />
+                  <Route path="companies" element={<CompaniesPage />} />
+                  <Route path="companies/:id" element={<CompaniesPage />} />
+                  <Route path="company/:id/settings" element={<CompanySettingsPage />} />
+                  <Route path="company-dashboard" element={<CompanyDashboardPage />} />
+                  <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
+                  <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
+                  <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
+                  <Route path="users" element={<UserManagementPage />} />
+                  <Route path="company-management" element={<CompanyManagementPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="search" element={<SearchPage />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
             </ModalManager>
           </TooltipProvider>
         </AppProvider>

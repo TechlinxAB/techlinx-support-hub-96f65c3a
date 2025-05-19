@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useState, memo } from 'react';
+import { useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -17,11 +17,10 @@ import {
 } from '@/utils/authRecovery';
 import PageTransition from '@/components/layout/PageTransition';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
+// Memoized Sidebar component to prevent unnecessary re-renders
+const MemoizedSidebar = memo(Sidebar);
 
-const Layout = ({ children }: LayoutProps) => {
+const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const [forceShow, setForceShow] = useState(false);
@@ -111,9 +110,9 @@ const Layout = ({ children }: LayoutProps) => {
   // If loading or initial session state, show a loading indicator
   if ((loading && !forceShow) || (authState === 'INITIAL_SESSION' && !forceShow)) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col">
+      <div className="flex items-center justify-center min-h-screen flex-col bg-sidebar">
         <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="mb-4">Loading application...</p>
+        <p className="mb-4 text-white">Loading application...</p>
         {isPauseRecovery && (
           <p className="text-sm text-amber-500 mb-4">
             Recovering from app pause/background state...
@@ -124,6 +123,7 @@ const Layout = ({ children }: LayoutProps) => {
             variant="link" 
             onClick={() => setForceShow(true)}
             size="sm"
+            className="text-white"
           >
             Continue anyway
           </Button>
@@ -156,7 +156,7 @@ const Layout = ({ children }: LayoutProps) => {
   // If no session and not authenticated, but not loading, show an error state
   if (!session && !isAuthenticated && !loading && !bypassActive && !forceShow) {
     return (
-      <div className="flex items-center justify-center min-h-screen flex-col">
+      <div className="flex items-center justify-center min-h-screen flex-col bg-sidebar">
         <p className="mb-4 text-red-500">Session not found. Please log in again.</p>
         <div className="flex gap-2">
           <Button 
@@ -186,15 +186,16 @@ const Layout = ({ children }: LayoutProps) => {
   // If bypass is active, show a special layout with warning
   if (bypassActive) {
     return (
-      <div className="flex h-screen overflow-hidden bg-muted/20">
-        {/* Static sidebar that won't be affected by page transitions */}
-        <div className={`fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-          <Sidebar isOpen={isSidebarOpen} />
+      <div className="flex h-screen overflow-hidden bg-sidebar">
+        <div className="fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
+          bg-sidebar will-change-transform
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}">
+          <MemoizedSidebar isOpen={isSidebarOpen} />
         </div>
         
-        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
-          ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out bg-muted/20
+          ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}
+          style={{ willChange: 'margin' }}>
           <Header toggleSidebar={toggleSidebar} />
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1 text-amber-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -211,7 +212,7 @@ const Layout = ({ children }: LayoutProps) => {
             </Button>
           </div>
           <main className="flex-1 overflow-y-auto p-4">
-            {children}
+            <Outlet />
           </main>
         </div>
       </div>
@@ -220,7 +221,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   // Main layout with persistent sidebar and animated content
   return (
-    <div className="flex h-screen overflow-hidden bg-muted/20">
+    <div className="flex h-screen overflow-hidden bg-sidebar">
       {/* Mobile overlay */}
       {isSidebarOpen && window.innerWidth < 768 && (
         <div 
@@ -230,15 +231,21 @@ const Layout = ({ children }: LayoutProps) => {
         />
       )}
       
-      {/* Static sidebar that won't be affected by page transitions */}
-      <div className={`fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <Sidebar isOpen={isSidebarOpen} />
+      {/* Persistent sidebar outside of AnimatePresence to prevent remounting */}
+      <div 
+        className={`fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out 
+          bg-sidebar will-change-transform
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+      >
+        <MemoizedSidebar isOpen={isSidebarOpen} />
       </div>
       
       {/* Main content area that adjusts based on sidebar state */}
-      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
-        ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+      <div 
+        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out bg-muted/20
+          ${isSidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}
+        style={{ willChange: 'margin' }}
+      >
         <Header toggleSidebar={toggleSidebar} />
         
         {isPauseRecovery && (
@@ -256,10 +263,10 @@ const Layout = ({ children }: LayoutProps) => {
         )}
         
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="flex-1 overflow-y-auto p-4 bg-muted/20">
           <AnimatePresence mode="wait" initial={false}>
             <PageTransition key={location.pathname}>
-              {children}
+              <Outlet />
             </PageTransition>
           </AnimatePresence>
         </main>

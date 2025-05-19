@@ -41,14 +41,8 @@ class NavigationService {
     if (!this.navigateFunction) {
       console.warn('Navigate function not set in NavigationService');
       
-      // IMPROVED: Fallback to direct navigation when navigate function is not available
-      if (typeof window !== 'undefined') {
-        console.log(`Falling back to window.location for navigation to ${to}`);
-        const url = to.startsWith('/') ? to : `/${to}`;
-        window.location.href = url;
-        return true;
-      }
-      
+      // Never use window.location as fallback - this causes page reloads
+      console.error('Cannot navigate without navigate function');
       return false;
     }
     
@@ -102,23 +96,26 @@ class NavigationService {
       return true;
     } catch (error) {
       console.error('Navigation error:', error);
-      
-      // IMPROVED: Fallback to direct navigation on error
-      if (typeof window !== 'undefined') {
-        const url = to.startsWith('/') ? to : `/${to}`;
-        window.location.href = url;
-        return true;
-      }
-      
       return false;
     }
   }
   
-  // Special method for hard redirects when needed
+  // Special method for hard redirects when needed - use only for auth redirects
+  // or when absolutely necessary (external URLs)
   public hardRedirect(to: string): void {
     console.log(`NavigationService: Hard redirect to ${to}`);
     if (typeof window !== 'undefined') {
-      window.location.href = to;
+      // Only use for external URLs or complete resets
+      if (to.startsWith('http') || to.includes('reset=') || to.includes('force=')) {
+        window.location.href = to;
+      } else {
+        // For internal URLs, try to use navigate function first
+        if (this.navigateFunction) {
+          this.navigateFunction(to, { replace: true });
+        } else {
+          window.location.href = to;
+        }
+      }
     }
   }
   

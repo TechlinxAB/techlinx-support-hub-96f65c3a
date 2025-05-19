@@ -11,21 +11,20 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Show nothing while authentication is being determined
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="fixed inset-0 flex items-center justify-center bg-sidebar">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-200"></div>
       </div>
     );
   }
   
-  // Redirect to auth page if not authenticated, preserving the intended destination
   if (!user) {
+    // Use React Router navigate to avoid page reloads
     return <Navigate to={`/auth?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
   
-  // If authenticated, render the protected content
+  // Return the children (which will be the Layout component)
   return <>{children}</>;
 };
 
