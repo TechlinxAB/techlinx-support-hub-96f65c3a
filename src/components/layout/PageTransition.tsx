@@ -14,16 +14,15 @@ const PageTransition = ({ children, className }: PageTransitionProps) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ 
-        duration: 0.5, // Increased for smoother transitions
+        duration: 0.3, 
         ease: "easeInOut",
-        // Use longer exit duration to ensure smooth crossfade
-        enter: { duration: 0.5 },
-        exit: { duration: 0.2 }
       }}
       style={{ 
         willChange: 'opacity',
         position: 'relative',
-        background: 'white' // Force white background
+        width: '100%',
+        height: '100%',
+        background: 'white' 
       }}
       className={className || "w-full h-full"}
     >

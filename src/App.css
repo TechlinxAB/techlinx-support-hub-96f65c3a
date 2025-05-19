@@ -60,42 +60,45 @@ html, body, #root {
   background-color: white;
 }
 
-/* Persistent sidebar style to prevent flickering */
-.sidebar-persistent {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 50;
-  will-change: transform;
-  transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
-  background-color: var(--sidebar);
-  /* Prevent flash and maintain visibility during page transitions */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-/* Layout container that holds both sidebar and content */
-.layout-container {
+/* Global layout styles - ensures sidebar doesn't flash */
+.app-container {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
   background-color: white;
 }
 
-/* Main content area - always white background */
+/* Main content styles */
 .main-content {
   flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background-color: white;
-  min-height: 100vh;
-  transition: margin-left 0.3s ease-in-out;
-  will-change: margin-left;
   position: relative;
-  z-index: 1;
+  transition: margin-left 0.3s ease-in-out;
 }
 
-/* Improve animation performance */
-.transition-all {
-  will-change: transform, opacity, margin;
+/* Completely separate sidebar to prevent flashing */
+.persistent-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  z-index: 50;
+  background-color: var(--sidebar-bg, #fff);
+  transition: width 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+/* Ensure content area doesn't flash */
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  background-color: white;
+  position: relative;
 }
 
 /* Dark mode fixes */
@@ -116,12 +119,12 @@ html, body, #root {
   border-color: hsl(216 34% 17%) !important;
 }
 
-/* Content transition wrapper */
-.content-transition-wrapper {
-  background-color: white;
-  min-height: 100vh;
-  width: 100%;
-  position: relative;
+/* Override any default background colors */
+.route-content {
+  background-color: white !important;
 }
 
-/* Fix for navigation service to use React Router */
+/* Remove any animation artifacts */
+* {
+  transform-style: flat;
+}

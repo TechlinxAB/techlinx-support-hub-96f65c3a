@@ -1,0 +1,4 @@
+
+interface Window {
+  toggleSidebar?: () => void;
+}

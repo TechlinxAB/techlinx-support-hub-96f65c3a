@@ -1,96 +1,68 @@
-import React, { useState, useEffect } from 'react';
-import { useAppContext } from '@/context/AppContext';
-import { useAuth } from '@/context/AuthContext';
-import { Bell, Menu, LogOut, User, Settings } from 'lucide-react';
+
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Search, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { format } from 'date-fns';
 import LogoutButton from '@/components/auth/LogoutButton';
+import { useAuth } from '@/context/AuthContext';
+import { useAppContext } from '@/context/AppContext';
+import NavigationService from '@/services/navigationService';
 
-interface HeaderProps {
-  toggleSidebar: () => void;
-}
-
-const Header = ({ toggleSidebar }: HeaderProps) => {
-  const { language, setLanguage } = useAppContext();
-  const { signOut, user, profile } = useAuth();
-  const [currentTime, setCurrentTime] = useState(new Date());
+const Header = () => {
+  const { currentUser } = useAppContext();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   
-  // Update time every minute
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
-    
-    return () => clearInterval(timer);
-  }, []);
+  // Using the global sidebar toggle function
+  const toggleSidebar = () => {
+    if (window.toggleSidebar) {
+      window.toggleSidebar();
+    }
+  };
+  
+  const handleSearchClick = () => {
+    NavigationService.navigate('/search');
+  };
   
   return (
-    <header className="bg-white dark:bg-card border-b border-border h-16 px-4 flex items-center justify-between shadow-sm">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={toggleSidebar} className="md:hidden">
-          <Menu className="h-5 w-5" />
-        </Button>
-      </div>
-      
-      <div className="text-sm text-muted-foreground">
-        {format(currentTime, 'EEEE, MMMM d, yyyy')}
-        <span className="ml-2 text-xs">
-          {format(currentTime, 'HH:mm')}
-        </span>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="relative"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">
-            2
-          </span>
-        </Button>
+    <header className="h-16 border-b border-gray-200 bg-white flex items-center px-4 sticky top-0 z-10">
+      <div className="w-full max-w-screen-xl mx-auto flex justify-between items-center">
+        <div className="flex items-center">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={toggleSidebar}
+            className="mr-4"
+          >
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+          
+          <h1 className="text-xl font-bold text-gray-800 hidden md:block">
+            {currentUser?.companyName || "Techlinx Dashboard"}
+          </h1>
+        </div>
         
-        <Button 
-          variant="ghost" 
-          onClick={() => setLanguage(language === 'en' ? 'sv' : 'en')}
-          className="text-sm"
-        >
-          {language === 'en' ? 'SV' : 'EN'}
-        </Button>
-        
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full w-8 h-8 bg-muted">
-              <span className="font-medium text-xs">{profile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>
-              My Account
-              <div className="text-xs text-muted-foreground">{profile?.email || user?.email}</div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <LogoutButton />
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center space-x-4">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={handleSearchClick}
+            aria-label="Search"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="icon"
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+          </Button>
+          
+          {isAuthenticated && <LogoutButton />}
+        </div>
       </div>
     </header>
   );

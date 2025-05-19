@@ -1,37 +1,18 @@
 
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
 import useModalManager from "./hooks/use-modal-manager";
 import ModalReset from "./components/ui/modal-reset";
-import SearchPage from "./pages/SearchPage";
 import { useEffect } from "react";
 import { initPauseUnpauseDetection } from "./utils/authRecovery";
 import NavigationService from "./services/navigationService";
 
-// Layouts
-import Layout from "./components/layout/Layout";
-
-// Pages
-import Dashboard from "./pages/Dashboard";
-import CasesPage from "./pages/CasesPage";
-import CaseDetailPage from "./pages/CaseDetailPage";
-import NewCasePage from "./pages/NewCasePage";
-import CompaniesPage from "./pages/CompaniesPage";
-import CompanyDashboardPage from "./pages/CompanyDashboardPage";
-import CompanyDashboardBuilderPage from "./pages/CompanyDashboardBuilderPage";
-import CompanyNewsPage from "./pages/CompanyNewsPage";
-import CompanyNewsBuilderPage from "./pages/CompanyNewsBuilderPage";
-import UserManagementPage from "./pages/UserManagementPage";
-import CompanyManagementPage from "./pages/CompanyManagementPage";
-import SettingsPage from "./pages/SettingsPage";
-import NotFound from "./pages/NotFound";
-import AuthPage from "./pages/AuthPage";
-import CompanySettingsPage from "./pages/CompanySettingsPage";
+// Import the new AppRoutes component that will handle all routing
+import AppRoutes from "./AppRoutes";
 
 // Initialize the query client with improved settings
 const queryClient = new QueryClient({
@@ -48,18 +29,6 @@ const queryClient = new QueryClient({
 const ModalManager = ({ children }: { children: React.ReactNode }) => {
   useModalManager();
   return <>{children}</>;
-};
-
-// Navigation Service Configurator
-const NavigationConfigurator = () => {
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    // Configure the navigation service with the current navigate function
-    NavigationService.setNavigateFunction(navigate);
-  }, [navigate]);
-  
-  return null;
 };
 
 // Init App Component to set up pause/unpause detection
@@ -83,38 +52,7 @@ const App = () => (
               <Toaster />
               <ModalReset />
               <InitApp />
-              <NavigationConfigurator />
-              <Routes>
-                {/* Public route - accessible without authentication */}
-                <Route path="/auth" element={<AuthPage />} />
-                
-                {/* Protected routes using a persistent layout */}
-                <Route 
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <Layout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route index element={<Dashboard />} />
-                  <Route path="cases" element={<CasesPage />} />
-                  <Route path="cases/new" element={<NewCasePage />} />
-                  <Route path="cases/:id" element={<CaseDetailPage />} />
-                  <Route path="companies" element={<CompaniesPage />} />
-                  <Route path="companies/:id" element={<CompaniesPage />} />
-                  <Route path="company/:id/settings" element={<CompanySettingsPage />} />
-                  <Route path="company-dashboard" element={<CompanyDashboardPage />} />
-                  <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
-                  <Route path="company-news/:companyId" element={<CompanyNewsPage />} />
-                  <Route path="company-news-builder/:companyId" element={<CompanyNewsBuilderPage />} />
-                  <Route path="users" element={<UserManagementPage />} />
-                  <Route path="company-management" element={<CompanyManagementPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                  <Route path="search" element={<SearchPage />} />
-                  <Route path="*" element={<NotFound />} />
-                </Route>
-              </Routes>
+              <AppRoutes />
             </ModalManager>
           </TooltipProvider>
         </AppProvider>
