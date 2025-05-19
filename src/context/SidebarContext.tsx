@@ -28,12 +28,16 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Load sidebar state from localStorage on component mount only
   useEffect(() => {
     const savedSidebarState = localStorage.getItem('sidebarState');
+    
+    // First check if we're on mobile
+    const isMobileView = window.innerWidth < 768;
+    setIsMobile(isMobileView);
+    
     if (savedSidebarState !== null) {
-      setIsSidebarOpen(savedSidebarState === 'open');
+      // On mobile, default to closed regardless of saved state
+      setIsSidebarOpen(isMobileView ? false : savedSidebarState === 'open');
     } else {
       // Default behavior based on screen size
-      const isMobileView = window.innerWidth < 768;
-      setIsMobile(isMobileView);
       setIsSidebarOpen(!isMobileView);
     }
   }, []);
@@ -43,17 +47,25 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const handleResize = () => {
       const isMobileView = window.innerWidth < 768;
       setIsMobile(isMobileView);
+      
+      // Close sidebar automatically when switching to mobile
+      if (isMobileView && isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
     };
 
     handleResize(); // Initial check
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [isSidebarOpen]);
 
   // Save sidebar state to localStorage when it changes
+  // Only save desktop state, don't save mobile state
   useEffect(() => {
-    localStorage.setItem('sidebarState', isSidebarOpen ? 'open' : 'closed');
-  }, [isSidebarOpen]);
+    if (!isMobile) {
+      localStorage.setItem('sidebarState', isSidebarOpen ? 'open' : 'closed');
+    }
+  }, [isSidebarOpen, isMobile]);
 
   // Use ResizeObserver to track sidebar width changes
   useEffect(() => {
@@ -83,11 +95,6 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
   };
-
-  // Make the toggle function available globally for legacy code
-  useEffect(() => {
-    window.toggleSidebar = toggleSidebar;
-  }, []);
 
   return (
     <SidebarContext.Provider 

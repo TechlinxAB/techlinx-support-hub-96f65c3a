@@ -2,8 +2,10 @@
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MessageCircle, Users, Settings, Clock, UserPlus, Building } from 'lucide-react';
+import { LayoutDashboard, MessageCircle, Users, Settings, Clock, UserPlus, Building, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useSidebar } from '@/context/SidebarContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface SidebarProps {
 const Sidebar = ({ isOpen }: SidebarProps) => {
   const { currentUser } = useAppContext();
   const location = useLocation();
+  const { toggleSidebar, isMobile } = useSidebar();
   const isConsultant = currentUser?.role === 'consultant';
   
   const menuItems = [
@@ -65,11 +68,24 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
         isOpen ? "translate-x-0 w-64" : "w-0 -translate-x-full md:translate-x-0 md:w-16",
       )}
     >
-      <div className="flex items-center h-16 px-4 border-b border-sidebar-border bg-sidebar">
+      <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border bg-sidebar">
         <Link to="/" className={cn("flex items-center gap-2 font-bold text-xl text-white", !isOpen && "md:justify-center")}>
           <Clock className="h-6 w-6" />
           {isOpen && <span>Techlinx</span>}
         </Link>
+        
+        {/* Mobile close button */}
+        {isMobile && isOpen && (
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={toggleSidebar}
+            className="text-white"
+          >
+            <X className="h-5 w-5" />
+            <span className="sr-only">Close sidebar</span>
+          </Button>
+        )}
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 bg-sidebar">
@@ -192,6 +208,17 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
                 {currentUser?.email || 'user@example.com'}
               </p>
             </div>
+            
+            {/* Toggle sidebar button in footer */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="text-sidebar-foreground/70 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
           </div>
         </div>
       )}
