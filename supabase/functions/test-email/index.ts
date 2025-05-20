@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
 import { Resend } from "npm:resend@2.0.0";
+import { SMTPClient } from "npm:emailjs@4.0.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,47 +51,105 @@ serve(async (req) => {
       throw new Error(`Error fetching notification settings: ${settingsError.message}`);
     }
 
-    // Check if Resend is configured
-    if (settings.email_provider !== "resend" || !settings.resend_api_key) {
+    // Send email based on the configured provider
+    if (settings.email_provider === "resend" && settings.resend_api_key) {
+      // Use Resend
+      const resend = new Resend(settings.resend_api_key);
+      
+      // Send a test email
+      const emailResult = await resend.emails.send({
+        from: `${settings.sender_name || "Techlinx Support"} <${settings.sender_email || "notifications@techlinx.se"}>`,
+        to: [recipientEmail],
+        subject: "Test Email from Techlinx Support",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Email Configuration Test</h2>
+            <p>This is a test email from your Techlinx Support system.</p>
+            <p>Your email notification system is working correctly!</p>
+            <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
+              Sent from your Techlinx Support system using Resend.
+            </p>
+          </div>
+        `,
+      });
+      
+      console.log("Test email sent via Resend:", emailResult);
+      
+      if (emailResult.error) {
+        throw new Error(emailResult.error.message);
+      }
+      
+      // Return success response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Test email sent to ${recipientEmail}`,
+          provider: "resend",
+          id: emailResult.id
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    } else if (settings.email_provider === "smtp" && 
+               settings.smtp_host && 
+               settings.smtp_user && 
+               settings.smtp_password) {
+      // Use SMTP
+      const client = new SMTPClient({
+        host: settings.smtp_host,
+        port: settings.smtp_port || 587,
+        user: settings.smtp_user,
+        password: settings.smtp_password,
+        tls: settings.smtp_secure === true,
+      });
+      
+      const emailResult = await client.sendAsync({
+        from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
+        to: recipientEmail,
+        subject: "Test Email from Techlinx Support",
+        text: `
+Email Configuration Test
+
+This is a test email from your Techlinx Support system.
+Your email notification system is working correctly!
+
+Sent from your Techlinx Support system using SMTP.
+        `,
+        attachment: [
+          {
+            data: `
+<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>Email Configuration Test</h2>
+  <p>This is a test email from your Techlinx Support system.</p>
+  <p>Your email notification system is working correctly!</p>
+  <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
+    Sent from your Techlinx Support system using SMTP.
+  </p>
+</div>
+            `,
+            alternative: true
+          }
+        ]
+      });
+      
+      console.log("Test email sent via SMTP");
+      
+      // Return success response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Test email sent to ${recipientEmail}`,
+          provider: "smtp"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    } else {
       return new Response(
         JSON.stringify({ 
-          error: "Resend is not configured. Please configure Resend in the notification settings." 
+          error: "Email provider is not properly configured. Please configure an email provider in the notification settings." 
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
-
-    // Initialize Resend with the API key
-    const resend = new Resend(settings.resend_api_key);
-    
-    // Send a test email
-    const emailResult = await resend.emails.send({
-      from: `${settings.sender_name || "Techlinx Support"} <${settings.sender_email || "notifications@techlinx.se"}>`,
-      to: [recipientEmail],
-      subject: "Test Email from Techlinx Support",
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Email Configuration Test</h2>
-          <p>This is a test email from your Techlinx Support system.</p>
-          <p>Your email notification system is working correctly!</p>
-          <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
-            Sent from your Techlinx Support system using Resend.
-          </p>
-        </div>
-      `,
-    });
-    
-    console.log("Test email sent via Resend:", emailResult);
-    
-    // Return success response
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Test email sent to ${recipientEmail}`,
-        id: emailResult.id
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
   } catch (error) {
     console.error("Error in test-email function:", error.message);
     

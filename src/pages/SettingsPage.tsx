@@ -30,6 +30,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { notificationService } from '@/services/notificationService';
 
 // Define our schema for notification settings
 const notificationFormSchema = z.object({
@@ -39,8 +40,13 @@ const notificationFormSchema = z.object({
   consultantSubject: z.string().min(5, "Subject must be at least 5 characters"),
   consultantBody: z.string().min(20, "Template must be at least 20 characters"),
   emailSignature: z.string().optional(),
-  emailProvider: z.enum(["resend", "none"]).default("none"),
+  emailProvider: z.enum(["resend", "smtp", "none"]).default("none"),
   resendApiKey: z.string().optional(),
+  smtpHost: z.string().optional(),
+  smtpPort: z.coerce.number().int().min(1).max(65535).default(587).optional(),
+  smtpUser: z.string().optional(),
+  smtpPassword: z.string().optional(),
+  smtpSecure: z.boolean().default(false).optional(),
   senderEmail: z.string().email("Invalid sender email").optional(),
   senderName: z.string().min(2, "Sender name must be at least 2 characters").optional(),
 });
@@ -62,6 +68,11 @@ const SettingsPage = () => {
     emailSignature: "Best regards,\nThe Techlinx Support Team",
     emailProvider: "none",
     resendApiKey: "",
+    smtpHost: "",
+    smtpPort: 587,
+    smtpUser: "",
+    smtpPassword: "",
+    smtpSecure: false,
     senderEmail: "notifications@techlinx.se",
     senderName: "Techlinx Support",
   });
@@ -76,8 +87,13 @@ const SettingsPage = () => {
       consultantSubject: templates.consultantSubject,
       consultantBody: templates.consultantBody,
       emailSignature: templates.emailSignature,
-      emailProvider: templates.emailProvider as "resend" | "none",
+      emailProvider: templates.emailProvider as "resend" | "smtp" | "none",
       resendApiKey: templates.resendApiKey,
+      smtpHost: templates.smtpHost,
+      smtpPort: templates.smtpPort,
+      smtpUser: templates.smtpUser,
+      smtpPassword: templates.smtpPassword,
+      smtpSecure: templates.smtpSecure,
       senderEmail: templates.senderEmail,
       senderName: templates.senderName,
     },
@@ -111,6 +127,11 @@ const SettingsPage = () => {
             emailSignature: settingsData?.email_signature || templates.emailSignature,
             emailProvider: settingsData?.email_provider || "none",
             resendApiKey: settingsData?.resend_api_key || "",
+            smtpHost: settingsData?.smtp_host || "",
+            smtpPort: settingsData?.smtp_port || 587,
+            smtpUser: settingsData?.smtp_user || "",
+            smtpPassword: settingsData?.smtp_password || "",
+            smtpSecure: settingsData?.smtp_secure || false,
             senderEmail: settingsData?.sender_email || "notifications@techlinx.se",
             senderName: settingsData?.sender_name || "Techlinx Support",
           };
@@ -140,6 +161,11 @@ const SettingsPage = () => {
             email_signature: data.emailSignature,
             email_provider: data.emailProvider,
             resend_api_key: data.resendApiKey,
+            smtp_host: data.smtpHost,
+            smtp_port: data.smtpPort,
+            smtp_user: data.smtpUser,
+            smtp_password: data.smtpPassword,
+            smtp_secure: data.smtpSecure,
             sender_email: data.senderEmail,
             sender_name: data.senderName,
             updated_at: new Date().toISOString(),
@@ -195,36 +221,10 @@ const SettingsPage = () => {
     setTestEmailLoading(true);
     
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      if (!sessionData.session) {
-        throw new Error("Not authenticated");
+      const success = await notificationService.sendTestEmail(testEmailAddress);
+      if (!success) {
+        throw new Error("Failed to send test email");
       }
-      
-      const response = await fetch(
-        `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/test-email`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${sessionData.session.access_token}`,
-          },
-          body: JSON.stringify({
-            recipientEmail: testEmailAddress,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send test email");
-      }
-
-      const responseData = await response.json();
-      
-      toast.success("Test email sent successfully", {
-        description: `Email sent to ${testEmailAddress}`
-      });
     } catch (error) {
       console.error("Error sending test email:", error);
       toast.error("Failed to send test email", {
@@ -455,6 +455,7 @@ const SettingsPage = () => {
                           <SelectContent>
                             <SelectItem value="none">None (Log emails only)</SelectItem>
                             <SelectItem value="resend">Resend</SelectItem>
+                            <SelectItem value="smtp">SMTP (Microsoft 365, Gmail, etc)</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -537,33 +538,183 @@ const SettingsPage = () => {
                           </div>
                         </div>
                       </div>
+                    </>
+                  )}
+                  
+                  {form.watch("emailProvider") === "smtp" && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="smtpHost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>SMTP Server</FormLabel>
+                              <FormDescription>
+                                Your SMTP server address
+                              </FormDescription>
+                              <FormControl>
+                                <Input placeholder="smtp.office365.com" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="smtpPort"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>SMTP Port</FormLabel>
+                              <FormDescription>
+                                SMTP server port (usually 587 or 465)
+                              </FormDescription>
+                              <FormControl>
+                                <Input type="number" placeholder="587" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                       
-                      <div className="pt-4 border-t">
-                        <h4 className="text-sm font-medium mb-2">Send Test Email</h4>
-                        <div className="flex space-x-2">
-                          <Input 
-                            type="email" 
-                            placeholder="recipient@example.com" 
-                            value={testEmailAddress} 
-                            onChange={(e) => setTestEmailAddress(e.target.value)} 
-                            className="max-w-md"
-                          />
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            onClick={sendTestEmail}
-                            disabled={testEmailLoading}
-                          >
-                            {testEmailLoading ? "Sending..." : "Test"}
-                            {testEmailLoading ? null : <Send className="ml-2 h-4 w-4" />}
-                          </Button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="smtpUser"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>SMTP Username</FormLabel>
+                              <FormDescription>
+                                Usually your email address
+                              </FormDescription>
+                              <FormControl>
+                                <Input placeholder="your.email@example.com" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="smtpPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>SMTP Password</FormLabel>
+                              <FormDescription>
+                                Your email account password
+                              </FormDescription>
+                              <FormControl>
+                                <Input type="password" placeholder="••••••••" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <FormField
+                        control={form.control}
+                        name="smtpSecure"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Use SSL/TLS</FormLabel>
+                              <FormDescription>
+                                Enable secure connection (TLS)
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="senderEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Sender Email</FormLabel>
+                              <FormDescription>
+                                The email address notifications will be sent from
+                              </FormDescription>
+                              <FormControl>
+                                <Input placeholder="notifications@yourdomain.com" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="senderName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Sender Name</FormLabel>
+                              <FormDescription>
+                                The name that will appear as the sender
+                              </FormDescription>
+                              <FormControl>
+                                <Input placeholder="Your Company Support" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
+                        <div className="flex items-start">
+                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-2" />
+                          <div className="text-sm text-amber-800">
+                            <p className="font-medium">Microsoft 365 SMTP Setup</p>
+                            <ol className="list-decimal ml-5 mt-1 space-y-1">
+                              <li>Server: <code>smtp.office365.com</code></li>
+                              <li>Port: <code>587</code></li>
+                              <li>Use SSL/TLS: <code>Yes</code></li>
+                              <li>Username: Your full email address</li>
+                              <li>Password: Your Microsoft 365 password or app password</li>
+                              <li>For security, it's recommended to create an app password rather than using your main account password</li>
+                            </ol>
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Send a test email to verify your Resend configuration
-                        </p>
                       </div>
                     </>
                   )}
+                  
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium mb-2">Send Test Email</h4>
+                    <div className="flex space-x-2">
+                      <Input 
+                        type="email" 
+                        placeholder="recipient@example.com" 
+                        value={testEmailAddress} 
+                        onChange={(e) => setTestEmailAddress(e.target.value)} 
+                        className="max-w-md"
+                      />
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={sendTestEmail}
+                        disabled={testEmailLoading}
+                      >
+                        {testEmailLoading ? "Sending..." : "Test"}
+                        {testEmailLoading ? null : <Send className="ml-2 h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Send a test email to verify your email configuration
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
               

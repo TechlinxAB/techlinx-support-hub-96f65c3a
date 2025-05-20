@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
 import { Resend } from "npm:resend@2.0.0";
+import { SMTPClient } from "npm:emailjs@4.0.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,13 +119,14 @@ serve(async (req) => {
       recipientEmail = settings.services_email || "services@techlinx.se";
     }
 
-    // Check if an email provider is configured
+    // Format the HTML content
+    const htmlContent = emailContent.replace(/\n/g, "<br>");
+    const plainTextContent = emailContent;
+
+    // Check which email provider to use
     if (settings.email_provider === "resend" && settings.resend_api_key) {
       // Initialize Resend with the API key
       const resend = new Resend(settings.resend_api_key);
-      
-      // Format the HTML content
-      const htmlContent = emailContent.replace(/\n/g, "<br>");
       
       // Send the email using Resend
       const emailResult = await resend.emails.send({
@@ -143,6 +145,43 @@ serve(async (req) => {
           message: `Notification sent to ${recipientEmail} via Resend`,
           provider: "resend",
           id: emailResult.id
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    } else if (settings.email_provider === "smtp" && 
+               settings.smtp_host && 
+               settings.smtp_user && 
+               settings.smtp_password) {
+      // Use SMTP
+      const client = new SMTPClient({
+        host: settings.smtp_host,
+        port: settings.smtp_port || 587,
+        user: settings.smtp_user,
+        password: settings.smtp_password,
+        tls: settings.smtp_secure === true,
+      });
+      
+      await client.sendAsync({
+        from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
+        to: recipientEmail,
+        subject: subject,
+        text: plainTextContent,
+        attachment: [
+          {
+            data: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">${htmlContent}</div>`,
+            alternative: true
+          }
+        ]
+      });
+      
+      console.log("Email sent via SMTP to", recipientEmail);
+      
+      // Return success response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Notification sent to ${recipientEmail} via SMTP`,
+          provider: "smtp"
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );

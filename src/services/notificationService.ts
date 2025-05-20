@@ -34,7 +34,9 @@ export const notificationService = {
         throw new Error("Failed to fetch notification settings");
       }
       
-      const emailConfigured = settings?.email_provider === 'resend' && settings?.resend_api_key;
+      const emailConfigured = 
+        (settings?.email_provider === 'resend' && settings?.resend_api_key) || 
+        (settings?.email_provider === 'smtp' && settings?.smtp_host && settings?.smtp_user && settings?.smtp_password);
       
       const response = await fetch(
         `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/send-case-notification`,
