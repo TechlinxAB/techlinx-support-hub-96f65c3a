@@ -26,7 +26,7 @@ const Header: React.FC = () => {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={toggleSidebar}
+                onClick={() => toggleSidebar()}
                 className="mr-4"
               >
                 <Menu className="h-5 w-5" />

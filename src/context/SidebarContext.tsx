@@ -9,7 +9,7 @@ interface SidebarContextType {
 }
 
 const defaultContext: SidebarContextType = {
-  isSidebarOpen: true,
+  isSidebarOpen: false, // Default to closed on mobile
   toggleSidebar: () => {},
   sidebarWidth: 256, // 16rem default
   isMobile: false
@@ -20,9 +20,9 @@ const SidebarContext = createContext<SidebarContextType>(defaultContext);
 export const useSidebar = () => useContext(SidebarContext);
 
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // On desktop, isSidebarOpen is always true
-  // On mobile, isSidebarOpen controls the visibility
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // On desktop, sidebar is always shown
+  // On mobile, isSidebarOpen controls visibility
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256); // 16rem default
   const [isMobile, setIsMobile] = useState(false);
   const sidebarRef = useRef<HTMLDivElement | null>(null);
@@ -33,8 +33,12 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const isMobileView = window.innerWidth < 768;
       setIsMobile(isMobileView);
       
-      // Close sidebar automatically when switching to mobile
-      if (isMobileView && isSidebarOpen) {
+      // Set sidebar state based on view
+      if (!isMobileView) {
+        // On desktop, sidebar is always open
+        setIsSidebarOpen(true);
+      } else if (isMobileView && isSidebarOpen) {
+        // When switching to mobile, close the sidebar
         setIsSidebarOpen(false);
       }
     };
@@ -70,10 +74,8 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const toggleSidebar = () => {
-    // Only toggle sidebar for mobile devices
-    if (isMobile) {
-      setIsSidebarOpen(prev => !prev);
-    }
+    // Toggle sidebar visibility
+    setIsSidebarOpen(prev => !prev);
   };
 
   return (

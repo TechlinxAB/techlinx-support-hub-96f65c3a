@@ -34,7 +34,7 @@ const PersistentSidebar: React.FC = () => {
         style={{ 
           // On desktop, sidebar is always full width
           // On mobile, sidebar is completely hidden unless open
-          width: isMobile ? (isSidebarOpen ? '16rem' : '0') : '16rem',
+          width: '16rem',
           transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
           visibility: isMobile && !isSidebarOpen ? 'hidden' : 'visible',
           isolation: 'isolate',
