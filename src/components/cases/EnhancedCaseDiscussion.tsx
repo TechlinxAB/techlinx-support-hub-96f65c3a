@@ -3,7 +3,6 @@ import React, { useEffect } from 'react';
 import CaseDiscussion from './CaseDiscussion'; // Import the original component
 import CaseDiscussionNotifier from './CaseDiscussionNotifier';
 import { useAppContext } from '@/context/AppContext';
-import { notificationService } from '@/services/notificationService';
 
 interface EnhancedCaseDiscussionProps {
   caseId: string;
@@ -42,16 +41,6 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
       clearInterval(intervalId);
     };
   }, [caseId, refetchReplies]);
-  
-  // Ensure notification trigger is installed when the component mounts
-  useEffect(() => {
-    async function checkAndInstallTrigger() {
-      console.log("[EnhancedCaseDiscussion] Checking notification trigger installation");
-      await notificationService.ensureNotificationTrigger();
-    }
-    
-    checkAndInstallTrigger();
-  }, []);
   
   // Add user role to each reply
   const repliesWithRole = replies?.map(reply => {
