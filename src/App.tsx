@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { AppRoutes } from "./AppRoutes";
+import AppRoutes from "./AppRoutes";
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { SidebarProvider } from './context/SidebarContext';
