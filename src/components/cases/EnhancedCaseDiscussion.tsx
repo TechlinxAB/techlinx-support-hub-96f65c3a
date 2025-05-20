@@ -18,6 +18,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   const { replies, refetchReplies, users } = useAppContext();
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
   const [notificationServiceStatus, setNotificationServiceStatus] = useState<'checking' | 'ok' | 'error' | 'pgnet_missing'>('checking');
+  const [diagnosticInfo, setDiagnosticInfo] = useState<any>(null);
   
   // Enhanced logging for debugging
   console.log(`[EnhancedCaseDiscussion] Initializing for case ${caseId}`);
@@ -31,23 +32,33 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   useEffect(() => {
     const checkNotificationSystem = async () => {
       try {
-        // First check if pg_net extension is properly installed
+        // First check if pg_net extension is properly installed with enhanced diagnostics
         const { data: pgNetData, error: pgNetError } = await supabase.rpc('check_pgnet_status');
         
         if (pgNetError) {
           console.error('[EnhancedCaseDiscussion] Error checking pg_net status:', pgNetError);
-          // If the function itself doesn't exist, that indicates a different problem
-          if (pgNetError.message.includes('does not exist')) {
-            console.log('[EnhancedCaseDiscussion] check_pgnet_status function does not exist, falling back to trigger check');
-          } else {
-            setNotificationServiceStatus('error');
-            return;
-          }
+          setNotificationServiceStatus('error');
+          return;
         }
         
-        if (pgNetData === false) {
+        console.log('[EnhancedCaseDiscussion] pg_net diagnostic info:', pgNetData);
+        setDiagnosticInfo(pgNetData);
+        
+        if (!pgNetData.extension_installed) {
           console.error('[EnhancedCaseDiscussion] pg_net extension is not available');
           setNotificationServiceStatus('pgnet_missing');
+          return;
+        }
+        
+        if (!pgNetData.http_post_function_exists) {
+          console.error('[EnhancedCaseDiscussion] pg_net extension installed but http_post function not found');
+          setNotificationServiceStatus('error');
+          return;
+        }
+        
+        if (pgNetData.test_result && pgNetData.test_result.startsWith('Error')) {
+          console.error('[EnhancedCaseDiscussion] pg_net test failed:', pgNetData.test_result);
+          setNotificationServiceStatus('error');
           return;
         }
         
@@ -88,7 +99,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   useEffect(() => {
     if (notificationServiceStatus === 'error') {
       toast.error('Notification service might not be working correctly', {
-        description: 'System administrators have been notified.',
+        description: 'System administrators have been notified. Check console for details.',
         duration: 5000,
       });
       
@@ -155,6 +166,12 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
     try {
       console.log('[EnhancedCaseDiscussion] Testing notification system');
       
+      // First get detailed pg_net information for debugging
+      const { data: pgNetDiag, error: pgNetDiagError } = await supabase.rpc('check_pgnet_status');
+      if (!pgNetDiagError) {
+        console.log('[EnhancedCaseDiscussion] Current pg_net status:', pgNetDiag);
+      }
+      
       const { data, error } = await supabase.rpc('test_notification_system', {
         case_id: caseId
       });
@@ -171,10 +188,10 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
       
       // Check if the result indicates a pg_net error
       if (data.includes('pg_net') || data.includes('does not exist')) {
-        toast.error('Notification test failed: Missing pg_net extension', {
-          description: 'The required database extension is not enabled. Contact system administrator.',
+        toast.error('Notification test failed: Issue with pg_net extension', {
+          description: 'The required database functionality is not working correctly. Contact system administrator.',
         });
-        setNotificationServiceStatus('pgnet_missing');
+        setNotificationServiceStatus('error');
       } else {
         toast.success('Notification test initiated', {
           description: 'Check server logs for results',
@@ -192,6 +209,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
     (window as any).testCaseNotification = testNotification;
     (window as any).checkReplies = () => console.log('Current replies:', replies);
     (window as any).getNotificationStatus = () => console.log('Notification status:', notificationServiceStatus);
+    (window as any).getDiagnosticInfo = () => console.log('Diagnostic info:', diagnosticInfo);
   }
   
   return (

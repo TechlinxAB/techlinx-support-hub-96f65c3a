@@ -254,7 +254,9 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           message: `Notification for ${recipientType} would be sent to ${recipientEmail} (email provider not configured)`,
-          provider: "none"
+          provider: "none",
+          recipient: recipientEmail,
+          subject: subject
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
@@ -274,6 +276,7 @@ serve(async (req) => {
           },
           requireTLS: true,
           debug: true, // Enable debug for more information
+          logger: true, // Enable logger
           tls: {
             // Do not fail on invalid certs
             rejectUnauthorized: false
@@ -303,7 +306,8 @@ serve(async (req) => {
             success: true,
             message: `Notification sent to ${recipientEmail} via SMTP`,
             provider: "smtp",
-            messageId: info.messageId
+            messageId: info.messageId,
+            recipient: recipientEmail
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
