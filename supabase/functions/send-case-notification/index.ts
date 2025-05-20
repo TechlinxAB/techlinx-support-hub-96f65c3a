@@ -83,6 +83,10 @@ serve(async (req) => {
       // Fall back to default template if not found
     }
 
+    // Create case link based on current environment - note we'll send the full URL in the email
+    const baseUrl = "https://support.example.com";
+    const caseLink = `${baseUrl}/cases/${caseId}`;
+
     const templateSubject = templates?.subject || 
       (recipientType === "user" 
         ? "Your case has been updated" 
@@ -90,8 +94,8 @@ serve(async (req) => {
 
     const templateBody = templates?.body || 
       (recipientType === "user" 
-        ? "Your case {case_title} has received a new reply." 
-        : "Case {case_title} has received a new reply from {user_name}.");
+        ? "Your case {case_title} has received a new reply. You can view and respond to this case by following this link: {case_link}" 
+        : "Case {case_title} has received a new reply from {user_name}. You can view and respond to this case by following this link: {case_link}");
 
     // Replace template variables
     const subject = templateSubject.replace("{case_title}", caseData.title);
@@ -103,7 +107,8 @@ serve(async (req) => {
       .replace("{case_status}", caseData.status)
       .replace("{case_priority}", caseData.priority)
       .replace("{category}", caseData.categories?.name || "")
-      .replace("{reply_content}", replyData.content);
+      .replace("{reply_content}", replyData.content)
+      .replace("{case_link}", caseLink);
 
     // Add signature if available
     const emailContent = settings.email_signature 

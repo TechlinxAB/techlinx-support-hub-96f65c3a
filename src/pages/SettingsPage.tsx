@@ -76,9 +76,9 @@ const SettingsPage = () => {
   const [templates, setTemplates] = useState({
     servicesEmail: "services@techlinx.se",
     userSubject: "Your case has been updated",
-    userBody: "Your case {case_title} has received a new reply.",
+    userBody: "Your case {case_title} has received a new reply. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}",
     consultantSubject: "New case reply notification",
-    consultantBody: "Case {case_title} has received a new reply from {user_name}.",
+    consultantBody: "Case {case_title} has received a new reply from {user_name}. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}",
     emailSignature: "Best regards,\nThe Techlinx Support Team",
     emailProvider: "none",
     smtpHost: "",
@@ -726,7 +726,7 @@ const SettingsPage = () => {
                         <FormControl>
                           <Textarea 
                             rows={6} 
-                            placeholder="Your case {case_title} has received a new reply." 
+                            placeholder="Your case {case_title} has received a new reply. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}" 
                             {...field} 
                           />
                         </FormControl>
@@ -770,7 +770,7 @@ const SettingsPage = () => {
                         <FormControl>
                           <Textarea 
                             rows={6} 
-                            placeholder="Case {case_title} has received a new reply from {user_name}." 
+                            placeholder="Case {case_title} has received a new reply from {user_name}. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}" 
                             {...field} 
                           />
                         </FormControl>
