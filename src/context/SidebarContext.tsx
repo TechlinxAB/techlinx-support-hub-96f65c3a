@@ -49,7 +49,6 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleSidebar = () => {
     // Only toggle if we're on mobile
     if (isMobile) {
-      console.log("Toggling sidebar, current state:", isSidebarOpen);
       lastToggleTimeRef.current = Date.now();
       setIsSidebarOpen(prev => !prev);
     }
@@ -59,10 +58,7 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Don't close if we just toggled within the last 300ms
     const now = Date.now();
     if (isMobile && isSidebarOpen && (now - lastToggleTimeRef.current > 300)) {
-      console.log("Closing sidebar");
       setIsSidebarOpen(false);
-    } else {
-      console.log("Ignoring close request - too soon after toggle", now - lastToggleTimeRef.current);
     }
   };
 

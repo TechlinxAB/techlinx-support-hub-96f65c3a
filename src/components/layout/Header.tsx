@@ -21,9 +21,6 @@ const Header: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Add debugging
-    console.log("Menu button clicked, current sidebar state:", isSidebarOpen);
-    
     // Toggle the sidebar
     toggleSidebar();
   };

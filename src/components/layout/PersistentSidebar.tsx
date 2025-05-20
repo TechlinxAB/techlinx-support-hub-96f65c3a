@@ -23,7 +23,6 @@ const PersistentSidebar: React.FC = () => {
         if (sidebarRef.current && 
             !sidebarRef.current.contains(event.target as Node) && 
             !isMenuButtonClick) {
-          console.log('Close triggered by click outside');
           closeSidebar();
         }
       };
