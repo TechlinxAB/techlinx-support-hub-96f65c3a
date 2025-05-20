@@ -153,45 +153,50 @@ serve(async (req) => {
                settings.smtp_user && 
                settings.smtp_password) {
       
-      // For Office 365, port 587 should use STARTTLS (secure: false)
-      const secure = settings.smtp_port === 465; // Only use secure:true for port 465
-      
-      // Use SMTP with improved Office 365 configuration
-      const client = new SMTPClient({
-        host: settings.smtp_host,
-        port: settings.smtp_port || 587,
-        user: settings.smtp_user,
-        password: settings.smtp_password,
-        tls: { ciphers: 'SSLv3' }, // Force a common cipher suite
-        timeout: 10000, // Add a reasonable timeout
-        authentication: ['PLAIN', 'LOGIN', 'CRAM-MD5'], // Explicitly specify authentication methods
-        ssl: secure, // Use SSL only for port 465
-      });
-      
-      await client.sendAsync({
-        from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
-        to: recipientEmail,
-        subject: subject,
-        text: plainTextContent,
-        attachment: [
-          {
-            data: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">${htmlContent}</div>`,
-            alternative: true
-          }
-        ]
-      });
-      
-      console.log("Email sent via SMTP to", recipientEmail);
-      
-      // Return success response
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Notification sent to ${recipientEmail} via SMTP`,
-          provider: "smtp"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
+      try {
+        console.log(`Attempting to send notification via Office 365 SMTP to: ${recipientEmail}`);
+        
+        // For Office 365, we need to use specific configuration
+        const client = new SMTPClient({
+          host: settings.smtp_host,
+          port: settings.smtp_port || 587,
+          user: settings.smtp_user,
+          password: settings.smtp_password,
+          // Most important Office 365 specific settings:
+          ssl: false, // Don't use direct SSL for port 587
+          tls: true,  // Use TLS (this enables STARTTLS)
+          timeout: 10000,
+          domain: "techlinx.se", // Use your actual domain
+        });
+        
+        await client.sendAsync({
+          from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
+          to: recipientEmail,
+          subject: subject,
+          text: plainTextContent,
+          attachment: [
+            {
+              data: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">${htmlContent}</div>`,
+              alternative: true
+            }
+          ]
+        });
+        
+        console.log("Email sent via SMTP to", recipientEmail);
+        
+        // Return success response
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Notification sent to ${recipientEmail} via SMTP`,
+            provider: "smtp"
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      } catch (smtpError) {
+        console.error("SMTP Error:", smtpError);
+        throw new Error(`SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`);
+      }
     } else {
       // Log the information since no email provider is configured
       console.log(`Would send ${recipientType} notification email to: ${recipientEmail}`);

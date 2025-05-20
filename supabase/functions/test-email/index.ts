@@ -96,28 +96,20 @@ serve(async (req) => {
                settings.smtp_user && 
                settings.smtp_password) {
       
-      // For Office 365, port 587 should use STARTTLS (secure: false)
-      const secure = settings.smtp_port === 465; // Only use secure:true for port 465
-      
-      console.log("Attempting to send via SMTP with settings:", {
-        host: settings.smtp_host,
-        port: settings.smtp_port || 587,
-        secure: secure,
-        user: settings.smtp_user,
-        // Password redacted for security
-      });
-      
       try {
-        // Use SMTP with proper configuration for Office 365
+        console.log(`Attempting to send via Office 365 SMTP to: ${recipientEmail}`);
+        
+        // For Office 365, we need to use specific configuration
         const client = new SMTPClient({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
           user: settings.smtp_user,
           password: settings.smtp_password,
-          tls: { ciphers: 'SSLv3' }, // Force a common cipher suite
-          timeout: 10000, // Add a reasonable timeout
-          authentication: ['PLAIN', 'LOGIN', 'CRAM-MD5'], // Explicitly specify authentication methods
-          ssl: secure, // Use SSL only for port 465
+          // Most important Office 365 specific settings:
+          ssl: false, // Don't use direct SSL for port 587
+          tls: true,  // Use TLS (this enables STARTTLS)
+          timeout: 10000,
+          domain: "techlinx.se", // Use your actual domain
         });
         
         console.log("SMTP client configured, attempting to send email...");
