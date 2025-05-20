@@ -23,13 +23,29 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
-import { AlertCircle, ExternalLink, Mail, Plus, Trash, Save, Send, Check } from 'lucide-react';
+import { 
+  AlertCircle, 
+  ChevronDown, 
+  ChevronUp, 
+  ExternalLink, 
+  Mail, 
+  Plus, 
+  Trash, 
+  Save, 
+  Send, 
+  Check 
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { notificationService } from '@/services/notificationService';
+import { 
+  Collapsible, 
+  CollapsibleContent, 
+  CollapsibleTrigger 
+} from '@/components/ui/collapsible';
 
 // Define our schema for notification settings
 const notificationFormSchema = z.object({
@@ -73,6 +89,7 @@ const SettingsPage = () => {
     senderEmail: "notifications@techlinx.se",
     senderName: "Techlinx Support",
   });
+  const [isEmailConfigOpen, setIsEmailConfigOpen] = useState(false);
 
   // Form
   const form = useForm<NotificationFormValues>({
@@ -457,153 +474,171 @@ const SettingsPage = () => {
                   />
                   
                   {form.watch("emailProvider") === "smtp" && (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Collapsible
+                      open={isEmailConfigOpen}
+                      onOpenChange={setIsEmailConfigOpen}
+                      className="border rounded-md p-2"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <div className="flex justify-between items-center p-2 cursor-pointer hover:bg-muted">
+                          <h4 className="text-sm font-medium">SMTP Configuration Settings</h4>
+                          <Button variant="ghost" size="sm">
+                            {isEmailConfigOpen ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="smtpHost"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Server</FormLabel>
+                                <FormDescription>
+                                  Your SMTP server address
+                                </FormDescription>
+                                <FormControl>
+                                  <Input placeholder="smtp.office365.com" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="smtpPort"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Port</FormLabel>
+                                <FormDescription>
+                                  SMTP server port (usually 587 for Office 365)
+                                </FormDescription>
+                                <FormControl>
+                                  <Input type="number" placeholder="587" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                          <FormField
+                            control={form.control}
+                            name="smtpUser"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Username</FormLabel>
+                                <FormDescription>
+                                  Usually your full email address
+                                </FormDescription>
+                                <FormControl>
+                                  <Input placeholder="your.email@example.com" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="smtpPassword"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Password</FormLabel>
+                                <FormDescription>
+                                  Your email account password
+                                </FormDescription>
+                                <FormControl>
+                                  <Input type="password" placeholder="••••••••" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        
                         <FormField
                           control={form.control}
-                          name="smtpHost"
+                          name="smtpSecure"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Server</FormLabel>
-                              <FormDescription>
-                                Your SMTP server address
-                              </FormDescription>
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 mt-4">
+                              <div className="space-y-0.5">
+                                <FormLabel className="text-base">Use SSL/TLS</FormLabel>
+                                <FormDescription>
+                                  Enable secure connection (TLS)
+                                </FormDescription>
+                              </div>
                               <FormControl>
-                                <Input placeholder="smtp.office365.com" {...field} />
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
                               </FormControl>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
                         
-                        <FormField
-                          control={form.control}
-                          name="smtpPort"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Port</FormLabel>
-                              <FormDescription>
-                                SMTP server port (usually 587 for Office 365)
-                              </FormDescription>
-                              <FormControl>
-                                <Input type="number" placeholder="587" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="smtpUser"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Username</FormLabel>
-                              <FormDescription>
-                                Usually your full email address
-                              </FormDescription>
-                              <FormControl>
-                                <Input placeholder="your.email@example.com" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="smtpPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Password</FormLabel>
-                              <FormDescription>
-                                Your email account password
-                              </FormDescription>
-                              <FormControl>
-                                <Input type="password" placeholder="••••••••" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      
-                      <FormField
-                        control={form.control}
-                        name="smtpSecure"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel className="text-base">Use SSL/TLS</FormLabel>
-                              <FormDescription>
-                                Enable secure connection (TLS)
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="senderEmail"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Sender Email</FormLabel>
-                              <FormDescription>
-                                The email address notifications will be sent from
-                              </FormDescription>
-                              <FormControl>
-                                <Input placeholder="notifications@yourdomain.com" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="senderName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Sender Name</FormLabel>
-                              <FormDescription>
-                                The name that will appear as the sender
-                              </FormDescription>
-                              <FormControl>
-                                <Input placeholder="Your Company Support" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                          <FormField
+                            control={form.control}
+                            name="senderEmail"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Sender Email</FormLabel>
+                                <FormDescription>
+                                  The email address notifications will be sent from
+                                </FormDescription>
+                                <FormControl>
+                                  <Input placeholder="notifications@yourdomain.com" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="senderName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Sender Name</FormLabel>
+                                <FormDescription>
+                                  The name that will appear as the sender
+                                </FormDescription>
+                                <FormControl>
+                                  <Input placeholder="Your Company Support" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
 
-                      <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
-                        <div className="flex items-start">
-                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-2" />
-                          <div className="text-sm text-amber-800">
-                            <p className="font-medium">Microsoft 365 SMTP Setup</p>
-                            <ol className="list-decimal ml-5 mt-1 space-y-1">
-                              <li>Server: <code>smtp.office365.com</code></li>
-                              <li>Port: <code>587</code></li>
-                              <li>Use SSL/TLS: <code>Yes</code> (enables STARTTLS)</li>
-                              <li>Username: Your full email address</li>
-                              <li>Password: Your Microsoft 365 password or app password</li>
-                              <li>For security, it's recommended to create an app password rather than using your main account password</li>
-                            </ol>
+                        <div className="p-4 border rounded-md bg-amber-50 border-amber-200 mt-4">
+                          <div className="flex items-start">
+                            <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-2" />
+                            <div className="text-sm text-amber-800">
+                              <p className="font-medium">Microsoft 365 SMTP Setup</p>
+                              <ol className="list-decimal ml-5 mt-1 space-y-1">
+                                <li>Server: <code>smtp.office365.com</code></li>
+                                <li>Port: <code>587</code></li>
+                                <li>Use SSL/TLS: <code>Yes</code> (enables STARTTLS)</li>
+                                <li>Username: Your full email address</li>
+                                <li>Password: Your Microsoft 365 password or app password</li>
+                                <li>For security, it's recommended to create an app password rather than using your main account password</li>
+                              </ol>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </>
+                      </CollapsibleContent>
+                    </Collapsible>
                   )}
                   
                   <div className="pt-4 border-t">
