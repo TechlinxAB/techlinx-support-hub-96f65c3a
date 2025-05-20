@@ -14,7 +14,7 @@ export const initPauseUnpauseDetection = () => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       pauseDetected = true;
-      console.log('App resumed from background, flagging potential token refresh need');
+      // Removed the console.log to silently handle pause detection
     }
   });
 };

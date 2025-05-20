@@ -31,7 +31,6 @@ const LoadingOverlay = ({ message }: { message?: string }) => (
 const Layout = () => {
   const [forceShow, setForceShow] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
-  const [isPauseRecovery, setIsPauseRecovery] = useState(false);
   const [pageTransitioning, setPageTransitioning] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
@@ -52,17 +51,8 @@ const Layout = () => {
     
     // Check if we're returning from a pause state
     if (wasPauseDetected()) {
-      setIsPauseRecovery(true);
-      toast.info("Recovering from app pause", {
-        description: "Your session is being verified after returning from background",
-        duration: 5000
-      });
-      
-      // Clear the pause detected flag after showing the message
-      setTimeout(() => {
-        clearPauseDetected();
-        setIsPauseRecovery(false);
-      }, 5000);
+      // Silently clear the pause detected flag without showing any notification
+      clearPauseDetected();
     }
     
     return () => {
@@ -167,24 +157,6 @@ const Layout = () => {
         }}
       >
         <Header />
-        
-        {isPauseRecovery && (
-          <div className="bg-amber-500/10 border-b border-amber-500/20 w-full">
-            <Container>
-              <div className="flex items-center justify-between w-full py-1">
-                <span className="text-sm text-amber-800">Recovering from app pause...</span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-7 text-xs"
-                  onClick={() => clearPauseDetected()}
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </Container>
-          </div>
-        )}
         
         {/* Content area with AnimatePresence for page transitions */}
         <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
