@@ -17,7 +17,7 @@ interface EnhancedCaseDiscussionProps {
 const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId }) => {
   const { replies, refetchReplies, users } = useAppContext();
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
-  const [notificationServiceStatus, setNotificationServiceStatus] = useState<'checking' | 'ok' | 'error'>('checking');
+  const [notificationServiceStatus, setNotificationServiceStatus] = useState<'checking' | 'ok' | 'error' | 'pgnet_missing'>('checking');
   
   // Enhanced logging for debugging
   console.log(`[EnhancedCaseDiscussion] Initializing for case ${caseId}`);
@@ -31,7 +31,27 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   useEffect(() => {
     const checkNotificationSystem = async () => {
       try {
-        // Check if the notification trigger is properly installed using our existing function
+        // First check if pg_net extension is properly installed
+        const { data: pgNetData, error: pgNetError } = await supabase.rpc('check_pgnet_status');
+        
+        if (pgNetError) {
+          console.error('[EnhancedCaseDiscussion] Error checking pg_net status:', pgNetError);
+          // If the function itself doesn't exist, that indicates a different problem
+          if (pgNetError.message.includes('does not exist')) {
+            console.log('[EnhancedCaseDiscussion] check_pgnet_status function does not exist, falling back to trigger check');
+          } else {
+            setNotificationServiceStatus('error');
+            return;
+          }
+        }
+        
+        if (pgNetData === false) {
+          console.error('[EnhancedCaseDiscussion] pg_net extension is not available');
+          setNotificationServiceStatus('pgnet_missing');
+          return;
+        }
+        
+        // Now check if the notification trigger is properly installed using our existing function
         const { data, error } = await supabase.rpc('check_notification_trigger_status');
         
         if (error) {
@@ -73,6 +93,14 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
       });
       
       // Could add here a call to report the issue to admins
+    } else if (notificationServiceStatus === 'pgnet_missing') {
+      toast.error('Email notification system unavailable', {
+        description: 'The database extension required for email notifications is not enabled. Please contact system administrators.',
+        duration: 8000,
+      });
+      
+      // Log a more detailed error for admins
+      console.error('[EnhancedCaseDiscussion] Critical: pg_net extension is not available. Email notifications will not work.');
     }
   }, [notificationServiceStatus]);
   
@@ -140,9 +168,18 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
       }
       
       console.log('[EnhancedCaseDiscussion] Test notification result:', data);
-      toast.success('Notification test initiated', {
-        description: 'Check server logs for results',
-      });
+      
+      // Check if the result indicates a pg_net error
+      if (data.includes('pg_net') || data.includes('does not exist')) {
+        toast.error('Notification test failed: Missing pg_net extension', {
+          description: 'The required database extension is not enabled. Contact system administrator.',
+        });
+        setNotificationServiceStatus('pgnet_missing');
+      } else {
+        toast.success('Notification test initiated', {
+          description: 'Check server logs for results',
+        });
+      }
     } catch (err) {
       console.error('[EnhancedCaseDiscussion] Exception testing notification:', err);
       toast.error('Exception testing notification system');
@@ -154,6 +191,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
     console.log('[EnhancedCaseDiscussion] Development mode - Test notification function available');
     (window as any).testCaseNotification = testNotification;
     (window as any).checkReplies = () => console.log('Current replies:', replies);
+    (window as any).getNotificationStatus = () => console.log('Notification status:', notificationServiceStatus);
   }
   
   return (

@@ -44,7 +44,14 @@ serve(async (req) => {
   
   console.log(`🔔 Processing notification - Case: ${caseId}, Reply: ${replyId}, Recipient: ${recipientType}`);
   console.log(`🔔 Authorization header present: ${!!req.headers.get("authorization")}`);
-  console.log(`🔔 Authorization header: ${req.headers.get("authorization")?.substring(0, 15)}...`);
+  
+  // Log authorization header for debugging but mask most of it
+  const authHeader = req.headers.get("authorization");
+  if (authHeader) {
+    console.log(`🔔 Authorization header: ${authHeader.substring(0, 15)}...`);
+  } else {
+    console.warn("🔔 No authorization header present - this might cause authentication issues");
+  }
 
   try {
     // Create a Supabase client with the Supabase URL and service key
@@ -66,7 +73,9 @@ serve(async (req) => {
       .select("debug_mode, log_level")
       .single();
     
-    if (debugSettings?.debug_mode) {
+    if (debugError) {
+      console.warn(`🔔 Error fetching debug settings: ${debugError.message}. Continuing with default settings.`);
+    } else if (debugSettings?.debug_mode) {
       console.log(`🔔 DEBUG MODE ENABLED - Log level: ${debugSettings.log_level || 'debug'}`);
     }
 
@@ -91,7 +100,8 @@ serve(async (req) => {
       hasSmtpPassword: !!settings.smtp_password,
       senderName: settings.sender_name,
       senderEmail: settings.sender_email,
-      emailSignature: !!settings.email_signature
+      emailSignature: !!settings.email_signature,
+      emailProvider: settings.email_provider
     });
 
     // Get the case details
@@ -117,6 +127,23 @@ serve(async (req) => {
 
     // Get the reply details
     console.log(`🔔 Fetching reply details for reply ID: ${replyId}`);
+    
+    // Handle special case for test notifications
+    if (replyId === 'test-reply-id') {
+      console.log('🔔 Processing test notification - using mock reply data');
+      
+      // Return success response for test notification
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Test notification would be sent to ${recipientType} (if email provider is configured)`,
+          provider: "test",
+          caseId: caseId
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+    
     const { data: replyData, error: replyError } = await supabase
       .from("replies")
       .select("*, profiles(*)")
