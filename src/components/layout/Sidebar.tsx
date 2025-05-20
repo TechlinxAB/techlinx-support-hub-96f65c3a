@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
@@ -63,19 +62,16 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
   
   return (
     <aside 
-      className={cn(
-        "h-screen bg-sidebar z-30 flex flex-col fixed left-0 top-0 bottom-0 transition-all duration-300 ease-in-out",
-        isOpen ? "translate-x-0 w-64" : "w-0 -translate-x-full md:translate-x-0 md:w-16",
-      )}
+      className="h-screen bg-sidebar z-30 flex flex-col fixed left-0 top-0 bottom-0 transition-all duration-300 ease-in-out w-64"
     >
       <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border bg-sidebar">
-        <Link to="/" className={cn("flex items-center gap-2 font-bold text-xl text-white", !isOpen && "md:justify-center")}>
+        <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
           <Clock className="h-6 w-6" />
-          {isOpen && <span>Techlinx</span>}
+          <span>Techlinx</span>
         </Link>
         
         {/* Mobile close button */}
-        {isMobile && isOpen && (
+        {isMobile && (
           <Button 
             variant="ghost" 
             size="icon"
@@ -89,41 +85,39 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 bg-sidebar">
-        {isOpen && (
-          <div className="mb-6">
-            <div className="mb-2 text-xs font-semibold uppercase text-sidebar-foreground/50">
-              Main Menu
-            </div>
-            <nav>
-              <ul className="space-y-1">
-                {menuItems.map((item) => {
-                  // Check if item should be shown (based on user role)
-                  const shouldShow = 
-                    (item.showOnlyForConsultant && isConsultant) || 
-                    (item.showOnlyForUser && !isConsultant) || 
-                    (!item.showOnlyForConsultant && !item.showOnlyForUser);
-                  
-                  return shouldShow && (
-                    <li key={item.to}>
-                      <Link
-                        to={item.to}
-                        className={cn(
-                          "sidebar-menu-item",
-                          item.isActive ? "active" : ""
-                        )}
-                      >
-                        {item.icon}
-                        <span>{item.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>
+        <div className="mb-6">
+          <div className="mb-2 text-xs font-semibold uppercase text-sidebar-foreground/50">
+            Main Menu
           </div>
-        )}
+          <nav>
+            <ul className="space-y-1">
+              {menuItems.map((item) => {
+                // Check if item should be shown (based on user role)
+                const shouldShow = 
+                  (item.showOnlyForConsultant && isConsultant) || 
+                  (item.showOnlyForUser && !isConsultant) || 
+                  (!item.showOnlyForConsultant && !item.showOnlyForUser);
+                
+                return shouldShow && (
+                  <li key={item.to}>
+                    <Link
+                      to={item.to}
+                      className={cn(
+                        "sidebar-menu-item",
+                        item.isActive ? "active" : ""
+                      )}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </div>
         
-        {isOpen && isConsultant && (
+        {isConsultant && (
           <div>
             <div className="mb-2 text-xs font-semibold uppercase text-sidebar-foreground/50">
               Admin
@@ -148,80 +142,23 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
             </nav>
           </div>
         )}
-        
-        {!isOpen && (
-          <div className="flex flex-col items-center space-y-4 pt-2">
-            {menuItems.map((item) => {
-              // Check if item should be shown (based on user role)
-              const shouldShow = 
-                (item.showOnlyForConsultant && isConsultant) || 
-                (item.showOnlyForUser && !isConsultant) || 
-                (!item.showOnlyForConsultant && !item.showOnlyForUser);
-              
-              return shouldShow && (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "w-10 h-10 flex items-center justify-center rounded-md",
-                    item.isActive 
-                      ? "bg-sidebar-accent text-white" 
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white"
-                  )}
-                  title={item.label}
-                >
-                  {item.icon}
-                </Link>
-              );
-            })}
-            
-            {isConsultant && adminItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "w-10 h-10 flex items-center justify-center rounded-md",
-                  item.isActive 
-                    ? "bg-sidebar-accent text-white" 
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white"
-                )}
-                title={item.label}
-              >
-                {item.icon}
-              </Link>
-            ))}
-          </div>
-        )}
       </div>
       
-      {isOpen && (
-        <div className="p-4 border-t border-sidebar-border bg-sidebar">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-white">
-              {currentUser?.name?.charAt(0) || 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                {currentUser?.name || 'User'}
-              </p>
-              <p className="text-xs text-sidebar-foreground/70 truncate">
-                {currentUser?.email || 'user@example.com'}
-              </p>
-            </div>
-            
-            {/* Toggle sidebar button in footer */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="text-sidebar-foreground/70 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Toggle sidebar</span>
-            </Button>
+      <div className="p-4 border-t border-sidebar-border bg-sidebar">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-white">
+            {currentUser?.name?.charAt(0) || 'U'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">
+              {currentUser?.name || 'User'}
+            </p>
+            <p className="text-xs text-sidebar-foreground/70 truncate">
+              {currentUser?.email || 'user@example.com'}
+            </p>
           </div>
         </div>
-      )}
+      </div>
     </aside>
   );
 };

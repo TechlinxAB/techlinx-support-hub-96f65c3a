@@ -20,29 +20,14 @@ const SidebarContext = createContext<SidebarContextType>(defaultContext);
 export const useSidebar = () => useContext(SidebarContext);
 
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // On desktop, isSidebarOpen is always true
+  // On mobile, isSidebarOpen controls the visibility
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(256); // 16rem default
   const [isMobile, setIsMobile] = useState(false);
   const sidebarRef = useRef<HTMLDivElement | null>(null);
 
-  // Load sidebar state from localStorage on component mount only
-  useEffect(() => {
-    const savedSidebarState = localStorage.getItem('sidebarState');
-    
-    // First check if we're on mobile
-    const isMobileView = window.innerWidth < 768;
-    setIsMobile(isMobileView);
-    
-    if (savedSidebarState !== null) {
-      // On mobile, default to closed regardless of saved state
-      setIsSidebarOpen(isMobileView ? false : savedSidebarState === 'open');
-    } else {
-      // Default behavior based on screen size
-      setIsSidebarOpen(!isMobileView);
-    }
-  }, []);
-
-  // Update isMobile state when window is resized
+  // Check if we're on mobile
   useEffect(() => {
     const handleResize = () => {
       const isMobileView = window.innerWidth < 768;
@@ -58,14 +43,6 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isSidebarOpen]);
-
-  // Save sidebar state to localStorage when it changes
-  // Only save desktop state, don't save mobile state
-  useEffect(() => {
-    if (!isMobile) {
-      localStorage.setItem('sidebarState', isSidebarOpen ? 'open' : 'closed');
-    }
-  }, [isSidebarOpen, isMobile]);
 
   // Use ResizeObserver to track sidebar width changes
   useEffect(() => {
@@ -93,7 +70,10 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const toggleSidebar = () => {
-    setIsSidebarOpen(prev => !prev);
+    // Only toggle sidebar for mobile devices
+    if (isMobile) {
+      setIsSidebarOpen(prev => !prev);
+    }
   };
 
   return (

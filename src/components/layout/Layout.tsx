@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -37,7 +36,8 @@ const Layout = () => {
   
   // Calculate content margin based on sidebar state
   // Mobile devices should have no margin for the sidebar
-  const contentMarginLeft = isMobile ? 0 : (isSidebarOpen ? '16rem' : '4rem');
+  // Desktop always has the full sidebar margin
+  const contentMarginLeft = isMobile ? 0 : '16rem';
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();

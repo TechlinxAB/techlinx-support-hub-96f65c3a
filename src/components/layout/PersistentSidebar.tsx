@@ -32,15 +32,15 @@ const PersistentSidebar: React.FC = () => {
       <div 
         className="fixed top-0 left-0 h-full z-40 bg-sidebar transition-all duration-300 ease-in-out shadow-md"
         style={{ 
-          // On desktop, sidebar is always visible based on collapsed state
+          // On desktop, sidebar is always full width
           // On mobile, sidebar is completely hidden unless open
-          width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
+          width: isMobile ? (isSidebarOpen ? '16rem' : '0') : '16rem',
           transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
           visibility: isMobile && !isSidebarOpen ? 'hidden' : 'visible',
           isolation: 'isolate',
         }}
       >
-        <Sidebar isOpen={isSidebarOpen} />
+        <Sidebar isOpen={!isMobile || isSidebarOpen} />
       </div>
     </>
   );
