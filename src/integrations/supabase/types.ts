@@ -535,6 +535,11 @@ export type Database = {
           sender_email: string | null
           sender_name: string | null
           services_email: string
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_secure: boolean | null
+          smtp_user: string | null
           updated_at: string
         }
         Insert: {
@@ -546,6 +551,11 @@ export type Database = {
           sender_email?: string | null
           sender_name?: string | null
           services_email?: string
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_secure?: boolean | null
+          smtp_user?: string | null
           updated_at?: string
         }
         Update: {
@@ -557,6 +567,11 @@ export type Database = {
           sender_email?: string | null
           sender_name?: string | null
           services_email?: string
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_secure?: boolean | null
+          smtp_user?: string | null
           updated_at?: string
         }
         Relationships: []
