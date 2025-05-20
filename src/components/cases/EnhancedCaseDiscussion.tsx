@@ -31,7 +31,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   useEffect(() => {
     const checkNotificationSystem = async () => {
       try {
-        // Check if the notification trigger is properly installed
+        // Check if the notification trigger is properly installed using our existing function
         const { data, error } = await supabase.rpc('check_notification_trigger_status');
         
         if (error) {
