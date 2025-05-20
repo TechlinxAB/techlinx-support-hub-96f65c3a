@@ -128,6 +128,7 @@ type AppContextType = {
   
   // Categories
   categories: Category[];
+  refetchCategories: () => Promise<Category[]>;
   
   // Replies and Notes
   replies: Reply[];
@@ -179,6 +180,7 @@ const AppContext = createContext<AppContextType>({
   users: [],
   refetchUsers: async () => [],
   categories: [],
+  refetchCategories: async () => [],
   replies: [],
   notes: [],
   loadingReplies: false,
@@ -1126,6 +1128,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     users,
     refetchUsers,
     categories,
+    refetchCategories,
     replies,
     notes,
     loadingReplies,
