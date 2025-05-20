@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { UserProfile } from './AuthContext';
@@ -500,7 +501,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           userId: item.user_id,
           content: item.content,
           isInternal: item.is_internal,
-          createdAt: new Date(item.created_at)
+          createdAt: new Date(item.created_at).toISOString() // Convert to string to match interface
         }));
         
         setReplies(formattedReplies);
@@ -582,7 +583,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           userId: responseData.user_id,
           content: responseData.content,
           isInternal: responseData.is_internal,
-          createdAt: new Date(responseData.created_at)
+          createdAt: new Date(responseData.created_at).toISOString() // Convert to string to match interface
         };
       }
       
