@@ -44,8 +44,11 @@ export const notificationService = {
       
       // Call the edge function with proper error handling
       try {
+        // Get the API URL from environment or constants instead of accessing protected property
+        const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
+        
         const response = await fetch(
-          `${supabase.supabaseUrl}/functions/v1/send-case-notification`,
+          `${functionsUrl}/send-case-notification`,
           {
             method: "POST",
             headers: {
@@ -118,8 +121,11 @@ export const notificationService = {
       
       // Call the edge function with proper error handling
       try {
+        // Get the API URL from environment or constants instead of accessing protected property
+        const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
+        
         const response = await fetch(
-          `${supabase.supabaseUrl}/functions/v1/test-email`,
+          `${functionsUrl}/test-email`,
           {
             method: "POST",
             headers: {
