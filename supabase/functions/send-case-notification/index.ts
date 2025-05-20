@@ -156,14 +156,16 @@ serve(async (req) => {
       // For Office 365, port 587 should use STARTTLS (secure: false)
       const secure = settings.smtp_port === 465; // Only use secure:true for port 465
       
-      // Use SMTP with corrected configuration
+      // Use SMTP with improved Office 365 configuration
       const client = new SMTPClient({
         host: settings.smtp_host,
         port: settings.smtp_port || 587,
         user: settings.smtp_user,
         password: settings.smtp_password,
-        tls: secure, // Set to true only for port 465, false for 587 (STARTTLS)
+        tls: { ciphers: 'SSLv3' }, // Force a common cipher suite
         timeout: 10000, // Add a reasonable timeout
+        authentication: ['PLAIN', 'LOGIN', 'CRAM-MD5'], // Explicitly specify authentication methods
+        ssl: secure, // Use SSL only for port 465
       });
       
       await client.sendAsync({

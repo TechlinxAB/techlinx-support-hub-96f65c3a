@@ -108,15 +108,19 @@ serve(async (req) => {
       });
       
       try {
-        // Use SMTP with corrected configuration for Office 365
+        // Use SMTP with proper configuration for Office 365
         const client = new SMTPClient({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
           user: settings.smtp_user,
           password: settings.smtp_password,
-          tls: secure, // Set to true only for port 465, false for 587 (STARTTLS)
+          tls: { ciphers: 'SSLv3' }, // Force a common cipher suite
           timeout: 10000, // Add a reasonable timeout
+          authentication: ['PLAIN', 'LOGIN', 'CRAM-MD5'], // Explicitly specify authentication methods
+          ssl: secure, // Use SSL only for port 465
         });
+        
+        console.log("SMTP client configured, attempting to send email...");
         
         const emailResult = await client.sendAsync({
           from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
