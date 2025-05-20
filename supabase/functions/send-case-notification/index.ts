@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,6 +38,16 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get the notification settings
+    const { data: settings, error: settingsError } = await supabase
+      .from("notification_settings")
+      .select("*")
+      .single();
+
+    if (settingsError) {
+      throw new Error(`Error fetching notification settings: ${settingsError.message}`);
+    }
 
     // Get the case details
     const { data: caseData, error: caseError } = await supabase
@@ -94,37 +105,63 @@ serve(async (req) => {
       .replace("{category}", caseData.categories?.name || "")
       .replace("{reply_content}", replyData.content);
 
+    // Add signature if available
+    const emailContent = settings.email_signature 
+      ? `${body}\n\n${settings.email_signature}`
+      : body;
+
     // Determine recipient email
     let recipientEmail;
     if (recipientType === "user") {
       recipientEmail = caseData.profiles.email; // The case owner's email
     } else {
-      // For consultant notifications, use the configured services email
-      const { data: settings } = await supabase
-        .from("notification_settings")
-        .select("services_email")
-        .single();
-      
-      recipientEmail = settings?.services_email || "services@techlinx.se";
+      recipientEmail = settings.services_email || "services@techlinx.se";
     }
 
-    // Send the email
-    // In a production environment, you would integrate with an email service like SendGrid or AWS SES
-    console.log(`Sending ${recipientType} notification email to: ${recipientEmail}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body: ${body}`);
-    
-    // Since we're not actually sending emails in this demo, we'll just log the information
-    // In a real scenario, you would add email sending logic here
-
-    // Return success response
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Notification for ${recipientType} would be sent to ${recipientEmail}`,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
+    // Check if an email provider is configured
+    if (settings.email_provider === "resend" && settings.resend_api_key) {
+      // Initialize Resend with the API key
+      const resend = new Resend(settings.resend_api_key);
+      
+      // Format the HTML content
+      const htmlContent = emailContent.replace(/\n/g, "<br>");
+      
+      // Send the email using Resend
+      const emailResult = await resend.emails.send({
+        from: `${settings.sender_name || "Techlinx Support"} <${settings.sender_email || "notifications@techlinx.se"}>`,
+        to: [recipientEmail],
+        subject: subject,
+        html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">${htmlContent}</div>`,
+      });
+      
+      console.log("Email sent via Resend:", emailResult);
+      
+      // Return success response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Notification sent to ${recipientEmail} via Resend`,
+          provider: "resend",
+          id: emailResult.id
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    } else {
+      // Log the information since no email provider is configured
+      console.log(`Would send ${recipientType} notification email to: ${recipientEmail}`);
+      console.log(`Subject: ${subject}`);
+      console.log(`Body: ${emailContent}`);
+      
+      // Return success response (but no actual email was sent)
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Notification for ${recipientType} would be sent to ${recipientEmail} (email provider not configured)`,
+          provider: "none"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
   } catch (error) {
     console.error("Error in send-case-notification function:", error.message);
     

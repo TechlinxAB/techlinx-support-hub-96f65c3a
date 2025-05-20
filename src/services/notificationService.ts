@@ -3,9 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Reply } from "@/context/AppContext";
 import { toast } from "sonner";
 
-// The URL for the Supabase Edge Function
-const SUPABASE_URL = "https://uaoeabhtbynyfzyfzogp.supabase.co";
-
 // Service for handling notifications
 export const notificationService = {
   /**
@@ -26,8 +23,16 @@ export const notificationService = {
       // If a user replied, notify consultants; if a consultant replied, notify the user
       const recipientType = isUserReply ? "consultant" : "user";
       
+      // Get notification settings to check if we have email configured
+      const { data: settings } = await supabase
+        .from('notification_settings')
+        .select('email_provider')
+        .single();
+      
+      const emailConfigured = settings?.email_provider === 'resend';
+      
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/send-case-notification`,
+        `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/send-case-notification`,
         {
           method: "POST",
           headers: {
@@ -47,10 +52,18 @@ export const notificationService = {
         throw new Error(errorData.error || "Failed to send notification");
       }
 
+      const responseData = await response.json();
+      
       // Show success toast
-      toast.success(`Notification sent to ${recipientType}`, {
-        description: "Email notification was triggered successfully"
-      });
+      if (emailConfigured) {
+        toast.success(`Email notification sent to ${recipientType}`, {
+          description: "Email notification delivered successfully"
+        });
+      } else {
+        toast.success(`Notification for ${recipientType} logged`, {
+          description: "Email notifications not configured - check Settings to enable"
+        });
+      }
       
       return true;
     } catch (error) {

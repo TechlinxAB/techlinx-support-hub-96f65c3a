@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash, Save } from 'lucide-react';
+import { AlertCircle, ExternalLink, Mail, Plus, Trash, Save, Send, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
@@ -39,14 +39,20 @@ const notificationFormSchema = z.object({
   consultantSubject: z.string().min(5, "Subject must be at least 5 characters"),
   consultantBody: z.string().min(20, "Template must be at least 20 characters"),
   emailSignature: z.string().optional(),
+  emailProvider: z.enum(["resend", "none"]).default("none"),
+  resendApiKey: z.string().optional(),
+  senderEmail: z.string().email("Invalid sender email").optional(),
+  senderName: z.string().min(2, "Sender name must be at least 2 characters").optional(),
 });
 
 type NotificationFormValues = z.infer<typeof notificationFormSchema>;
 
 const SettingsPage = () => {
-  const { currentUser, categories } = useAppContext();
+  const { currentUser, categories, refetchCategories } = useAppContext();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [testEmailLoading, setTestEmailLoading] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('');
   const [templates, setTemplates] = useState({
     servicesEmail: "services@techlinx.se",
     userSubject: "Your case has been updated",
@@ -54,6 +60,10 @@ const SettingsPage = () => {
     consultantSubject: "New case reply notification",
     consultantBody: "Case {case_title} has received a new reply from {user_name}.",
     emailSignature: "Best regards,\nThe Techlinx Support Team",
+    emailProvider: "none",
+    resendApiKey: "",
+    senderEmail: "notifications@techlinx.se",
+    senderName: "Techlinx Support",
   });
 
   // Form
@@ -66,6 +76,10 @@ const SettingsPage = () => {
       consultantSubject: templates.consultantSubject,
       consultantBody: templates.consultantBody,
       emailSignature: templates.emailSignature,
+      emailProvider: templates.emailProvider as "resend" | "none",
+      resendApiKey: templates.resendApiKey,
+      senderEmail: templates.senderEmail,
+      senderName: templates.senderName,
     },
   });
 
@@ -95,6 +109,10 @@ const SettingsPage = () => {
             consultantSubject: consultantTemplate?.subject || templates.consultantSubject,
             consultantBody: consultantTemplate?.body || templates.consultantBody,
             emailSignature: settingsData?.email_signature || templates.emailSignature,
+            emailProvider: settingsData?.email_provider || "none",
+            resendApiKey: settingsData?.resend_api_key || "",
+            senderEmail: settingsData?.sender_email || "notifications@techlinx.se",
+            senderName: settingsData?.sender_name || "Techlinx Support",
           };
           
           setTemplates(newTemplates);
@@ -120,6 +138,10 @@ const SettingsPage = () => {
             id: 1, // Using a fixed ID for the single settings record
             services_email: data.servicesEmail,
             email_signature: data.emailSignature,
+            email_provider: data.emailProvider,
+            resend_api_key: data.resendApiKey,
+            sender_email: data.senderEmail,
+            sender_name: data.senderName,
             updated_at: new Date().toISOString(),
           }
         ]);
@@ -163,6 +185,56 @@ const SettingsPage = () => {
     }
   };
 
+  // Send a test email
+  const sendTestEmail = async () => {
+    if (!testEmailAddress) {
+      toast.error("Please enter a test email address");
+      return;
+    }
+
+    setTestEmailLoading(true);
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        throw new Error("Not authenticated");
+      }
+      
+      const response = await fetch(
+        `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/test-email`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionData.session.access_token}`,
+          },
+          body: JSON.stringify({
+            recipientEmail: testEmailAddress,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send test email");
+      }
+
+      const responseData = await response.json();
+      
+      toast.success("Test email sent successfully", {
+        description: `Email sent to ${testEmailAddress}`
+      });
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      toast.error("Failed to send test email", {
+        description: error.message || "An error occurred"
+      });
+    } finally {
+      setTestEmailLoading(false);
+    }
+  };
+
   // Add a new category
   const addCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -175,7 +247,7 @@ const SettingsPage = () => {
       if (error) throw error;
       
       // Refetch categories
-      await useAppContext().refetchCategories();
+      await refetchCategories();
       setNewCategoryName('');
       toast.success("Category added successfully");
     } catch (error) {
@@ -195,7 +267,7 @@ const SettingsPage = () => {
       if (error) throw error;
       
       // Refetch categories
-      await useAppContext().refetchCategories();
+      await refetchCategories();
       toast.success("Category deleted successfully");
     } catch (error) {
       console.error("Error deleting category:", error);
@@ -355,6 +427,146 @@ const SettingsPage = () => {
         <TabsContent value="notification" className="space-y-4 mt-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmitNotifications)} className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Provider Configuration</CardTitle>
+                  <CardDescription>Configure your email service provider for sending notifications</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="emailProvider"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email Provider</FormLabel>
+                        <FormDescription>
+                          Select which email service to use for sending notifications
+                        </FormDescription>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select email provider" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">None (Log emails only)</SelectItem>
+                            <SelectItem value="resend">Resend</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch("emailProvider") === "resend" && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="resendApiKey"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Resend API Key</FormLabel>
+                            <FormDescription>
+                              API key from your Resend.com account
+                              <a 
+                                href="https://resend.com/api-keys" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="ml-2 inline-flex items-center text-blue-500 hover:text-blue-700"
+                              >
+                                Get API Key <ExternalLink className="h-3 w-3 ml-1" />
+                              </a>
+                            </FormDescription>
+                            <FormControl>
+                              <Input type="password" placeholder="re_xxxxxxxxxxxx" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="senderEmail"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sender Email</FormLabel>
+                            <FormDescription>
+                              The email address notifications will be sent from
+                            </FormDescription>
+                            <FormControl>
+                              <Input placeholder="notifications@yourdomain.com" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="senderName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sender Name</FormLabel>
+                            <FormDescription>
+                              The name that will appear as the sender
+                            </FormDescription>
+                            <FormControl>
+                              <Input placeholder="Your Company Support" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
+                        <div className="flex items-start">
+                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-2" />
+                          <div className="text-sm text-amber-800">
+                            <p className="font-medium">Important Resend Setup</p>
+                            <ol className="list-decimal ml-5 mt-1 space-y-1">
+                              <li>Sign up at <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Resend.com</a></li>
+                              <li>Verify your domain for better deliverability</li>
+                              <li>Generate an API key from the dashboard</li>
+                              <li>Free tier includes 3,000 emails/month, then $8/month for 100k emails</li>
+                            </ol>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="pt-4 border-t">
+                        <h4 className="text-sm font-medium mb-2">Send Test Email</h4>
+                        <div className="flex space-x-2">
+                          <Input 
+                            type="email" 
+                            placeholder="recipient@example.com" 
+                            value={testEmailAddress} 
+                            onChange={(e) => setTestEmailAddress(e.target.value)} 
+                            className="max-w-md"
+                          />
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={sendTestEmail}
+                            disabled={testEmailLoading}
+                          >
+                            {testEmailLoading ? "Sending..." : "Test"}
+                            {testEmailLoading ? null : <Send className="ml-2 h-4 w-4" />}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Send a test email to verify your Resend configuration
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+              
               <Card>
                 <CardHeader>
                   <CardTitle>Email Configuration</CardTitle>
