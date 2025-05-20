@@ -33,7 +33,8 @@ import {
   Trash, 
   Save, 
   Send, 
-  Check 
+  Check,
+  HelpCircle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -46,6 +47,12 @@ import {
   CollapsibleContent, 
   CollapsibleTrigger 
 } from '@/components/ui/collapsible';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Define our schema for notification settings
 const notificationFormSchema = z.object({
@@ -90,6 +97,7 @@ const SettingsPage = () => {
     senderName: "Techlinx Support",
   });
   const [isEmailConfigOpen, setIsEmailConfigOpen] = useState(false);
+  const [isPlaceholdersOpen, setIsPlaceholdersOpen] = useState(true);
 
   // Form
   const form = useForm<NotificationFormValues>({
@@ -295,6 +303,42 @@ const SettingsPage = () => {
     );
   }
   
+  // Template placeholders for reference
+  const templatePlaceholders = [
+    { name: '{case_title}', description: 'The title of the case' },
+    { name: '{case_id}', description: 'The ID of the case (for links)' },
+    { name: '{case_status}', description: 'The current status of the case' },
+    { name: '{case_priority}', description: 'The priority level of the case' },
+    { name: '{category}', description: 'The category of the case' },
+    { name: '{user_name}', description: 'The name of the user who created the reply' },
+    { name: '{reply_content}', description: 'The content of the latest reply' },
+    { name: '{case_link}', description: 'The full URL to view the case' },
+  ];
+
+  // Display a placeholder in the textarea
+  const insertPlaceholder = (placeholder: string, fieldName: "userBody" | "consultantBody") => {
+    const field = form.getValues(fieldName);
+    const textarea = document.getElementById(fieldName) as HTMLTextAreaElement;
+    
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = field || "";
+      const newText = text.substring(0, start) + placeholder + text.substring(end);
+      form.setValue(fieldName, newText, { shouldValidate: true });
+      
+      // Set focus and cursor position after the inserted placeholder
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
+      }, 0);
+    } else {
+      // Fallback if we can't find the textarea
+      const currentText = field || "";
+      form.setValue(fieldName, currentText + " " + placeholder, { shouldValidate: true });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
@@ -694,6 +738,51 @@ const SettingsPage = () => {
               </Card>
               
               <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Template Placeholders</CardTitle>
+                    <CardDescription>Available placeholders you can use in your email templates</CardDescription>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setIsPlaceholdersOpen(!isPlaceholdersOpen)}
+                  >
+                    {isPlaceholdersOpen ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CardHeader>
+                {isPlaceholdersOpen && (
+                  <CardContent>
+                    <div className="bg-muted p-4 rounded-md border mb-4">
+                      <h4 className="text-sm font-medium mb-2 flex items-center">
+                        <HelpCircle className="h-4 w-4 mr-2" />
+                        How to use placeholders
+                      </h4>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Copy and paste these placeholders into your email templates. They will be automatically replaced with actual values when emails are sent.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
+                        {templatePlaceholders.map((placeholder) => (
+                          <div key={placeholder.name} className="flex items-center">
+                            <code className="bg-background border px-2 py-0.5 rounded text-sm font-mono">
+                              {placeholder.name}
+                            </code>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              - {placeholder.description}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+              
+              <Card>
                 <CardHeader>
                   <CardTitle>User Notification Template</CardTitle>
                   <CardDescription>Template for emails sent to users when their case is updated</CardDescription>
@@ -718,13 +807,33 @@ const SettingsPage = () => {
                     name="userBody"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email Body</FormLabel>
-                        <FormDescription>
-                          You can use these placeholders: {"{case_title}"}, {"{case_id}"}, {"{case_status}"}, 
-                          {"{case_priority}"}, {"{category}"}, {"{user_name}"}, {"{reply_content}"}
-                        </FormDescription>
+                        <FormLabel className="flex items-center justify-between">
+                          <span>Email Body</span>
+                          <div className="flex gap-1">
+                            {templatePlaceholders.map((placeholder) => (
+                              <TooltipProvider key={placeholder.name}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      type="button" 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => insertPlaceholder(placeholder.name, "userBody")}
+                                    >
+                                      {placeholder.name.replace(/[{}]/g, '')}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{placeholder.description}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))}
+                          </div>
+                        </FormLabel>
                         <FormControl>
                           <Textarea 
+                            id="userBody"
                             rows={6} 
                             placeholder="Your case {case_title} has received a new reply. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}" 
                             {...field} 
@@ -762,13 +871,33 @@ const SettingsPage = () => {
                     name="consultantBody"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email Body</FormLabel>
-                        <FormDescription>
-                          You can use these placeholders: {"{case_title}"}, {"{case_id}"}, {"{case_status}"}, 
-                          {"{case_priority}"}, {"{category}"}, {"{user_name}"}, {"{reply_content}"}
-                        </FormDescription>
+                        <FormLabel className="flex items-center justify-between">
+                          <span>Email Body</span>
+                          <div className="flex gap-1">
+                            {templatePlaceholders.map((placeholder) => (
+                              <TooltipProvider key={placeholder.name}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      type="button" 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => insertPlaceholder(placeholder.name, "consultantBody")}
+                                    >
+                                      {placeholder.name.replace(/[{}]/g, '')}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{placeholder.description}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))}
+                          </div>
+                        </FormLabel>
                         <FormControl>
                           <Textarea 
+                            id="consultantBody"
                             rows={6} 
                             placeholder="Case {case_title} has received a new reply from {user_name}. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}" 
                             {...field} 
