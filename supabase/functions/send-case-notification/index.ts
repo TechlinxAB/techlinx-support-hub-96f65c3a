@@ -18,6 +18,7 @@ serve(async (req) => {
   console.log("🔔 send-case-notification function called");
   console.log(`🔔 Request method: ${req.method}`);
   console.log(`🔔 Request URL: ${req.url}`);
+  console.log(`🔔 Request headers: ${JSON.stringify([...req.headers.entries()])}`);
   
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
@@ -55,6 +56,8 @@ serve(async (req) => {
     }
     
     console.log(`🔔 Connecting to Supabase at ${supabaseUrl}`);
+    console.log(`🔔 Using service key: ${supabaseServiceKey.substring(0, 5)}...${supabaseServiceKey.substring(supabaseServiceKey.length - 5)}`);
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get the notification settings

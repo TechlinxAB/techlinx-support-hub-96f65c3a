@@ -66,6 +66,9 @@ export const notificationService = {
       
       // Call the edge function with proper error handling
       try {
+        // First ensure the trigger is installed
+        await this.ensureNotificationTrigger();
+        
         // Get the API URL from environment or constants
         // The edge function URL should include the Supabase project ID
         const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
@@ -136,6 +139,47 @@ export const notificationService = {
         description: error.message || "An error occurred while sending the notification"
       });
       
+      return false;
+    }
+  },
+
+  /**
+   * Ensure the notification trigger is properly installed in the database
+   */
+  async ensureNotificationTrigger(): Promise<boolean> {
+    try {
+      console.log("[NotificationService] Ensuring notification trigger is installed");
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData.session) {
+        console.error("[NotificationService] Auth error for trigger installation:", sessionError);
+        return false;
+      }
+
+      const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
+      
+      const response = await fetch(
+        `${functionsUrl}/ensure-notification-trigger`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionData.session.access_token}`,
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+        console.error("[NotificationService] Trigger installation error:", errorData);
+        return false;
+      }
+
+      const data = await response.json();
+      console.log("[NotificationService] Trigger installation response:", data);
+      return true;
+    } catch (error) {
+      console.error("[NotificationService] Error ensuring trigger:", error);
       return false;
     }
   },
