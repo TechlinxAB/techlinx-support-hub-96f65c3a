@@ -51,6 +51,8 @@ serve(async (req) => {
       throw new Error(`Error fetching notification settings: ${settingsError.message}`);
     }
 
+    console.log("Notification settings:", settings);
+
     // Send email based on the configured provider
     if (settings.email_provider === "resend" && settings.resend_api_key) {
       // Use Resend
@@ -93,20 +95,30 @@ serve(async (req) => {
                settings.smtp_host && 
                settings.smtp_user && 
                settings.smtp_password) {
-      // Use SMTP
-      const client = new SMTPClient({
+      
+      console.log("Attempting to send via SMTP with settings:", {
         host: settings.smtp_host,
         port: settings.smtp_port || 587,
+        secure: settings.smtp_secure === true,
         user: settings.smtp_user,
-        password: settings.smtp_password,
-        tls: settings.smtp_secure === true,
+        // Password redacted for security
       });
       
-      const emailResult = await client.sendAsync({
-        from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
-        to: recipientEmail,
-        subject: "Test Email from Techlinx Support",
-        text: `
+      try {
+        // Use SMTP
+        const client = new SMTPClient({
+          host: settings.smtp_host,
+          port: settings.smtp_port || 587,
+          user: settings.smtp_user,
+          password: settings.smtp_password,
+          tls: settings.smtp_secure === true,
+        });
+        
+        const emailResult = await client.sendAsync({
+          from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
+          to: recipientEmail,
+          subject: "Test Email from Techlinx Support",
+          text: `
 Email Configuration Test
 
 This is a test email from your Techlinx Support system.
@@ -114,9 +126,9 @@ Your email notification system is working correctly!
 
 Sent from your Techlinx Support system using SMTP.
         `,
-        attachment: [
-          {
-            data: `
+          attachment: [
+            {
+              data: `
 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
   <h2>Email Configuration Test</h2>
   <p>This is a test email from your Techlinx Support system.</p>
@@ -126,22 +138,26 @@ Sent from your Techlinx Support system using SMTP.
   </p>
 </div>
             `,
-            alternative: true
-          }
-        ]
-      });
-      
-      console.log("Test email sent via SMTP");
-      
-      // Return success response
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Test email sent to ${recipientEmail}`,
-          provider: "smtp"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
+              alternative: true
+            }
+          ]
+        });
+        
+        console.log("Test email sent via SMTP successfully");
+        
+        // Return success response
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Test email sent to ${recipientEmail}`,
+            provider: "smtp"
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      } catch (smtpError) {
+        console.error("SMTP Error:", smtpError);
+        throw new Error(`SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`);
+      }
     } else {
       return new Response(
         JSON.stringify({ 

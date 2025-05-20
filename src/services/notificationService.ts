@@ -13,7 +13,11 @@ export const notificationService = {
    */
   async sendReplyNotification(caseId: string, replyId: string, isUserReply: boolean): Promise<boolean> {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        throw new Error(`Authentication error: ${sessionError.message}`);
+      }
       
       if (!sessionData.session) {
         throw new Error("Not authenticated");
@@ -38,41 +42,49 @@ export const notificationService = {
         (settings?.email_provider === 'resend' && settings?.resend_api_key) || 
         (settings?.email_provider === 'smtp' && settings?.smtp_host && settings?.smtp_user && settings?.smtp_password);
       
-      const response = await fetch(
-        `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/send-case-notification`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${sessionData.session.access_token}`,
-          },
-          body: JSON.stringify({
-            caseId,
-            replyId,
-            recipientType,
-          }),
+      // Call the edge function with proper error handling
+      try {
+        const response = await fetch(
+          `${supabase.supabaseUrl}/functions/v1/send-case-notification`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              caseId,
+              replyId,
+              recipientType,
+            }),
+          }
+        );
+  
+        // Check for HTTP errors
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+          throw new Error(errorData.error || `Failed to send notification (HTTP ${response.status})`);
         }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send notification");
+  
+        const responseData = await response.json();
+        
+        // Show success toast
+        if (emailConfigured) {
+          toast.success(`Email notification sent to ${recipientType}`, {
+            description: "Email notification delivered successfully"
+          });
+        } else {
+          toast.success(`Notification for ${recipientType} logged`, {
+            description: "Email notifications not configured - check Settings to enable"
+          });
+        }
+        
+        return true;
+      } catch (fetchError) {
+        console.error("Error calling notification function:", fetchError);
+        throw new Error(`Failed to call notification service: ${fetchError.message}`);
       }
-
-      const responseData = await response.json();
       
-      // Show success toast
-      if (emailConfigured) {
-        toast.success(`Email notification sent to ${recipientType}`, {
-          description: "Email notification delivered successfully"
-        });
-      } else {
-        toast.success(`Notification for ${recipientType} logged`, {
-          description: "Email notifications not configured - check Settings to enable"
-        });
-      }
-      
-      return true;
     } catch (error) {
       console.error("Error sending notification:", error);
       
@@ -91,38 +103,54 @@ export const notificationService = {
    */
   async sendTestEmail(recipientEmail: string): Promise<boolean> {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
+      // Get the session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        throw new Error(`Authentication error: ${sessionError.message}`);
+      }
       
       if (!sessionData.session) {
         throw new Error("Not authenticated");
       }
       
-      const response = await fetch(
-        `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/test-email`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${sessionData.session.access_token}`,
-          },
-          body: JSON.stringify({
-            recipientEmail,
-          }),
+      console.log("Sending test email to:", recipientEmail);
+      
+      // Call the edge function with proper error handling
+      try {
+        const response = await fetch(
+          `${supabase.supabaseUrl}/functions/v1/test-email`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              recipientEmail,
+            }),
+          }
+        );
+  
+        // Handle HTTP errors
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+          throw new Error(errorData.error || `Failed to send test email (HTTP ${response.status})`);
         }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send test email");
+  
+        const responseData = await response.json();
+        
+        console.log("Test email response:", responseData);
+        
+        toast.success("Test email sent successfully", {
+          description: `Email sent to ${recipientEmail}`
+        });
+        
+        return true;
+      } catch (fetchError) {
+        console.error("Error calling test email function:", fetchError);
+        throw new Error(`Test email service error: ${fetchError.message}`);
       }
-
-      const responseData = await response.json();
-      
-      toast.success("Test email sent successfully", {
-        description: `Email sent to ${recipientEmail}`
-      });
-      
-      return true;
     } catch (error) {
       console.error("Error sending test email:", error);
       
