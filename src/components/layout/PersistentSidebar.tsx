@@ -33,7 +33,8 @@ const PersistentSidebar: React.FC = () => {
         className="fixed top-0 left-0 h-full z-40 bg-sidebar transition-all duration-300 ease-in-out shadow-md"
         style={{ 
           width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
-          transform: isSidebarOpen || !isMobile ? 'translateX(0)' : 'translateX(-100%)',
+          transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+          visibility: isMobile && !isSidebarOpen ? 'hidden' : 'visible',
           isolation: 'isolate',
         }}
       >

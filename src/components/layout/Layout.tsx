@@ -36,9 +36,8 @@ const Layout = () => {
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
   
   // Calculate content margin based on sidebar state
-  const contentMarginLeft = isMobile
-    ? 0
-    : (isSidebarOpen ? '16rem' : '4rem');
+  // Mobile devices should have no margin for the sidebar
+  const contentMarginLeft = isMobile ? 0 : (isSidebarOpen ? '16rem' : '4rem');
   
   // Check if bypass is active
   const bypassActive = isForceBypassActive();
