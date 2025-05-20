@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 interface SidebarContextType {
@@ -24,8 +25,8 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarWidth] = useState(256); // Fixed width at 16rem
   const [isMobile, setIsMobile] = useState(false);
-  // Keep track of whether the sidebar toggle was just clicked
-  const toggleTimeoutRef = useRef<number | null>(null);
+  // Track the last time the sidebar was toggled
+  const lastToggleTimeRef = useRef<number>(0);
 
   // Check if we're on mobile
   useEffect(() => {
@@ -49,24 +50,19 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Only toggle if we're on mobile
     if (isMobile) {
       console.log("Toggling sidebar, current state:", isSidebarOpen);
-      
-      // Set a small delay to ensure the click event has fully propagated
-      // before the state change, which will prevent race conditions
-      if (toggleTimeoutRef.current) {
-        window.clearTimeout(toggleTimeoutRef.current);
-      }
-      
-      toggleTimeoutRef.current = window.setTimeout(() => {
-        setIsSidebarOpen(prev => !prev);
-      }, 10);
+      lastToggleTimeRef.current = Date.now();
+      setIsSidebarOpen(prev => !prev);
     }
   };
   
   const closeSidebar = () => {
-    // Don't close if we just toggled
-    if (isMobile && isSidebarOpen) {
+    // Don't close if we just toggled within the last 300ms
+    const now = Date.now();
+    if (isMobile && isSidebarOpen && (now - lastToggleTimeRef.current > 300)) {
       console.log("Closing sidebar");
       setIsSidebarOpen(false);
+    } else {
+      console.log("Ignoring close request - too soon after toggle", now - lastToggleTimeRef.current);
     }
   };
 

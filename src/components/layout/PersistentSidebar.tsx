@@ -13,23 +13,28 @@ const PersistentSidebar: React.FC = () => {
   
   // Handle click outside to close sidebar on mobile
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // Make sure we're not handling the initial click that opened the sidebar
-      // by checking if the click target is not the menu button
-      if (isMobile && 
-          isSidebarOpen && 
-          sidebarRef.current && 
-          !sidebarRef.current.contains(event.target as Node) &&
-          !(event.target as HTMLElement).closest('[aria-label="Toggle menu"]')) {
-        closeSidebar();
-      }
-    };
-    
-    // Use mouseup instead of mousedown to prevent immediate closing
-    document.addEventListener('mouseup', handleClickOutside);
-    return () => {
-      document.removeEventListener('mouseup', handleClickOutside);
-    };
+    // Only add the event listener when the sidebar is open on mobile
+    if (isMobile && isSidebarOpen) {
+      const handleClickOutside = (event: MouseEvent) => {
+        // Only close if click is outside sidebar and not on the toggle button
+        const menuButton = document.querySelector('[aria-label="Toggle menu"]');
+        const isMenuButtonClick = menuButton?.contains(event.target as Node);
+        
+        if (sidebarRef.current && 
+            !sidebarRef.current.contains(event.target as Node) && 
+            !isMenuButtonClick) {
+          console.log('Close triggered by click outside');
+          closeSidebar();
+        }
+      };
+      
+      // Use mouseup for better UX and to prevent race conditions
+      document.addEventListener('mouseup', handleClickOutside);
+      
+      return () => {
+        document.removeEventListener('mouseup', handleClickOutside);
+      };
+    }
   }, [isMobile, isSidebarOpen, closeSidebar]);
   
   // Close sidebar when route changes on mobile

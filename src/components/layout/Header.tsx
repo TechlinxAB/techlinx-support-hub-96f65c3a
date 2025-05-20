@@ -17,10 +17,14 @@ const Header: React.FC = () => {
   const navigate = useNavigate();
   
   const handleMenuClick = (e: React.MouseEvent) => {
-    // Stop propagation to prevent the click from reaching the document
+    // Completely isolate this click
     e.preventDefault();
     e.stopPropagation();
+    
+    // Add debugging
     console.log("Menu button clicked, current sidebar state:", isSidebarOpen);
+    
+    // Toggle the sidebar
     toggleSidebar();
   };
   
@@ -37,6 +41,7 @@ const Header: React.FC = () => {
                 onClick={handleMenuClick}
                 className="mr-4"
                 aria-label="Toggle menu"
+                data-testid="mobile-menu-button"
               >
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Toggle menu</span>
