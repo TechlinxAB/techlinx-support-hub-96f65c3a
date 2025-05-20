@@ -13,7 +13,7 @@ import Container from './Container';
 const Header: React.FC = () => {
   const { currentUser } = useAppContext();
   const { isAuthenticated } = useAuth();
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, isMobile } = useSidebar();
   const navigate = useNavigate();
   
   return (
@@ -21,22 +21,21 @@ const Header: React.FC = () => {
       <Container className="h-full">
         <div className="flex justify-between items-center h-full">
           <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={toggleSidebar}
-              className="mr-4"
-            >
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle sidebar</span>
-            </Button>
-            
-            {/* Removed the name display that was here */}
+            {/* Only show menu button on mobile */}
+            {isMobile && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={toggleSidebar}
+                className="mr-4"
+              >
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle sidebar</span>
+              </Button>
+            )}
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Removed search icon button that was here */}
-            
             <Button 
               variant="ghost" 
               size="icon"

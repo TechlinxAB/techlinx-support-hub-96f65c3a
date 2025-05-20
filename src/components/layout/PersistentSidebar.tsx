@@ -32,6 +32,8 @@ const PersistentSidebar: React.FC = () => {
       <div 
         className="fixed top-0 left-0 h-full z-40 bg-sidebar transition-all duration-300 ease-in-out shadow-md"
         style={{ 
+          // On desktop, sidebar is always visible based on collapsed state
+          // On mobile, sidebar is completely hidden unless open
           width: isSidebarOpen ? '16rem' : (isMobile ? '0' : '4rem'),
           transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
           visibility: isMobile && !isSidebarOpen ? 'hidden' : 'visible',
