@@ -24,12 +24,17 @@ export const notificationService = {
       const recipientType = isUserReply ? "consultant" : "user";
       
       // Get notification settings to check if we have email configured
-      const { data: settings } = await supabase
+      const { data: settings, error: settingsError } = await supabase
         .from('notification_settings')
-        .select('email_provider')
+        .select('*')
         .single();
       
-      const emailConfigured = settings?.email_provider === 'resend';
+      if (settingsError) {
+        console.error("Error fetching notification settings:", settingsError);
+        throw new Error("Failed to fetch notification settings");
+      }
+      
+      const emailConfigured = settings?.email_provider === 'resend' && settings?.resend_api_key;
       
       const response = await fetch(
         `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/send-case-notification`,
@@ -72,6 +77,55 @@ export const notificationService = {
       // Show error toast
       toast.error("Failed to send notification", {
         description: error.message || "An error occurred while sending the notification"
+      });
+      
+      return false;
+    }
+  },
+  
+  /**
+   * Send a test email to verify email configuration
+   * @param recipientEmail The email address to send the test to
+   */
+  async sendTestEmail(recipientEmail: string): Promise<boolean> {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        throw new Error("Not authenticated");
+      }
+      
+      const response = await fetch(
+        `https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1/test-email`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionData.session.access_token}`,
+          },
+          body: JSON.stringify({
+            recipientEmail,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send test email");
+      }
+
+      const responseData = await response.json();
+      
+      toast.success("Test email sent successfully", {
+        description: `Email sent to ${recipientEmail}`
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      
+      toast.error("Failed to send test email", {
+        description: error.message || "An error occurred while sending the test email"
       });
       
       return false;

@@ -528,22 +528,34 @@ export type Database = {
       notification_settings: {
         Row: {
           created_at: string
+          email_provider: string | null
           email_signature: string | null
           id: number
+          resend_api_key: string | null
+          sender_email: string | null
+          sender_name: string | null
           services_email: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          email_provider?: string | null
           email_signature?: string | null
           id?: number
+          resend_api_key?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
           services_email?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          email_provider?: string | null
           email_signature?: string | null
           id?: number
+          resend_api_key?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
           services_email?: string
           updated_at?: string
         }
