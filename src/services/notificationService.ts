@@ -13,19 +13,28 @@ export const notificationService = {
    */
   async sendReplyNotification(caseId: string, replyId: string, isUserReply: boolean): Promise<boolean> {
     try {
+      console.log(`[NotificationService] Starting notification process for reply ${replyId} in case ${caseId}`);
+      console.log(`[NotificationService] Is user reply: ${isUserReply}`);
+      
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
+        console.error(`[NotificationService] Authentication error:`, sessionError);
         throw new Error(`Authentication error: ${sessionError.message}`);
       }
       
       if (!sessionData.session) {
+        console.error(`[NotificationService] Not authenticated - no session data`);
         throw new Error("Not authenticated");
       }
+      
+      console.log(`[NotificationService] Authenticated as ${sessionData.session.user.email}`);
       
       // Determine recipient type based on who made the reply
       // If a user replied, notify consultants; if a consultant replied, notify the user
       const recipientType = isUserReply ? "consultant" : "user";
+      
+      console.log(`[NotificationService] Recipient type: ${recipientType}`);
       
       // Get notification settings to check if we have email configured
       const { data: settings, error: settingsError } = await supabase
@@ -34,23 +43,38 @@ export const notificationService = {
         .single();
       
       if (settingsError) {
-        console.error("Error fetching notification settings:", settingsError);
+        console.error("[NotificationService] Error fetching notification settings:", settingsError);
         throw new Error("Failed to fetch notification settings");
       }
       
+      console.log(`[NotificationService] Retrieved notification settings:`, {
+        smtpConfigured: !!settings.smtp_host,
+        smtpHost: settings.smtp_host,
+        smtpPort: settings.smtp_port,
+        servicesEmail: settings.services_email,
+        hasSmtpUser: !!settings.smtp_user,
+        hasSmtpPassword: !!settings.smtp_password,
+        senderEmail: settings.sender_email,
+        senderName: settings.sender_name
+      });
+      
       const emailConfigured = settings?.smtp_host && settings?.smtp_user && settings?.smtp_password;
       
-      console.log("Notification service - sending notification:", {
-        caseId,
-        replyId,
-        recipientType,
-        emailConfigured
-      });
+      if (!emailConfigured) {
+        console.warn(`[NotificationService] Email is not fully configured. Missing required SMTP settings.`);
+      }
       
       // Call the edge function with proper error handling
       try {
         // Get the API URL from environment or constants instead of accessing protected property
         const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
+        
+        console.log(`[NotificationService] Calling edge function at ${functionsUrl}/send-case-notification`);
+        console.log(`[NotificationService] Payload:`, {
+          caseId,
+          replyId,
+          recipientType
+        });
         
         const response = await fetch(
           `${functionsUrl}/send-case-notification`,
@@ -68,14 +92,17 @@ export const notificationService = {
           }
         );
   
+        console.log(`[NotificationService] Edge function response status: ${response.status}`);
+        
         // Check for HTTP errors
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+          console.error(`[NotificationService] Edge function error:`, errorData);
           throw new Error(errorData.error || `Failed to send notification (HTTP ${response.status})`);
         }
   
         const responseData = await response.json();
-        console.log("Notification response:", responseData);
+        console.log("[NotificationService] Edge function response:", responseData);
         
         // Show success toast
         if (emailConfigured) {
@@ -90,12 +117,12 @@ export const notificationService = {
         
         return true;
       } catch (fetchError) {
-        console.error("Error calling notification function:", fetchError);
+        console.error("[NotificationService] Error calling notification function:", fetchError);
         throw new Error(`Failed to call notification service: ${fetchError.message}`);
       }
       
     } catch (error) {
-      console.error("Error sending notification:", error);
+      console.error("[NotificationService] Error sending notification:", error);
       
       // Show error toast
       toast.error("Failed to send notification", {
