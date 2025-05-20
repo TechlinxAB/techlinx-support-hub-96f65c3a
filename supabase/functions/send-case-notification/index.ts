@@ -122,7 +122,7 @@ serve(async (req) => {
     });
     
     // Skip sending if the reply is marked as internal and we're notifying a user
-    if (replyData.isInternal && recipientType === "user") {
+    if (replyData.is_internal && recipientType === "user") {
       console.log("🔔 Skipping notification for internal reply to user");
       return new Response(
         JSON.stringify({ 
