@@ -17,6 +17,7 @@ interface NotificationPayload {
 serve(async (req) => {
   console.log("🔔 send-case-notification function called");
   console.log(`🔔 Request method: ${req.method}`);
+  console.log(`🔔 Request URL: ${req.url}`);
   
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
@@ -117,7 +118,7 @@ serve(async (req) => {
     console.log("🔔 Reply data retrieved:", {
       replyId: replyData.id,
       replyAuthor: replyData.profiles?.name,
-      isInternal: replyData.isInternal,
+      isInternal: replyData.is_internal,
       contentPreview: replyData.content.substring(0, 50) + (replyData.content.length > 50 ? '...' : '')
     });
     

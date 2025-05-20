@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+
+import React from 'react';
 import { Reply } from '@/context/AppContext';
 
 interface CaseDiscussionNotifierProps {
@@ -7,21 +8,12 @@ interface CaseDiscussionNotifierProps {
 }
 
 /**
- * This component used to handle notifications for new replies.
- * Now notifications are handled automatically via a database trigger,
- * so this component is just a placeholder for backward compatibility.
+ * This component no longer needs to handle notifications.
+ * Notifications are now triggered automatically by a database trigger when a new reply is inserted.
+ * This component is kept for backward compatibility in case other components expect it to exist.
  */
-const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = ({ caseId, replies }) => {
-  // Keep track of the latest processed reply to avoid duplicate processing
-  const processedRepliesRef = useRef<Set<string>>(new Set());
-  
-  useEffect(() => {
-    // Just log that notifications are now handled by the database
-    console.log("[CaseDiscussionNotifier] Notifications are now handled by database triggers");
-    
-    // No cleanup needed
-    return () => {};
-  }, [caseId]);
+const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = () => {
+  console.log("[CaseDiscussionNotifier] Notification system now uses database triggers");
   
   // No UI to render
   return null;
