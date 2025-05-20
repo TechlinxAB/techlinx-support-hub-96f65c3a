@@ -66,7 +66,8 @@ export const notificationService = {
       
       // Call the edge function with proper error handling
       try {
-        // Get the API URL from environment or constants instead of accessing protected property
+        // Get the API URL from environment or constants
+        // The edge function URL should include the Supabase project ID
         const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
         
         console.log(`[NotificationService] Calling edge function at ${functionsUrl}/send-case-notification`);
@@ -75,6 +76,12 @@ export const notificationService = {
           replyId,
           recipientType
         });
+        
+        // Make sure we have a valid access token before proceeding
+        if (!sessionData.session.access_token) {
+          console.error("[NotificationService] No access token available");
+          throw new Error("Authentication error: No access token");
+        }
         
         const response = await fetch(
           `${functionsUrl}/send-case-notification`,

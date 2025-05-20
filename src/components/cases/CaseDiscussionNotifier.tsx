@@ -1,3 +1,4 @@
+
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { notificationService } from '@/services/notificationService';
@@ -56,28 +57,33 @@ const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = ({
       return;
     }
     
-    // Check if this is the current user's reply
-    // We only send notifications about the current user's replies
-    if (latestReply.userId !== currentUser.id) {
-      console.log(`[CaseDiscussionNotifier] Reply ${latestReply.id} is not from current user. Skipping notification.`);
+    // CRITICAL FIX: The previous logic was only sending notifications for the current user's own replies
+    // We need to reverse this - we want to send notifications when someone ELSE replies
+    // We only want to process notifications for replies that are NOT from the current user
+    const isReplyFromCurrentUser = latestReply.userId === currentUser.id;
+    
+    if (isReplyFromCurrentUser) {
+      console.log(`[CaseDiscussionNotifier] Reply ${latestReply.id} is from current user. No notification needed.`);
       // Still mark as processed to avoid checking it again
       lastProcessedReplyId.current = latestReply.id;
       return;
     }
     
-    // Skip internal replies sent to users (internal replies are only visible to consultants)
+    console.log(`[CaseDiscussionNotifier] Reply ${latestReply.id} is from another user. Processing notification...`);
+    
+    // Skip internal replies if the current user is not a consultant
     if (currentUser.role !== 'consultant' && latestReply.isInternal) {
       console.log(`[CaseDiscussionNotifier] Reply ${latestReply.id} is internal but current user is not a consultant. Skipping.`);
       lastProcessedReplyId.current = latestReply.id;
       return;
     }
     
-    console.log(`[CaseDiscussionNotifier] Reply ${latestReply.id} is recent (${timeDifference/1000}s old) and from current user. Processing notification...`);
+    console.log(`[CaseDiscussionNotifier] Reply ${latestReply.id} is recent (${timeDifference/1000}s old) and from another user. Processing notification...`);
     
-    // Determine if this is a user reply or consultant reply
-    // If current user is a consultant, it's a consultant reply (notify the user)
-    // Otherwise it's a user reply (notify the consultant)
-    const isUserReply = currentUser.role !== 'consultant';
+    // Determine if this is a user reply or consultant reply based on the sender's role
+    // If the reply is from a consultant, notify the user
+    // If the reply is from a user, notify the consultant
+    const isUserReply = latestReply.userRole !== 'consultant';
     
     console.log(`[CaseDiscussionNotifier] Sending ${isUserReply ? 'user' : 'consultant'} reply notification for case ${caseId}`);
     console.log(`[CaseDiscussionNotifier] Is internal reply: ${latestReply.isInternal}`);

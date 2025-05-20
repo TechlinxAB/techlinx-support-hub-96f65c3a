@@ -13,7 +13,13 @@ interface EnhancedCaseDiscussionProps {
  * without modifying the original component
  */
 const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId }) => {
-  const { replies, refetchReplies } = useAppContext();
+  const { replies, refetchReplies, users } = useAppContext();
+  
+  // Log the state of replies for debugging
+  console.log(`[EnhancedCaseDiscussion] Current replies count: ${replies?.length || 0}`);
+  if (replies && replies.length > 0) {
+    console.log(`[EnhancedCaseDiscussion] Latest reply: ${replies[replies.length - 1].id}`);
+  }
   
   // Load replies when the component mounts or caseId changes
   useEffect(() => {
@@ -36,12 +42,19 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
     };
   }, [caseId, refetchReplies]);
   
-  console.log(`[EnhancedCaseDiscussion] Current replies count: ${replies?.length || 0}`);
+  // Add user role to each reply
+  const repliesWithRole = replies?.map(reply => {
+    const user = users.find(u => u.id === reply.userId);
+    return {
+      ...reply,
+      userRole: user?.role || 'user'
+    };
+  }) || [];
   
   return (
     <>
       <CaseDiscussion caseId={caseId} />
-      <CaseDiscussionNotifier caseId={caseId} replies={replies} />
+      <CaseDiscussionNotifier caseId={caseId} replies={repliesWithRole} />
     </>
   );
 };
