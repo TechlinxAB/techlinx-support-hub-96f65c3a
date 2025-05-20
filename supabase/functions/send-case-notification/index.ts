@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
-import { SMTPClient } from "npm:emailjs@4.0.3";
+import nodemailer from "npm:nodemailer@6.9.9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,7 +119,9 @@ serve(async (req) => {
     }
 
     // Format the HTML content
-    const htmlContent = emailContent.replace(/\n/g, "<br>");
+    const htmlContent = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      ${emailContent.replace(/\n/g, "<br>")}
+    </div>`;
     const plainTextContent = emailContent;
 
     // Check if we have valid SMTP settings
@@ -139,44 +141,49 @@ serve(async (req) => {
       );
     } else {
       try {
-        console.log(`Attempting to send notification via SMTP to: ${recipientEmail}`);
+        console.log(`Attempting to send notification via Nodemailer to: ${recipientEmail}`);
         console.log(`Using SMTP server: ${settings.smtp_host}:${settings.smtp_port || 587}`);
         
-        // Configure SMTP client for Office 365
-        const client = new SMTPClient({
+        // Configure Nodemailer transporter
+        const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
-          user: settings.smtp_user,
-          password: settings.smtp_password,
-          ssl: false,           // Don't use direct SSL
-          tls: true,            // Use STARTTLS instead
-          timeout: 30000,       // Longer timeout (30 seconds)
-          domain: "lovable.app" // Set a valid domain for HELO/EHLO
+          secure: false, // We'll use STARTTLS
+          auth: {
+            user: settings.smtp_user,
+            pass: settings.smtp_password,
+          },
+          requireTLS: true,
+          tls: {
+            // Do not fail on invalid certs
+            rejectUnauthorized: false
+          }
         });
         
-        await client.sendAsync({
+        // Verify connection configuration
+        await transporter.verify();
+        console.log("SMTP connection verified successfully");
+        
+        // Send the email
+        const info = await transporter.sendMail({
           from: settings.sender_email ? 
             `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
             `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
           to: recipientEmail,
           subject: subject,
           text: plainTextContent,
-          attachment: [
-            {
-              data: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">${htmlContent}</div>`,
-              alternative: true
-            }
-          ]
+          html: htmlContent
         });
         
-        console.log("Email sent via SMTP to", recipientEmail);
+        console.log("Email sent via SMTP to", recipientEmail, "Message ID:", info.messageId);
         
         // Return success response
         return new Response(
           JSON.stringify({
             success: true,
             message: `Notification sent to ${recipientEmail} via SMTP`,
-            provider: "smtp"
+            provider: "smtp",
+            messageId: info.messageId
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
@@ -188,20 +195,25 @@ serve(async (req) => {
         
         if (smtpError.message?.includes("authentication")) {
           errorMessage = "SMTP Authentication failed: Please check your username and password";
-        } else if (smtpError.message?.includes("connection")) {
+        } else if (smtpError.message?.includes("connection") || smtpError.code === 'ECONNECTION') {
           errorMessage = "SMTP Connection error: Unable to establish connection to the SMTP server";
-        } else if (smtpError.message?.includes("timeout")) {
+        } else if (smtpError.message?.includes("timeout") || smtpError.code === 'ETIMEDOUT') {
           errorMessage = "SMTP Timeout: The connection to the SMTP server timed out";
+        } else if (smtpError.code === 'ESOCKET') {
+          errorMessage = "SMTP Socket error: Problem with the connection";
         }
         
         throw new Error(errorMessage);
       }
     }
   } catch (error) {
-    console.error("Error in send-case-notification function:", error.message);
+    console.error("Error in send-case-notification function:", error.message, error.stack);
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        stack: error.stack // Include stack trace for debugging
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
