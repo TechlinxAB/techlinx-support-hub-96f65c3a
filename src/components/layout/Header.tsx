@@ -26,11 +26,12 @@ const Header: React.FC = () => {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => toggleSidebar()}
+                onClick={toggleSidebar}
                 className="mr-4"
+                aria-label="Toggle menu"
               >
                 <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle sidebar</span>
+                <span className="sr-only">Toggle menu</span>
               </Button>
             )}
           </div>

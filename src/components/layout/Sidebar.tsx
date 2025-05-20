@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
@@ -6,14 +7,10 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useSidebar } from '@/context/SidebarContext';
 
-interface SidebarProps {
-  isOpen: boolean;
-}
-
-const Sidebar = ({ isOpen }: SidebarProps) => {
+const Sidebar = () => {
   const { currentUser } = useAppContext();
   const location = useLocation();
-  const { toggleSidebar, isMobile } = useSidebar();
+  const { closeSidebar, isMobile } = useSidebar();
   const isConsultant = currentUser?.role === 'consultant';
   
   const menuItems = [
@@ -61,9 +58,7 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
   ];
   
   return (
-    <aside 
-      className="h-screen bg-sidebar z-30 flex flex-col fixed left-0 top-0 bottom-0 transition-all duration-300 ease-in-out w-64"
-    >
+    <aside className="h-screen bg-sidebar z-30 flex flex-col w-full">
       <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border bg-sidebar">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
           <Clock className="h-6 w-6" />
@@ -75,8 +70,9 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
           <Button 
             variant="ghost" 
             size="icon"
-            onClick={toggleSidebar}
+            onClick={closeSidebar}
             className="text-white"
+            aria-label="Close menu"
           >
             <X className="h-5 w-5" />
             <span className="sr-only">Close sidebar</span>

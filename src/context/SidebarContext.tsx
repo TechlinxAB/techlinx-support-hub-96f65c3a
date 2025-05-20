@@ -4,13 +4,15 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 interface SidebarContextType {
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  closeSidebar: () => void;
   sidebarWidth: number;
   isMobile: boolean;
 }
 
 const defaultContext: SidebarContextType = {
-  isSidebarOpen: false, // Default to closed on mobile
+  isSidebarOpen: false,
   toggleSidebar: () => {},
+  closeSidebar: () => {},
   sidebarWidth: 256, // 16rem default
   isMobile: false
 };
@@ -20,8 +22,6 @@ const SidebarContext = createContext<SidebarContextType>(defaultContext);
 export const useSidebar = () => useContext(SidebarContext);
 
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // On desktop, sidebar is always shown
-  // On mobile, isSidebarOpen controls visibility
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256); // 16rem default
   const [isMobile, setIsMobile] = useState(false);
@@ -37,16 +37,13 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!isMobileView) {
         // On desktop, sidebar is always open
         setIsSidebarOpen(true);
-      } else if (isMobileView && isSidebarOpen) {
-        // When switching to mobile, close the sidebar
-        setIsSidebarOpen(false);
       }
     };
 
     handleResize(); // Initial check
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isSidebarOpen]);
+  }, []);
 
   // Use ResizeObserver to track sidebar width changes
   useEffect(() => {
@@ -77,12 +74,19 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Toggle sidebar visibility
     setIsSidebarOpen(prev => !prev);
   };
+  
+  const closeSidebar = () => {
+    if (isMobile && isSidebarOpen) {
+      setIsSidebarOpen(false);
+    }
+  };
 
   return (
     <SidebarContext.Provider 
       value={{ 
         isSidebarOpen, 
-        toggleSidebar, 
+        toggleSidebar,
+        closeSidebar,
         sidebarWidth,
         isMobile 
       }}
