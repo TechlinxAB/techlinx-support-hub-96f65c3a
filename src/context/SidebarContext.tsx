@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 interface SidebarContextType {
@@ -25,6 +24,8 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarWidth] = useState(256); // Fixed width at 16rem
   const [isMobile, setIsMobile] = useState(false);
+  // Keep track of whether the sidebar toggle was just clicked
+  const toggleTimeoutRef = useRef<number | null>(null);
 
   // Check if we're on mobile
   useEffect(() => {
@@ -48,11 +49,21 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Only toggle if we're on mobile
     if (isMobile) {
       console.log("Toggling sidebar, current state:", isSidebarOpen);
-      setIsSidebarOpen(prev => !prev);
+      
+      // Set a small delay to ensure the click event has fully propagated
+      // before the state change, which will prevent race conditions
+      if (toggleTimeoutRef.current) {
+        window.clearTimeout(toggleTimeoutRef.current);
+      }
+      
+      toggleTimeoutRef.current = window.setTimeout(() => {
+        setIsSidebarOpen(prev => !prev);
+      }, 10);
     }
   };
   
   const closeSidebar = () => {
+    // Don't close if we just toggled
     if (isMobile && isSidebarOpen) {
       console.log("Closing sidebar");
       setIsSidebarOpen(false);

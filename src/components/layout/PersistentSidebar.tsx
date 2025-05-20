@@ -14,17 +14,21 @@ const PersistentSidebar: React.FC = () => {
   // Handle click outside to close sidebar on mobile
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Make sure we're not handling the initial click that opened the sidebar
+      // by checking if the click target is not the menu button
       if (isMobile && 
           isSidebarOpen && 
           sidebarRef.current && 
-          !sidebarRef.current.contains(event.target as Node)) {
+          !sidebarRef.current.contains(event.target as Node) &&
+          !(event.target as HTMLElement).closest('[aria-label="Toggle menu"]')) {
         closeSidebar();
       }
     };
     
-    document.addEventListener('mousedown', handleClickOutside);
+    // Use mouseup instead of mousedown to prevent immediate closing
+    document.addEventListener('mouseup', handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mouseup', handleClickOutside);
     };
   }, [isMobile, isSidebarOpen, closeSidebar]);
   
@@ -52,7 +56,7 @@ const PersistentSidebar: React.FC = () => {
       
       <div 
         ref={sidebarRef}
-        className={`fixed top-0 left-0 h-full z-40 bg-sidebar transition-transform duration-300 ease-in-out shadow-md w-64`}
+        className="fixed top-0 left-0 h-full z-40 bg-sidebar transition-transform duration-300 ease-in-out shadow-md w-64"
         style={{ 
           transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
           display: (isMobile || isSidebarOpen) ? 'block' : 'none'

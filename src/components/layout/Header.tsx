@@ -17,6 +17,7 @@ const Header: React.FC = () => {
   const navigate = useNavigate();
   
   const handleMenuClick = (e: React.MouseEvent) => {
+    // Stop propagation to prevent the click from reaching the document
     e.preventDefault();
     e.stopPropagation();
     console.log("Menu button clicked, current sidebar state:", isSidebarOpen);
