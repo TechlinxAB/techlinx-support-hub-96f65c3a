@@ -51,14 +51,15 @@ export type User = {
 };
 
 // Define Reply type
-export type Reply = {
+export interface Reply {
   id: string;
   caseId: string;
   userId: string;
   content: string;
-  isInternal?: boolean;
-  createdAt: Date;
-};
+  isInternal: boolean;
+  createdAt: string;
+  userRole?: string; // Add userRole as an optional property
+}
 
 // Define Note type
 export type Note = {

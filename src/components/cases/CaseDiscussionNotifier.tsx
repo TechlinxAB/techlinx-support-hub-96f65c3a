@@ -6,7 +6,7 @@ import { Reply } from '@/context/AppContext';
 
 interface CaseDiscussionNotifierProps {
   caseId: string;
-  replies: Reply[];
+  replies: (Reply & { userRole?: string })[]; // Ensure userRole is included in the prop type
 }
 
 /**
@@ -57,8 +57,6 @@ const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = ({
       return;
     }
     
-    // CRITICAL FIX: The previous logic was only sending notifications for the current user's own replies
-    // We need to reverse this - we want to send notifications when someone ELSE replies
     // We only want to process notifications for replies that are NOT from the current user
     const isReplyFromCurrentUser = latestReply.userId === currentUser.id;
     
@@ -86,6 +84,7 @@ const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = ({
     const isUserReply = latestReply.userRole !== 'consultant';
     
     console.log(`[CaseDiscussionNotifier] Sending ${isUserReply ? 'user' : 'consultant'} reply notification for case ${caseId}`);
+    console.log(`[CaseDiscussionNotifier] Reply from user role: ${latestReply.userRole}`);
     console.log(`[CaseDiscussionNotifier] Is internal reply: ${latestReply.isInternal}`);
     
     // Call the notification service to send the notification
