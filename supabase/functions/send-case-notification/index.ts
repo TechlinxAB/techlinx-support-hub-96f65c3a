@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
-import { Resend } from "npm:resend@2.0.0";
 import { SMTPClient } from "npm:emailjs@4.0.3";
 
 const corsHeaders = {
@@ -123,54 +122,42 @@ serve(async (req) => {
     const htmlContent = emailContent.replace(/\n/g, "<br>");
     const plainTextContent = emailContent;
 
-    // Check which email provider to use
-    if (settings.email_provider === "resend" && settings.resend_api_key) {
-      // Initialize Resend with the API key
-      const resend = new Resend(settings.resend_api_key);
+    // Check if we have valid SMTP settings
+    if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_password) {
+      console.log(`Would send ${recipientType} notification email to: ${recipientEmail}`);
+      console.log(`Subject: ${subject}`);
+      console.log(`Body: ${emailContent}`);
       
-      // Send the email using Resend
-      const emailResult = await resend.emails.send({
-        from: `${settings.sender_name || "Techlinx Support"} <${settings.sender_email || "notifications@techlinx.se"}>`,
-        to: [recipientEmail],
-        subject: subject,
-        html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">${htmlContent}</div>`,
-      });
-      
-      console.log("Email sent via Resend:", emailResult);
-      
-      // Return success response
+      // Return log-only response when SMTP is not configured
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Notification sent to ${recipientEmail} via Resend`,
-          provider: "resend",
-          id: emailResult.id
+          message: `Notification for ${recipientType} would be sent to ${recipientEmail} (email provider not configured)`,
+          provider: "none"
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
-    } else if (settings.email_provider === "smtp" && 
-               settings.smtp_host && 
-               settings.smtp_user && 
-               settings.smtp_password) {
-      
+    } else {
       try {
-        console.log(`Attempting to send notification via Office 365 SMTP to: ${recipientEmail}`);
+        console.log(`Attempting to send notification via SMTP to: ${recipientEmail}`);
+        console.log(`Using SMTP server: ${settings.smtp_host}:${settings.smtp_port || 587}`);
         
-        // For Office 365, we need to use specific configuration
+        // Configure SMTP client for Office 365
         const client = new SMTPClient({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
           user: settings.smtp_user,
           password: settings.smtp_password,
-          // Most important Office 365 specific settings:
-          ssl: false, // Don't use direct SSL for port 587
-          tls: true,  // Use TLS (this enables STARTTLS)
-          timeout: 10000,
-          domain: "techlinx.se", // Use your actual domain
+          ssl: false,           // Don't use direct SSL
+          tls: true,            // Use STARTTLS instead
+          timeout: 30000,       // Longer timeout (30 seconds)
+          domain: "lovable.app" // Set a valid domain for HELO/EHLO
         });
         
         await client.sendAsync({
-          from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
+          from: settings.sender_email ? 
+            `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
+            `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
           to: recipientEmail,
           subject: subject,
           text: plainTextContent,
@@ -194,24 +181,21 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
       } catch (smtpError) {
-        console.error("SMTP Error:", smtpError);
-        throw new Error(`SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`);
+        console.error("SMTP Error Details:", smtpError);
+        
+        // Provide more specific error message based on common SMTP issues
+        let errorMessage = `SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`;
+        
+        if (smtpError.message?.includes("authentication")) {
+          errorMessage = "SMTP Authentication failed: Please check your username and password";
+        } else if (smtpError.message?.includes("connection")) {
+          errorMessage = "SMTP Connection error: Unable to establish connection to the SMTP server";
+        } else if (smtpError.message?.includes("timeout")) {
+          errorMessage = "SMTP Timeout: The connection to the SMTP server timed out";
+        }
+        
+        throw new Error(errorMessage);
       }
-    } else {
-      // Log the information since no email provider is configured
-      console.log(`Would send ${recipientType} notification email to: ${recipientEmail}`);
-      console.log(`Subject: ${subject}`);
-      console.log(`Body: ${emailContent}`);
-      
-      // Return success response (but no actual email was sent)
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Notification for ${recipientType} would be sent to ${recipientEmail} (email provider not configured)`,
-          provider: "none"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
     }
   } catch (error) {
     console.error("Error in send-case-notification function:", error.message);

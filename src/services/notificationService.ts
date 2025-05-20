@@ -38,9 +38,7 @@ export const notificationService = {
         throw new Error("Failed to fetch notification settings");
       }
       
-      const emailConfigured = 
-        (settings?.email_provider === 'resend' && settings?.resend_api_key) || 
-        (settings?.email_provider === 'smtp' && settings?.smtp_host && settings?.smtp_user && settings?.smtp_password);
+      const emailConfigured = settings?.smtp_host && settings?.smtp_user && settings?.smtp_password;
       
       // Call the edge function with proper error handling
       try {
@@ -121,7 +119,6 @@ export const notificationService = {
       
       // Call the edge function with proper error handling
       try {
-        // Get the API URL from environment or constants instead of accessing protected property
         const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
         
         const response = await fetch(

@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
-import { Resend } from "npm:resend@2.0.0";
 import { SMTPClient } from "npm:emailjs@4.0.3";
 
 const corsHeaders = {
@@ -51,120 +50,87 @@ serve(async (req) => {
       throw new Error(`Error fetching notification settings: ${settingsError.message}`);
     }
 
-    console.log("Notification settings:", settings);
+    console.log("Notification settings fetched:", settings);
 
-    // Send email based on the configured provider
-    if (settings.email_provider === "resend" && settings.resend_api_key) {
-      // Use Resend
-      const resend = new Resend(settings.resend_api_key);
+    // Check if we have valid SMTP settings
+    if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_password) {
+      return new Response(
+        JSON.stringify({ 
+          error: "SMTP configuration is incomplete. Please configure your SMTP settings properly." 
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
       
-      // Send a test email
-      const emailResult = await resend.emails.send({
-        from: `${settings.sender_name || "Techlinx Support"} <${settings.sender_email || "notifications@techlinx.se"}>`,
-        to: [recipientEmail],
-        subject: "Test Email from Techlinx Support",
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Email Configuration Test</h2>
-            <p>This is a test email from your Techlinx Support system.</p>
-            <p>Your email notification system is working correctly!</p>
-            <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
-              Sent from your Techlinx Support system using Resend.
-            </p>
-          </div>
-        `,
+    try {
+      console.log(`Starting SMTP test to: ${recipientEmail}`);
+      console.log(`Using SMTP server: ${settings.smtp_host}:${settings.smtp_port || 587}`);
+      
+      // Configure SMTP client for Office 365
+      const client = new SMTPClient({
+        host: settings.smtp_host,
+        port: settings.smtp_port || 587,
+        user: settings.smtp_user,
+        password: settings.smtp_password,
+        ssl: false,           // Don't use direct SSL
+        tls: true,            // Use STARTTLS instead
+        timeout: 30000,       // Longer timeout (30 seconds)
+        domain: "lovable.app" // Set a valid domain for HELO/EHLO
       });
       
-      console.log("Test email sent via Resend:", emailResult);
+      console.log("SMTP client configured, attempting to connect...");
       
-      if (emailResult.error) {
-        throw new Error(emailResult.error.message);
-      }
+      // Send a test email
+      const emailResult = await client.sendAsync({
+        from: settings.sender_email ? 
+          `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
+          `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
+        to: recipientEmail,
+        subject: "Test Email from Support System",
+        text: "This is a test email from your support system.\n\nIf you're seeing this, your email configuration is working correctly!",
+        attachment: [
+          {
+            data: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
+                <h2 style="color: #333;">Email Configuration Test</h2>
+                <p>This is a test email from your support system.</p>
+                <p style="font-weight: bold; color: #22c55e;">If you're seeing this, your email configuration is working correctly! ✓</p>
+                <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
+                  Sent from your support system using SMTP.
+                </p>
+              </div>
+            `,
+            alternative: true
+          }
+        ]
+      });
+      
+      console.log("Test email sent successfully");
       
       // Return success response
       return new Response(
         JSON.stringify({
           success: true,
           message: `Test email sent to ${recipientEmail}`,
-          provider: "resend",
-          id: emailResult.id
+          provider: "smtp"
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
-    } else if (settings.email_provider === "smtp" && 
-               settings.smtp_host && 
-               settings.smtp_user && 
-               settings.smtp_password) {
+    } catch (smtpError) {
+      console.error("SMTP Error Details:", smtpError);
       
-      try {
-        console.log(`Attempting to send via Office 365 SMTP to: ${recipientEmail}`);
-        
-        // For Office 365, we need to use specific configuration
-        const client = new SMTPClient({
-          host: settings.smtp_host,
-          port: settings.smtp_port || 587,
-          user: settings.smtp_user,
-          password: settings.smtp_password,
-          // Most important Office 365 specific settings:
-          ssl: false, // Don't use direct SSL for port 587
-          tls: true,  // Use TLS (this enables STARTTLS)
-          timeout: 10000,
-          domain: "techlinx.se", // Use your actual domain
-        });
-        
-        console.log("SMTP client configured, attempting to send email...");
-        
-        const emailResult = await client.sendAsync({
-          from: `"${settings.sender_name || "Techlinx Support"}" <${settings.sender_email || settings.smtp_user}>`,
-          to: recipientEmail,
-          subject: "Test Email from Techlinx Support",
-          text: `
-Email Configuration Test
-
-This is a test email from your Techlinx Support system.
-Your email notification system is working correctly!
-
-Sent from your Techlinx Support system using SMTP.
-        `,
-          attachment: [
-            {
-              data: `
-<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-  <h2>Email Configuration Test</h2>
-  <p>This is a test email from your Techlinx Support system.</p>
-  <p>Your email notification system is working correctly!</p>
-  <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
-    Sent from your Techlinx Support system using SMTP.
-  </p>
-</div>
-            `,
-              alternative: true
-            }
-          ]
-        });
-        
-        console.log("Test email sent via SMTP successfully");
-        
-        // Return success response
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: `Test email sent to ${recipientEmail}`,
-            provider: "smtp"
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-        );
-      } catch (smtpError) {
-        console.error("SMTP Error:", smtpError);
-        throw new Error(`SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`);
+      // Provide more specific error message based on common SMTP issues
+      let errorMessage = `SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`;
+      
+      if (smtpError.message?.includes("authentication")) {
+        errorMessage = "SMTP Authentication failed: Please check your username and password";
+      } else if (smtpError.message?.includes("connection")) {
+        errorMessage = "SMTP Connection error: Unable to establish connection to the SMTP server";
+      } else if (smtpError.message?.includes("timeout")) {
+        errorMessage = "SMTP Timeout: The connection to the SMTP server timed out";
       }
-    } else {
-      return new Response(
-        JSON.stringify({ 
-          error: "Email provider is not properly configured. Please configure an email provider in the notification settings." 
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-      );
+      
+      throw new Error(errorMessage);
     }
   } catch (error) {
     console.error("Error in test-email function:", error.message);

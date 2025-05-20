@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,8 +39,7 @@ const notificationFormSchema = z.object({
   consultantSubject: z.string().min(5, "Subject must be at least 5 characters"),
   consultantBody: z.string().min(20, "Template must be at least 20 characters"),
   emailSignature: z.string().optional(),
-  emailProvider: z.enum(["resend", "smtp", "none"]).default("none"),
-  resendApiKey: z.string().optional(),
+  emailProvider: z.enum(["smtp", "none"]).default("none"),
   smtpHost: z.string().optional(),
   smtpPort: z.coerce.number().int().min(1).max(65535).default(587).optional(),
   smtpUser: z.string().optional(),
@@ -67,7 +65,6 @@ const SettingsPage = () => {
     consultantBody: "Case {case_title} has received a new reply from {user_name}.",
     emailSignature: "Best regards,\nThe Techlinx Support Team",
     emailProvider: "none",
-    resendApiKey: "",
     smtpHost: "",
     smtpPort: 587,
     smtpUser: "",
@@ -87,8 +84,7 @@ const SettingsPage = () => {
       consultantSubject: templates.consultantSubject,
       consultantBody: templates.consultantBody,
       emailSignature: templates.emailSignature,
-      emailProvider: templates.emailProvider as "resend" | "smtp" | "none",
-      resendApiKey: templates.resendApiKey,
+      emailProvider: templates.emailProvider as "smtp" | "none",
       smtpHost: templates.smtpHost,
       smtpPort: templates.smtpPort,
       smtpUser: templates.smtpUser,
@@ -126,7 +122,6 @@ const SettingsPage = () => {
             consultantBody: consultantTemplate?.body || templates.consultantBody,
             emailSignature: settingsData?.email_signature || templates.emailSignature,
             emailProvider: settingsData?.email_provider || "none",
-            resendApiKey: settingsData?.resend_api_key || "",
             smtpHost: settingsData?.smtp_host || "",
             smtpPort: settingsData?.smtp_port || 587,
             smtpUser: settingsData?.smtp_user || "",
@@ -160,7 +155,6 @@ const SettingsPage = () => {
             services_email: data.servicesEmail,
             email_signature: data.emailSignature,
             email_provider: data.emailProvider,
-            resend_api_key: data.resendApiKey,
             smtp_host: data.smtpHost,
             smtp_port: data.smtpPort,
             smtp_user: data.smtpUser,
@@ -454,7 +448,6 @@ const SettingsPage = () => {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="none">None (Log emails only)</SelectItem>
-                            <SelectItem value="resend">Resend</SelectItem>
                             <SelectItem value="smtp">SMTP (Microsoft 365, Gmail, etc)</SelectItem>
                           </SelectContent>
                         </Select>
@@ -462,84 +455,6 @@ const SettingsPage = () => {
                       </FormItem>
                     )}
                   />
-
-                  {form.watch("emailProvider") === "resend" && (
-                    <>
-                      <FormField
-                        control={form.control}
-                        name="resendApiKey"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Resend API Key</FormLabel>
-                            <FormDescription>
-                              API key from your Resend.com account
-                              <a 
-                                href="https://resend.com/api-keys" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="ml-2 inline-flex items-center text-blue-500 hover:text-blue-700"
-                              >
-                                Get API Key <ExternalLink className="h-3 w-3 ml-1" />
-                              </a>
-                            </FormDescription>
-                            <FormControl>
-                              <Input type="password" placeholder="re_xxxxxxxxxxxx" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
-                        name="senderEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sender Email</FormLabel>
-                            <FormDescription>
-                              The email address notifications will be sent from
-                            </FormDescription>
-                            <FormControl>
-                              <Input placeholder="notifications@yourdomain.com" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
-                        name="senderName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sender Name</FormLabel>
-                            <FormDescription>
-                              The name that will appear as the sender
-                            </FormDescription>
-                            <FormControl>
-                              <Input placeholder="Your Company Support" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
-                        <div className="flex items-start">
-                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-2" />
-                          <div className="text-sm text-amber-800">
-                            <p className="font-medium">Important Resend Setup</p>
-                            <ol className="list-decimal ml-5 mt-1 space-y-1">
-                              <li>Sign up at <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Resend.com</a></li>
-                              <li>Verify your domain for better deliverability</li>
-                              <li>Generate an API key from the dashboard</li>
-                              <li>Free tier includes 3,000 emails/month, then $8/month for 100k emails</li>
-                            </ol>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
                   
                   {form.watch("emailProvider") === "smtp" && (
                     <>
@@ -568,7 +483,7 @@ const SettingsPage = () => {
                             <FormItem>
                               <FormLabel>SMTP Port</FormLabel>
                               <FormDescription>
-                                SMTP server port (usually 587 or 465)
+                                SMTP server port (usually 587 for Office 365)
                               </FormDescription>
                               <FormControl>
                                 <Input type="number" placeholder="587" {...field} />
@@ -587,7 +502,7 @@ const SettingsPage = () => {
                             <FormItem>
                               <FormLabel>SMTP Username</FormLabel>
                               <FormDescription>
-                                Usually your email address
+                                Usually your full email address
                               </FormDescription>
                               <FormControl>
                                 <Input placeholder="your.email@example.com" {...field} />
@@ -680,7 +595,7 @@ const SettingsPage = () => {
                             <ol className="list-decimal ml-5 mt-1 space-y-1">
                               <li>Server: <code>smtp.office365.com</code></li>
                               <li>Port: <code>587</code></li>
-                              <li>Use SSL/TLS: <code>Yes</code></li>
+                              <li>Use SSL/TLS: <code>Yes</code> (enables STARTTLS)</li>
                               <li>Username: Your full email address</li>
                               <li>Password: Your Microsoft 365 password or app password</li>
                               <li>For security, it's recommended to create an app password rather than using your main account password</li>
@@ -705,7 +620,7 @@ const SettingsPage = () => {
                         type="button" 
                         variant="outline" 
                         onClick={sendTestEmail}
-                        disabled={testEmailLoading}
+                        disabled={testEmailLoading || form.watch("emailProvider") === "none"}
                       >
                         {testEmailLoading ? "Sending..." : "Test"}
                         {testEmailLoading ? null : <Send className="ml-2 h-4 w-4" />}
