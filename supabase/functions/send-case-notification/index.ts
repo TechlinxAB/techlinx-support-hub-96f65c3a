@@ -43,6 +43,8 @@ serve(async (req) => {
   const { caseId, replyId, recipientType } = payload;
   
   console.log(`🔔 Processing notification - Case: ${caseId}, Reply: ${replyId}, Recipient: ${recipientType}`);
+  console.log(`🔔 Authorization header present: ${!!req.headers.get("authorization")}`);
+  console.log(`🔔 Authorization header: ${req.headers.get("authorization")?.substring(0, 15)}...`);
 
   try {
     // Create a Supabase client with the Supabase URL and service key
@@ -56,6 +58,17 @@ serve(async (req) => {
     
     console.log(`🔔 Connecting to Supabase at ${supabaseUrl}`);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if the notification settings has debug mode enabled
+    console.log(`🔔 Checking notification debug settings`);
+    const { data: debugSettings, error: debugError } = await supabase
+      .from("notification_settings")
+      .select("debug_mode, log_level")
+      .single();
+    
+    if (debugSettings?.debug_mode) {
+      console.log(`🔔 DEBUG MODE ENABLED - Log level: ${debugSettings.log_level || 'debug'}`);
+    }
 
     // Get the notification settings
     console.log(`🔔 Fetching notification settings`);
@@ -227,12 +240,13 @@ serve(async (req) => {
         const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
-          secure: false, // We'll use STARTTLS
+          secure: settings.smtp_secure || false,
           auth: {
             user: settings.smtp_user,
             pass: settings.smtp_password,
           },
           requireTLS: true,
+          debug: true, // Enable debug for more information
           tls: {
             // Do not fail on invalid certs
             rejectUnauthorized: false
@@ -291,7 +305,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        stack: error.stack // Include stack trace for debugging
+        stack: error.stack, // Include stack trace for debugging
+        timestamp: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );

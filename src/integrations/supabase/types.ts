@@ -528,9 +528,11 @@ export type Database = {
       notification_settings: {
         Row: {
           created_at: string
+          debug_mode: boolean | null
           email_provider: string | null
           email_signature: string | null
           id: number
+          log_level: string | null
           resend_api_key: string | null
           sender_email: string | null
           sender_name: string | null
@@ -544,9 +546,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          debug_mode?: boolean | null
           email_provider?: string | null
           email_signature?: string | null
           id?: number
+          log_level?: string | null
           resend_api_key?: string | null
           sender_email?: string | null
           sender_name?: string | null
@@ -560,9 +564,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          debug_mode?: boolean | null
           email_provider?: string | null
           email_signature?: string | null
           id?: number
+          log_level?: string | null
           resend_api_key?: string | null
           sender_email?: string | null
           sender_name?: string | null
@@ -701,6 +707,15 @@ export type Database = {
         Args: { company_id: string }
         Returns: boolean
       }
+      check_notification_trigger_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          trigger_name: string
+          is_active: boolean
+          table_name: string
+          function_name: string
+        }[]
+      }
       handle_company_deletion: {
         Args: { company_id_param: string }
         Returns: undefined
@@ -708,6 +723,10 @@ export type Database = {
       is_consultant: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      test_notification_system: {
+        Args: { case_id: string }
+        Returns: string
       }
     }
     Enums: {
