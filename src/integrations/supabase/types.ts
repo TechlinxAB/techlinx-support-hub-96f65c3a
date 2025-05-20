@@ -525,6 +525,54 @@ export type Database = {
           },
         ]
       }
+      notification_settings: {
+        Row: {
+          created_at: string
+          email_signature: string | null
+          id: number
+          services_email: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email_signature?: string | null
+          id?: number
+          services_email?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email_signature?: string | null
+          id?: number
+          services_email?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      notification_templates: {
+        Row: {
+          body: string
+          created_at: string
+          subject: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          subject: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          subject?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar: string | null

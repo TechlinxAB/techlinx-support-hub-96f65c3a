@@ -970,6 +970,39 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
   
+  // Implementation for refetching categories
+  const refetchCategories = async (): Promise<Category[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+        return categories;
+      }
+      
+      if (data) {
+        const formattedCategories = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          createdAt: new Date(item.created_at)
+        }));
+        
+        setCategories(formattedCategories);
+        return formattedCategories;
+      }
+      
+      return categories;
+    } catch (error) {
+      console.error("Error in refetchCategories:", error);
+      toast.error("Failed to load categories");
+      return categories;
+    }
+  };
+  
   // Company News blocks - Placeholder implementations
   const addCompanyNewsBlock = async (data: any): Promise<any> => {
     try {
@@ -1079,21 +1112,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         await refetchCompanies();
         
         // Load categories
-        const { data: categoryData, error: categoryError } = await supabase
-          .from('categories')
-          .select('*');
-        
-        if (categoryError) {
-          console.error("Error loading categories:", categoryError);
-        } else if (categoryData) {
-          const formattedCategories = categoryData.map(item => ({
-            id: item.id,
-            name: item.name,
-            createdAt: new Date(item.created_at)
-          }));
-          
-          setCategories(formattedCategories);
-        }
+        await refetchCategories();
         
         // Load users (profiles)
         await refetchUsers();
