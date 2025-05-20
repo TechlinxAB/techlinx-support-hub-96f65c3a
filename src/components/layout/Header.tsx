@@ -13,11 +13,18 @@ import Container from './Container';
 const Header: React.FC = () => {
   const { currentUser } = useAppContext();
   const { isAuthenticated } = useAuth();
-  const { toggleSidebar, isMobile } = useSidebar();
+  const { toggleSidebar, isMobile, isSidebarOpen } = useSidebar();
   const navigate = useNavigate();
   
+  const handleMenuClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Menu button clicked, current sidebar state:", isSidebarOpen);
+    toggleSidebar();
+  };
+  
   return (
-    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-10 w-full">
+    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-20 w-full">
       <Container className="h-full">
         <div className="flex justify-between items-center h-full">
           <div className="flex items-center">
@@ -26,7 +33,7 @@ const Header: React.FC = () => {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={toggleSidebar}
+                onClick={handleMenuClick}
                 className="mr-4"
                 aria-label="Toggle menu"
               >

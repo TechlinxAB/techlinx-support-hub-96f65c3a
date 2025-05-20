@@ -23,9 +23,8 @@ export const useSidebar = () => useContext(SidebarContext);
 
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(256); // 16rem default
+  const [sidebarWidth] = useState(256); // Fixed width at 16rem
   const [isMobile, setIsMobile] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement | null>(null);
 
   // Check if we're on mobile
   useEffect(() => {
@@ -33,9 +32,9 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const isMobileView = window.innerWidth < 768;
       setIsMobile(isMobileView);
       
-      // Set sidebar state based on view
+      // On desktop, sidebar should always be considered "open"
+      // but on mobile, we need to respect the current state
       if (!isMobileView) {
-        // On desktop, sidebar is always open
         setIsSidebarOpen(true);
       }
     };
@@ -45,38 +44,17 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Use ResizeObserver to track sidebar width changes
-  useEffect(() => {
-    if (!sidebarRef.current) return;
-
-    const updateSidebarWidth = () => {
-      if (sidebarRef.current) {
-        const width = sidebarRef.current.offsetWidth;
-        setSidebarWidth(width);
-      }
-    };
-
-    // Initial width measurement
-    updateSidebarWidth();
-
-    // Set up ResizeObserver
-    const resizeObserver = new ResizeObserver(updateSidebarWidth);
-    resizeObserver.observe(sidebarRef.current);
-
-    return () => {
-      if (sidebarRef.current) {
-        resizeObserver.unobserve(sidebarRef.current);
-      }
-    };
-  }, []);
-
   const toggleSidebar = () => {
-    // Toggle sidebar visibility
-    setIsSidebarOpen(prev => !prev);
+    // Only toggle if we're on mobile
+    if (isMobile) {
+      console.log("Toggling sidebar, current state:", isSidebarOpen);
+      setIsSidebarOpen(prev => !prev);
+    }
   };
   
   const closeSidebar = () => {
     if (isMobile && isSidebarOpen) {
+      console.log("Closing sidebar");
       setIsSidebarOpen(false);
     }
   };
@@ -91,9 +69,7 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isMobile 
       }}
     >
-      <div ref={sidebarRef} className="sidebar-container">
-        {children}
-      </div>
+      {children}
     </SidebarContext.Provider>
   );
 };

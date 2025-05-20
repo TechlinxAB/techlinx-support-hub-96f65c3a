@@ -1,7 +1,6 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAppContext } from '@/context/AppContext';
 import Sidebar from './Sidebar';
 import { useSidebar } from '@/context/SidebarContext';
 import { X } from 'lucide-react';
@@ -36,6 +35,11 @@ const PersistentSidebar: React.FC = () => {
     }
   }, [location.pathname, isMobile, isSidebarOpen, closeSidebar]);
   
+  // Only render if we're on desktop or if the sidebar is open on mobile
+  if (!isMobile && !isSidebarOpen) {
+    return null;
+  }
+  
   return (
     <>
       {/* Mobile overlay when sidebar is open */}
@@ -51,6 +55,7 @@ const PersistentSidebar: React.FC = () => {
         className={`fixed top-0 left-0 h-full z-40 bg-sidebar transition-transform duration-300 ease-in-out shadow-md w-64`}
         style={{ 
           transform: isMobile && !isSidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+          display: (isMobile || isSidebarOpen) ? 'block' : 'none'
         }}
       >
         <Sidebar />
