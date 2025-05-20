@@ -40,6 +40,13 @@ export const notificationService = {
       
       const emailConfigured = settings?.smtp_host && settings?.smtp_user && settings?.smtp_password;
       
+      console.log("Notification service - sending notification:", {
+        caseId,
+        replyId,
+        recipientType,
+        emailConfigured
+      });
+      
       // Call the edge function with proper error handling
       try {
         // Get the API URL from environment or constants instead of accessing protected property
@@ -68,6 +75,7 @@ export const notificationService = {
         }
   
         const responseData = await response.json();
+        console.log("Notification response:", responseData);
         
         // Show success toast
         if (emailConfigured) {

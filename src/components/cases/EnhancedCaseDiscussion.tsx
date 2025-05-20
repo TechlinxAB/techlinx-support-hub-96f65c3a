@@ -15,11 +15,23 @@ interface EnhancedCaseDiscussionProps {
 const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId }) => {
   const { replies, refetchReplies } = useAppContext();
   
-  // Load replies when the component mounts
+  // Load replies when the component mounts or caseId changes
   useEffect(() => {
     if (caseId) {
+      console.log(`EnhancedCaseDiscussion: Loading replies for case ${caseId}`);
       refetchReplies(caseId);
     }
+    
+    // Set up polling for new replies
+    const intervalId = setInterval(() => {
+      if (caseId) {
+        refetchReplies(caseId);
+      }
+    }, 30000); // Poll every 30 seconds
+    
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [caseId, refetchReplies]);
   
   return (

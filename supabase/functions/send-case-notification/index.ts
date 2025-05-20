@@ -32,6 +32,8 @@ serve(async (req) => {
   }
 
   const { caseId, replyId, recipientType } = payload;
+  
+  console.log(`Processing notification - Case: ${caseId}, Reply: ${replyId}, Recipient: ${recipientType}`);
 
   try {
     // Create a Supabase client with the Supabase URL and service key
@@ -48,6 +50,11 @@ serve(async (req) => {
     if (settingsError) {
       throw new Error(`Error fetching notification settings: ${settingsError.message}`);
     }
+    
+    console.log("Notification settings retrieved:", {
+      smtpConfigured: !!settings.smtp_host,
+      servicesEmail: settings.services_email
+    });
 
     // Get the case details
     const { data: caseData, error: caseError } = await supabase
@@ -59,6 +66,12 @@ serve(async (req) => {
     if (caseError) {
       throw new Error(`Error fetching case: ${caseError.message}`);
     }
+    
+    console.log("Case data retrieved:", {
+      caseId: caseData.id,
+      caseTitle: caseData.title,
+      userEmail: caseData.profiles?.email
+    });
 
     // Get the reply details
     const { data: replyData, error: replyError } = await supabase
@@ -69,6 +82,24 @@ serve(async (req) => {
 
     if (replyError) {
       throw new Error(`Error fetching reply: ${replyError.message}`);
+    }
+    
+    console.log("Reply data retrieved:", {
+      replyId: replyData.id,
+      replyAuthor: replyData.profiles.name,
+      isInternal: replyData.isInternal
+    });
+    
+    // Skip sending if the reply is marked as internal and we're notifying a user
+    if (replyData.isInternal && recipientType === "user") {
+      console.log("Skipping notification for internal reply to user");
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Notification skipped - internal reply" 
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
     // Get the notification template
@@ -122,6 +153,8 @@ serve(async (req) => {
     } else {
       recipientEmail = settings.services_email || "services@techlinx.se";
     }
+    
+    console.log(`Sending notification to ${recipientEmail} (${recipientType})`);
 
     // Format the HTML content
     const htmlContent = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">

@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { notificationService } from '@/services/notificationService';
@@ -35,9 +34,18 @@ const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = ({
     const replyIsRecent = 
       (new Date().getTime() - new Date(latestReply.createdAt).getTime()) < 10000;
     
-    // Only send notification for recent replies that are from the current user
+    // Only send notification for recent replies that are created by the current user
+    // This ensures we send notifications about our own replies to the other party
     if (replyIsRecent && latestReply.userId === currentUser.id) {
+      console.log("Recent reply detected - processing notification");
+      
+      // Determine if this is a user reply or consultant reply
+      // If current user is a consultant, it's a consultant reply (notify the user)
+      // Otherwise it's a user reply (notify the consultant)
       const isUserReply = currentUser.role !== 'consultant';
+      
+      console.log(`Sending ${isUserReply ? 'user' : 'consultant'} reply notification for case ${caseId}`);
+      
       notificationService.sendReplyNotification(
         caseId,
         latestReply.id,
