@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle } from 'lucide-react';
+import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,6 +23,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+type SortOption = 'date-desc' | 'date-asc' | 'status-asc' | 'status-desc';
 
 const CasesPage = () => {
   const { loadingCases, cases, refetchCases } = useAppContext();
@@ -36,6 +47,9 @@ const CasesPage = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Add new sort state
+  const [sortOption, setSortOption] = useState<SortOption>('date-desc');
 
   // Track if initial data has been loaded
   useEffect(() => {
@@ -106,6 +120,17 @@ const CasesPage = () => {
     }
   };
 
+  // Get status order for sorting
+  const getStatusOrder = (status: string): number => {
+    switch (status) {
+      case 'new': return 0;
+      case 'ongoing': return 1;
+      case 'resolved': return 2;
+      case 'completed': return 3;
+      default: return 4;
+    }
+  };
+
   // Display case list as a table component
   const CaseListTable = ({ statusFilter, watchlistFilter, searchQuery }: { 
     statusFilter?: CaseStatus | 'all', 
@@ -134,6 +159,27 @@ const CasesPage = () => {
       return matchesSearch && matchesStatus && matchesWatchlist;
     });
 
+    // Sort cases based on selected sort option
+    filteredCases = [...filteredCases].sort((a, b) => {
+      const dateA = new Date(a.updatedAt).getTime();
+      const dateB = new Date(b.updatedAt).getTime();
+      const statusOrderA = getStatusOrder(a.status);
+      const statusOrderB = getStatusOrder(b.status);
+      
+      switch(sortOption) {
+        case 'date-desc':
+          return dateB - dateA; // Most recent first
+        case 'date-asc':
+          return dateA - dateB; // Oldest first
+        case 'status-asc':
+          return statusOrderA - statusOrderB; // New → Completed
+        case 'status-desc':
+          return statusOrderB - statusOrderA; // Completed → New
+        default:
+          return dateB - dateA; // Default to most recent
+      }
+    });
+
     if (filteredCases.length === 0) {
       return <div className="text-center py-6 text-muted-foreground">No cases found</div>;
     }
@@ -144,7 +190,13 @@ const CasesPage = () => {
           <TableRow>
             <TableHead>Title</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Date</TableHead>
+            <TableHead>
+              <div className="flex items-center cursor-pointer" 
+                   onClick={() => setSortOption(sortOption === 'date-desc' ? 'date-asc' : 'date-desc')}>
+                Date
+                <ArrowUpDown size={16} className="ml-1" />
+              </div>
+            </TableHead>
             <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -204,11 +256,11 @@ const CasesPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header section with title, search and action buttons */}
+      {/* Header section with title, search, filter dropdown, and action buttons */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight text-primary">Cases</h1>
 
-        {/* Search and filter buttons in a container */}
+        {/* Search, dropdown filter, and new case button in a container */}
         <div className="flex w-full md:w-auto space-x-2 items-center">
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -220,14 +272,50 @@ const CasesPage = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => setShowFilters(!showFilters)}
-            className={showFilters ? "bg-muted" : ""}
-          >
-            <Filter className="h-4 w-4" />
-          </Button>
+          
+          {/* Replace Filter button with DropdownMenu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className={showFilters ? "bg-muted" : ""}>
+                <Filter className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuLabel>Filter Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShowFilters(!showFilters)}>
+                {showFilters ? "Hide Filter Tabs" : "Show Filter Tabs"}
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Sort By</DropdownMenuLabel>
+              <DropdownMenuItem 
+                onClick={() => setSortOption('date-desc')}
+                className={sortOption === 'date-desc' ? "bg-accent" : ""}
+              >
+                Date (Newest First)
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setSortOption('date-asc')}
+                className={sortOption === 'date-asc' ? "bg-accent" : ""}
+              >
+                Date (Oldest First)
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setSortOption('status-asc')}
+                className={sortOption === 'status-asc' ? "bg-accent" : ""}
+              >
+                Status (New → Completed)
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setSortOption('status-desc')}
+                className={sortOption === 'status-desc' ? "bg-accent" : ""}
+              >
+                Status (Completed → New)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
           <Link to="/cases/new">
             <Button className="whitespace-nowrap">New Case</Button>
           </Link>
