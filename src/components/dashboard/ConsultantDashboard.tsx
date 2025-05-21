@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -193,7 +192,7 @@ const ConsultantDashboard = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <Badge variant="default" className="bg-green-500">New</Badge>
+              <Badge variant="new">New</Badge>
               New Cases
             </CardTitle>
           </CardHeader>
@@ -243,7 +242,7 @@ const ConsultantDashboard = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-500">Active</Badge>
+              <Badge variant="ongoing">Ongoing</Badge>
               Ongoing Cases
             </CardTitle>
           </CardHeader>
@@ -293,7 +292,7 @@ const ConsultantDashboard = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <Badge variant="default" className="bg-yellow-500">Pending</Badge>
+              <Badge variant="awaiting">Awaiting</Badge>
               Awaiting Confirmation
             </CardTitle>
           </CardHeader>
@@ -343,7 +342,7 @@ const ConsultantDashboard = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <Badge variant="destructive">Overdue</Badge>
+              <Badge variant="overdue">Overdue</Badge>
               Overdue Cases
             </CardTitle>
           </CardHeader>

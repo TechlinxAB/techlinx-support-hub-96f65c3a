@@ -28,17 +28,17 @@ const ActiveCasesList = ({ cases, settings }: ActiveCasesListProps) => {
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'new':
-        return { variant: 'new', label: 'New' };
+        return { variant: 'new' as const, label: 'New' };
       case 'active':
-        return { variant: 'ongoing', label: 'Ongoing' };
+        return { variant: 'ongoing' as const, label: 'Ongoing' };
       case 'pending':
       case 'resolved':
       case 'waiting':
-        return { variant: 'awaiting', label: 'Awaiting' };
+        return { variant: 'awaiting' as const, label: 'Awaiting' };
       case 'completed':
-        return { variant: 'completed', label: 'Completed' };
+        return { variant: 'completed' as const, label: 'Completed' };
       default:
-        return { variant: 'overdue', label: 'Overdue' };
+        return { variant: 'overdue' as const, label: 'Overdue' };
     }
   };
   
