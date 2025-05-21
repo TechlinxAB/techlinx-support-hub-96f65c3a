@@ -8,13 +8,10 @@ interface CaseDiscussionNotifierProps {
 }
 
 /**
- * This component no longer needs to handle notifications.
- * Notifications are now triggered automatically by a database trigger when a new reply is inserted.
- * This component is kept for backward compatibility in case other components expect it to exist.
+ * This component is a placeholder.
+ * We're implementing a different notification approach directly in the CaseDiscussion component.
  */
 const CaseDiscussionNotifier: React.FC<CaseDiscussionNotifierProps> = () => {
-  console.log("[CaseDiscussionNotifier] Notification system now uses database triggers");
-  
   // No UI to render
   return null;
 };

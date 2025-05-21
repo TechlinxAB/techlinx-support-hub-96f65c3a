@@ -67,7 +67,6 @@ export const notificationService = {
       // Call the edge function with proper error handling
       try {
         // Get the API URL from environment or constants
-        // The edge function URL should include the Supabase project ID
         const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
         
         console.log(`[NotificationService] Calling edge function at ${functionsUrl}/send-case-notification`);
@@ -123,12 +122,12 @@ export const notificationService = {
         }
         
         return true;
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         console.error("[NotificationService] Error calling notification function:", fetchError);
         throw new Error(`Failed to call notification service: ${fetchError.message}`);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("[NotificationService] Error sending notification:", error);
       
       // Show error toast
@@ -192,11 +191,11 @@ export const notificationService = {
         });
         
         return true;
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         console.error("Error calling test email function:", fetchError);
         throw new Error(`Test email service error: ${fetchError.message}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending test email:", error);
       
       toast.error("Failed to send test email", {

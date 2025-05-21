@@ -12,7 +12,8 @@ import {
   File, 
   FileText, 
   X, 
-  Trash2
+  Trash2,
+  Mail
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -22,6 +23,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { notificationService } from '@/services/notificationService';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -143,6 +145,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const [offlineMode, setOfflineMode] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
   const [replyToDelete, setReplyToDelete] = useState<string | null>(null);
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
@@ -295,6 +298,44 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     }
   };
   
+  // Send notification about a new reply
+  const sendNotification = async (newReply: any, recipientType: 'user' | 'consultant') => {
+    if (!newReply || !newReply.id) {
+      console.error('Cannot send notification: Invalid reply data');
+      return false;
+    }
+    
+    setIsSendingNotification(true);
+    try {
+      // Send notification using the notification service
+      const success = await notificationService.sendReplyNotification(
+        caseId,
+        newReply.id,
+        currentUser?.role !== 'consultant' // isUserReply (if not consultant, then it's a user)
+      );
+      
+      if (success) {
+        toast({
+          title: "Notification sent",
+          description: `The ${recipientType} has been notified about your reply`,
+        });
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      toast({
+        title: "Notification failed",
+        description: "Could not send notification. The recipient may not see your reply immediately.",
+        variant: "destructive"
+      });
+      return false;
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
+  
+  // Handle adding a reply
   const handleAddReply = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -351,6 +392,15 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           ? `Your reply with ${attachments.length} attachment(s) has been added.` 
           : "Your reply has been added successfully."
       });
+      
+      // Determine recipient type based on current user role
+      const recipientType = currentUser?.role === 'consultant' ? 'user' : 'consultant';
+      
+      // Don't send notification for internal replies to users
+      if (!(isInternalReply && recipientType === 'user')) {
+        // Send notification after reply is successfully created
+        sendNotification(newReply, recipientType);
+      }
       
       // Clear form
       setReplyContent('');
@@ -707,7 +757,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 onChange={(e) => setReplyContent(e.target.value)}
                 rows={4}
                 className="w-full"
-                disabled={isUploading}
+                disabled={isUploading || isSendingNotification}
               />
               
               {/* Display selected file previews */}
@@ -756,6 +806,16 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 </div>
               )}
               
+              {/* Show notification progress */}
+              {isSendingNotification && (
+                <Alert variant="default" className="bg-blue-50 text-blue-800">
+                  <AlertDescription className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Sending notification...
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <div className="flex flex-wrap justify-between items-center gap-3">
                 <div className="flex items-center">
                   <Input 
@@ -765,7 +825,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                     id="file-upload"
                     ref={fileInputRef}
                     className="max-w-xs"
-                    disabled={isUploading}
+                    disabled={isUploading || isSendingNotification}
                   />
                 </div>
                 
@@ -776,7 +836,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                         id="internal" 
                         checked={isInternalReply}
                         onCheckedChange={setIsInternalReply}
-                        disabled={isUploading}
+                        disabled={isUploading || isSendingNotification}
                       />
                       <Label htmlFor="internal" className="text-sm">Internal reply</Label>
                     </div>
@@ -785,12 +845,18 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                   <Button 
                     type="submit" 
                     className="gap-2"
-                    disabled={isUploading || (!replyContent.trim() && attachments.length === 0)}
+                    disabled={isUploading || isSendingNotification || 
+                             (!replyContent.trim() && attachments.length === 0)}
                   >
                     {isUploading ? (
                       <>
                         <RefreshCw className="h-4 w-4 animate-spin" />
                         Uploading...
+                      </>
+                    ) : isSendingNotification ? (
+                      <>
+                        <Mail className="h-4 w-4" />
+                        Notifying...
                       </>
                     ) : (
                       <>
@@ -805,6 +871,55 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Internal Notes for consultants */}
+      {isConsultant && (
+        <Card className="mt-6">
+          <CardHeader className="pb-3">
+            <h3 className="text-lg font-semibold">Internal Notes</h3>
+            <p className="text-sm text-muted-foreground">
+              Notes are only visible to consultants
+            </p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!noteContent.trim()) return;
+              
+              addNote({
+                caseId,
+                userId: currentUser!.id,
+                content: noteContent,
+              }).then(() => {
+                setNoteContent('');
+                debouncedFetch(caseId);
+                toast({
+                  title: "Note added",
+                  description: "Your internal note has been added."
+                });
+              }).catch(error => {
+                console.error('Error adding note:', error);
+                toast({
+                  title: "Failed to add note",
+                  description: "There was an error adding your note.",
+                  variant: "destructive"
+                });
+              });
+            }} className="space-y-3">
+              <Textarea 
+                placeholder="Add internal note..." 
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                rows={4}
+              />
+              
+              <div className="flex justify-end">
+                <Button type="submit" disabled={!noteContent.trim()}>Add Note</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
