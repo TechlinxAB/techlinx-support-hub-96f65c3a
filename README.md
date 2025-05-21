@@ -43,8 +43,8 @@ Before you begin, ensure your Linux server has the following installed:
 #### 1. Clone the Repository
 
 ```bash
-# Navigate to your desired location
-cd /var/www
+# Navigate to your home directory
+cd ~
 
 # Clone the repository
 git clone <YOUR_REPOSITORY_URL> techlinx-helpdesk
@@ -81,7 +81,7 @@ server {
     listen 80;
     server_name your-domain.com;  # Replace with your actual domain
 
-    root /var/www/techlinx-helpdesk/dist;
+    root /home/YOUR_USERNAME/techlinx-helpdesk/dist;  # Replace YOUR_USERNAME with your actual username
     index index.html;
 
     # Important for Single Page Applications
@@ -133,7 +133,7 @@ After deployment, you need to update the Base URL in the application settings:
 When you need to update the application, follow these steps:
 
 ```bash
-cd /var/www/techlinx-helpdesk
+cd ~/techlinx-helpdesk
 git pull
 npm install  # In case dependencies have changed
 npm run build
@@ -144,7 +144,7 @@ npm run build
 Create a script file to simplify updates:
 
 ```bash
-nano /var/www/techlinx-helpdesk/update.sh
+nano ~/techlinx-helpdesk/update.sh
 ```
 
 Add the following content:
@@ -152,7 +152,7 @@ Add the following content:
 ```bash
 #!/bin/bash
 echo "Updating Techlinx Helpdesk..."
-cd /var/www/techlinx-helpdesk
+cd ~/techlinx-helpdesk
 git pull
 npm install
 npm run build
@@ -162,13 +162,13 @@ echo "Update completed: $(date)"
 Make it executable:
 
 ```bash
-chmod +x /var/www/techlinx-helpdesk/update.sh
+chmod +x ~/techlinx-helpdesk/update.sh
 ```
 
 Now you can update by running:
 
 ```bash
-sudo /var/www/techlinx-helpdesk/update.sh
+~/techlinx-helpdesk/update.sh
 ```
 
 ### Troubleshooting
@@ -189,7 +189,8 @@ If the application is having trouble connecting to the Supabase backend:
 If you encounter permission issues:
 
 ```bash
-sudo chown -R www-data:www-data /var/www/techlinx-helpdesk
+# Ensure the application files are owned by your user
+sudo chown -R $USER:$USER ~/techlinx-helpdesk
 ```
 
 #### Nginx Logs
