@@ -5,6 +5,9 @@ import CaseDiscussionNotifier from './CaseDiscussionNotifier';
 import { useAppContext } from '@/context/AppContext';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Info } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface EnhancedCaseDiscussionProps {
   caseId: string;
@@ -17,8 +20,9 @@ interface EnhancedCaseDiscussionProps {
 const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId }) => {
   const { replies, refetchReplies, users } = useAppContext();
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
-  const [notificationServiceStatus, setNotificationServiceStatus] = useState<'checking' | 'ok' | 'error' | 'pgnet_missing'>('checking');
+  const [notificationServiceStatus, setNotificationServiceStatus] = useState<'checking' | 'ok' | 'error' | 'pgnet_missing' | 'pgnet_function_missing'>('checking');
   const [diagnosticInfo, setDiagnosticInfo] = useState<any>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   
   // Enhanced logging for debugging
   console.log(`[EnhancedCaseDiscussion] Initializing for case ${caseId}`);
@@ -38,6 +42,11 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
         if (pgNetError) {
           console.error('[EnhancedCaseDiscussion] Error checking pg_net availability:', pgNetError);
           setNotificationServiceStatus('error');
+          setDiagnosticInfo({
+            error: pgNetError.message,
+            details: "Error while checking pg_net availability",
+            timestamp: new Date().toISOString()
+          });
           return;
         }
         
@@ -52,20 +61,31 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
         
         if (!pgNetData.http_post_function_exists) {
           console.error('[EnhancedCaseDiscussion] pg_net extension installed but http_post function not found');
-          setNotificationServiceStatus('error');
+          setNotificationServiceStatus('pgnet_function_missing');
           return;
         }
         
-        // Test HTTP request capability
+        // Now perform an explicit test of the HTTP functionality
+        console.log('[EnhancedCaseDiscussion] Testing HTTP request capability');
         const { data: httpTest, error: httpTestError } = await supabase.rpc('test_http_request');
         
         if (httpTestError) {
           console.error('[EnhancedCaseDiscussion] Error testing HTTP request capability:', httpTestError);
+          setDiagnosticInfo(prev => ({
+            ...prev,
+            http_test_error: httpTestError.message,
+            http_test_timestamp: new Date().toISOString()
+          }));
           setNotificationServiceStatus('error');
           return;
         }
         
         console.log('[EnhancedCaseDiscussion] HTTP request test result:', httpTest);
+        setDiagnosticInfo(prev => ({
+          ...prev,
+          http_test_result: httpTest,
+          http_test_timestamp: new Date().toISOString()
+        }));
         
         if (!httpTest.success) {
           console.error('[EnhancedCaseDiscussion] HTTP request test failed:', httpTest.error);
@@ -78,12 +98,23 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
         
         if (error) {
           console.error('[EnhancedCaseDiscussion] Error checking notification trigger:', error);
+          setDiagnosticInfo(prev => ({
+            ...prev,
+            trigger_check_error: error.message,
+            trigger_check_timestamp: new Date().toISOString()
+          }));
           setNotificationServiceStatus('error');
           return;
         }
         
         if (data && data.length > 0) {
           console.log('[EnhancedCaseDiscussion] Notification trigger status:', data);
+          setDiagnosticInfo(prev => ({
+            ...prev,
+            trigger_status: data,
+            trigger_check_timestamp: new Date().toISOString()
+          }));
+          
           const trigger = data[0];
           
           if (trigger.is_active) {
@@ -95,10 +126,20 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
           }
         } else {
           console.error('[EnhancedCaseDiscussion] Notification trigger not found');
+          setDiagnosticInfo(prev => ({
+            ...prev,
+            trigger_missing: true,
+            trigger_check_timestamp: new Date().toISOString()
+          }));
           setNotificationServiceStatus('error');
         }
       } catch (err) {
         console.error('[EnhancedCaseDiscussion] Exception checking notification trigger:', err);
+        setDiagnosticInfo({
+          error: err.message,
+          stack: err.stack,
+          timestamp: new Date().toISOString()
+        });
         setNotificationServiceStatus('error');
       }
     };
@@ -120,6 +161,13 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
       });
       
       console.error('[EnhancedCaseDiscussion] Critical: pg_net extension is not available. Email notifications will not work.');
+    } else if (notificationServiceStatus === 'pgnet_function_missing') {
+      toast.error('Email notification system configuration issue', {
+        description: 'The pg_net extension is enabled but the HTTP functions are not available. Please contact system administrators.',
+        duration: 8000,
+      });
+      
+      console.error('[EnhancedCaseDiscussion] Critical: pg_net extension is available but HTTP functions are missing.');
     } else if (notificationServiceStatus === 'ok') {
       console.log('[EnhancedCaseDiscussion] Notification system is properly configured and active');
     }
@@ -175,17 +223,43 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   const testNotification = async () => {
     try {
       console.log('[EnhancedCaseDiscussion] Testing notification system');
+      toast.info('Testing notification system...', {
+        description: 'Attempting to verify notification system functionality',
+        duration: 3000,
+      });
       
       // First get detailed pg_net information for debugging
       const { data: pgNetDiag, error: pgNetDiagError } = await supabase.rpc('check_pg_net_availability');
       if (!pgNetDiagError) {
         console.log('[EnhancedCaseDiscussion] Current pg_net status:', pgNetDiag);
+        setDiagnosticInfo(prev => ({
+          ...prev,
+          pg_net_status: pgNetDiag,
+          test_timestamp: new Date().toISOString()
+        }));
+      } else {
+        setDiagnosticInfo(prev => ({
+          ...prev,
+          pg_net_check_error: pgNetDiagError.message,
+          test_timestamp: new Date().toISOString()
+        }));
       }
       
       // Use the test HTTP request function to validate basic connectivity
       const { data: httpTest, error: httpTestError } = await supabase.rpc('test_http_request');
       if (!httpTestError) {
         console.log('[EnhancedCaseDiscussion] HTTP test result:', httpTest);
+        setDiagnosticInfo(prev => ({
+          ...prev,
+          http_test: httpTest,
+          test_timestamp: new Date().toISOString()
+        }));
+      } else {
+        setDiagnosticInfo(prev => ({
+          ...prev,
+          http_test_error: httpTestError.message,
+          test_timestamp: new Date().toISOString()
+        }));
       }
       
       // Call the specific notification test function
@@ -198,10 +272,22 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
         toast.error('Failed to test notification system', {
           description: error.message,
         });
+        
+        setDiagnosticInfo(prev => ({
+          ...prev,
+          notification_test_error: error.message,
+          test_timestamp: new Date().toISOString()
+        }));
+        
         return;
       }
       
       console.log('[EnhancedCaseDiscussion] Test notification result:', data);
+      setDiagnosticInfo(prev => ({
+        ...prev,
+        notification_test_result: data,
+        test_timestamp: new Date().toISOString()
+      }));
       
       // Check if the result indicates success
       toast.success('Notification test initiated', {
@@ -211,7 +297,15 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
     } catch (err) {
       console.error('[EnhancedCaseDiscussion] Exception testing notification:', err);
       toast.error('Exception testing notification system');
+      setDiagnosticInfo(prev => ({
+        ...prev,
+        test_exception: err.message,
+        test_stack: err.stack,
+        test_timestamp: new Date().toISOString()
+      }));
     }
+    
+    setShowDiagnostics(true);
   };
   
   // This function is only for development/debugging and can be removed in production
@@ -225,6 +319,45 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   
   return (
     <>
+      {notificationServiceStatus !== 'checking' && notificationServiceStatus !== 'ok' && (
+        <Alert variant="warning" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Notification System Issue</AlertTitle>
+          <AlertDescription>
+            {notificationServiceStatus === 'pgnet_missing' && (
+              <span>The database extension for email notifications (pg_net) is not enabled. Please contact system administrators.</span>
+            )}
+            {notificationServiceStatus === 'pgnet_function_missing' && (
+              <span>The pg_net extension is enabled but the HTTP functions are not available. This may require a database restart. Please contact system administrators.</span>
+            )}
+            {notificationServiceStatus === 'error' && (
+              <span>There is a problem with the notification system. Technical staff have been notified.</span>
+            )}
+            <div className="mt-2">
+              <Button variant="outline" size="sm" onClick={() => setShowDiagnostics(!showDiagnostics)}>
+                {showDiagnostics ? "Hide Diagnostics" : "Show Diagnostics"}
+              </Button>
+              {' '}
+              <Button variant="outline" size="sm" onClick={testNotification}>
+                Run Diagnostics
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {showDiagnostics && diagnosticInfo && (
+        <Alert variant="default" className="mb-4 bg-slate-50">
+          <Info className="h-4 w-4" />
+          <AlertTitle>Notification System Diagnostics</AlertTitle>
+          <AlertDescription>
+            <pre className="text-xs mt-2 p-2 bg-slate-100 rounded overflow-auto max-h-40">
+              {JSON.stringify(diagnosticInfo, null, 2)}
+            </pre>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <CaseDiscussion caseId={caseId} />
       <CaseDiscussionNotifier caseId={caseId} replies={repliesWithRole} />
     </>
