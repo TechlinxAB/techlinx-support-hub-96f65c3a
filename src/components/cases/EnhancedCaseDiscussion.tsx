@@ -1,6 +1,6 @@
 
 import React from 'react';
-import CaseDiscussion from './CaseDiscussion'; // Import the original component
+import CaseDiscussion from './CaseDiscussion'; 
 import { useAppContext } from '@/context/AppContext';
 
 interface EnhancedCaseDiscussionProps {
@@ -23,11 +23,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
     };
   }) || [];
   
-  return (
-    <>
-      <CaseDiscussion caseId={caseId} />
-    </>
-  );
+  return <CaseDiscussion caseId={caseId} />;
 };
 
 export default EnhancedCaseDiscussion;

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Reply } from "@/context/AppContext";
+import { toast } from "sonner";
 
 // Service for handling notifications
 export const notificationService = {
@@ -173,7 +174,6 @@ export const notificationService = {
         console.log("Test email response:", responseData);
         
         // Keep the toast for test emails since this is specifically requested by the user
-        import { toast } from "sonner"; 
         toast.success("Test email sent successfully", {
           description: `Email sent to ${recipientEmail}`
         });
@@ -187,7 +187,6 @@ export const notificationService = {
       console.error("Error sending test email:", error);
       
       // Keep the toast for test emails
-      import { toast } from "sonner";
       toast.error("Failed to send test email", {
         description: error.message || "An error occurred while sending the test email"
       });
