@@ -527,6 +527,7 @@ export type Database = {
       }
       notification_settings: {
         Row: {
+          base_url: string | null
           created_at: string
           debug_mode: boolean | null
           email_provider: string | null
@@ -545,6 +546,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          base_url?: string | null
           created_at?: string
           debug_mode?: boolean | null
           email_provider?: string | null
@@ -563,6 +565,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          base_url?: string | null
           created_at?: string
           debug_mode?: boolean | null
           email_provider?: string | null

@@ -79,7 +79,7 @@ serve(async (req) => {
       senderName: settings.sender_name,
       senderEmail: settings.sender_email,
       emailProvider: settings.email_provider,
-      baseUrl: settings.base_url || 'https://support.example.com'
+      baseUrl: settings.base_url || 'https://helpdesk.techlinx.se'
     });
 
     // Handle special case for test notifications
@@ -168,7 +168,7 @@ serve(async (req) => {
     console.log("🔔 Template data:", templates || "Using fallback template");
 
     // Create case link based on settings or default
-    const baseUrl = settings.base_url || "https://support.example.com";
+    const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
     const caseLink = `${baseUrl}/cases/${caseId}`;
 
     const templateSubject = templates?.subject || 
