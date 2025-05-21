@@ -43,16 +43,7 @@ serve(async (req) => {
   const { caseId, replyId, recipientType } = payload;
   
   console.log(`🔔 Processing notification - Case: ${caseId}, Reply: ${replyId}, Recipient: ${recipientType}`);
-  console.log(`🔔 Authorization header present: ${!!req.headers.get("authorization")}`);
   
-  // Log authorization header for debugging but mask most of it
-  const authHeader = req.headers.get("authorization");
-  if (authHeader) {
-    console.log(`🔔 Authorization header: ${authHeader.substring(0, 15)}...`);
-  } else {
-    console.warn("🔔 No authorization header present - this might cause authentication issues");
-  }
-
   try {
     // Create a Supabase client with the Supabase URL and service key
     const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
@@ -65,19 +56,6 @@ serve(async (req) => {
     
     console.log(`🔔 Connecting to Supabase at ${supabaseUrl}`);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Check if the notification settings has debug mode enabled
-    console.log(`🔔 Checking notification debug settings`);
-    const { data: debugSettings, error: debugError } = await supabase
-      .from("notification_settings")
-      .select("debug_mode, log_level")
-      .single();
-    
-    if (debugError) {
-      console.warn(`🔔 Error fetching debug settings: ${debugError.message}. Continuing with default settings.`);
-    } else if (debugSettings?.debug_mode) {
-      console.log(`🔔 DEBUG MODE ENABLED - Log level: ${debugSettings.log_level || 'debug'}`);
-    }
 
     // Get the notification settings
     console.log(`🔔 Fetching notification settings`);
@@ -100,7 +78,6 @@ serve(async (req) => {
       hasSmtpPassword: !!settings.smtp_password,
       senderName: settings.sender_name,
       senderEmail: settings.sender_email,
-      emailSignature: !!settings.email_signature,
       emailProvider: settings.email_provider
     });
 
@@ -175,7 +152,6 @@ serve(async (req) => {
     }
 
     // Get the notification template
-    console.log(`🔔 Fetching notification template for recipient type: ${recipientType}`);
     const { data: templates, error: templateError } = await supabase
       .from("notification_templates")
       .select("*")
@@ -190,7 +166,7 @@ serve(async (req) => {
 
     console.log("🔔 Template data:", templates || "Using fallback template");
 
-    // Create case link based on current environment - note we'll send the full URL in the email
+    // Create case link based on current environment
     const baseUrl = "https://support.example.com";
     const caseLink = `${baseUrl}/cases/${caseId}`;
 
@@ -241,7 +217,6 @@ serve(async (req) => {
     const htmlContent = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       ${emailContent.replace(/\n/g, "<br>")}
     </div>`;
-    const plainTextContent = emailContent;
 
     // Check if we have valid SMTP settings
     if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_password) {
@@ -294,7 +269,7 @@ serve(async (req) => {
             `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
           to: recipientEmail,
           subject: subject,
-          text: plainTextContent,
+          text: emailContent,
           html: htmlContent
         });
         

@@ -716,6 +716,10 @@ export type Database = {
           function_name: string
         }[]
       }
+      check_pg_net_availability: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       handle_company_deletion: {
         Args: { company_id_param: string }
         Returns: undefined
@@ -723,6 +727,10 @@ export type Database = {
       is_consultant: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      test_http_request: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       test_notification_system: {
         Args: { case_id: string }
