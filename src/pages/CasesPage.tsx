@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Filter, Star, Trash2, CheckCircle, Clock, PlusCircle, AlertCircle } from 'lucide-react';
+import { Loader, Search, Filter, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,24 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-// Custom star SVG for the watchlist tab
-const WatchlistStar = () => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="24" 
-    height="24" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className="h-7 w-7"
-  >
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
 
 const CasesPage = () => {
   const { loadingCases, cases, refetchCases } = useAppContext();
@@ -253,47 +234,29 @@ const CasesPage = () => {
         </div>
       </div>
       
-      {/* Improved filter tabs with consistent styling */}
+      {/* Filter tabs with nicer styling */}
       <div className={`rounded-lg border shadow-sm p-4 bg-card transition-all duration-200 ${showFilters ? 'block' : 'hidden'}`}>
         <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
           <TabsList className="grid w-full grid-cols-3 mb-2 lg:grid-cols-6">
-            <TabsTrigger value="all" className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4" />
-              <span>All Cases</span>
-            </TabsTrigger>
-            <TabsTrigger value="new" className="flex items-center justify-center gap-2">
-              <PlusCircle className="h-4 w-4" />
-              <span>New</span>
-            </TabsTrigger>
-            <TabsTrigger value="ongoing" className="flex items-center justify-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>Ongoing</span>
-            </TabsTrigger>
-            <TabsTrigger value="resolved" className="flex items-center justify-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              <span>Awaiting</span>
-            </TabsTrigger>
-            <TabsTrigger value="completed" className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4" />
-              <span>Completed</span>
-            </TabsTrigger>
-            <TabsTrigger value="watchlist" className="flex items-center justify-center gap-2">
-              <WatchlistStar />
-              <div className="flex items-center">
+            <TabsTrigger value="all">All Cases</TabsTrigger>
+            <TabsTrigger value="new">New</TabsTrigger>
+            <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
+            <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
+            <TabsTrigger value="completed">Completed</TabsTrigger>
+            <TabsTrigger value="watchlist" className="relative">
+              <span className="flex items-center">
+                <Star className="h-4 w-4 mr-1" />
                 <span>Watchlist</span>
                 {watchlistCount > 0 && (
-                  <Badge 
-                    variant="secondary" 
-                    className="ml-1.5 h-[18px] min-w-[20px] px-1 py-0 flex items-center justify-center rounded-full text-xs font-medium translate-y-[-3px]"
-                  >
+                  <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
                     {watchlistCount}
                   </Badge>
                 )}
-              </div>
+              </span>
             </TabsTrigger>
           </TabsList>
           
-          {/* TabsContent components inside the Tabs component */}
+          {/* Move TabsContent components inside the Tabs component */}
           <TabsContent value="all">
             <CaseListTable statusFilter="all" searchQuery={searchQuery} />
           </TabsContent>
@@ -321,7 +284,7 @@ const CasesPage = () => {
         </div>
       ) : (
         <>
-          {/* Content when filters are not shown */}
+          {/* Remove duplicate TabsContent components that were outside the Tabs component */}
           {activeTab === "all" && !showFilters && <CaseListTable statusFilter="all" searchQuery={searchQuery} />}
           {activeTab === "new" && !showFilters && <CaseListTable statusFilter="new" searchQuery={searchQuery} />}
           {activeTab === "ongoing" && !showFilters && <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />}
