@@ -21,6 +21,8 @@ const badgeVariants = cva(
         awaiting: "border-transparent bg-amber-500 text-white hover:bg-amber-600",
         overdue: "border-transparent bg-red-500 text-white hover:bg-red-600",
         completed: "border-transparent bg-slate-500 text-white hover:bg-slate-600",
+        active: "border-transparent bg-blue-500 text-white hover:bg-blue-600", /* Added alias for backward compatibility */
+        pending: "border-transparent bg-amber-500 text-white hover:bg-amber-600", /* Added alias for backward compatibility */
       },
     },
     defaultVariants: {

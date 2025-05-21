@@ -24,54 +24,58 @@ const ActiveCasesList = ({ cases, settings }: ActiveCasesListProps) => {
     navigate(`/cases/${caseId}`);
   };
   
+  // Map status from backend to display names
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case 'new':
+        return { variant: 'new', label: 'New' };
+      case 'active':
+        return { variant: 'ongoing', label: 'Ongoing' };
+      case 'pending':
+      case 'resolved':
+      case 'waiting':
+        return { variant: 'awaiting', label: 'Awaiting' };
+      case 'completed':
+        return { variant: 'completed', label: 'Completed' };
+      default:
+        return { variant: 'overdue', label: 'Overdue' };
+    }
+  };
+  
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Your Active Cases</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cases.map(caseItem => (
-          <Card 
-            key={caseItem.id} 
-            className="hover:shadow-md transition-shadow duration-200 cursor-pointer overflow-hidden border border-slate-200 hover:border-slate-300"
-            onClick={() => handleCaseClick(caseItem.id)}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium line-clamp-2">{caseItem.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    {format(new Date(caseItem.updatedAt), 'MMM d, yyyy')}
-                  </span>
+        {cases.map(caseItem => {
+          const statusInfo = getStatusInfo(caseItem.status);
+          
+          return (
+            <Card 
+              key={caseItem.id} 
+              className="hover:shadow-md transition-shadow duration-200 cursor-pointer overflow-hidden border border-slate-200 hover:border-slate-300"
+              onClick={() => handleCaseClick(caseItem.id)}
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium line-clamp-2">{caseItem.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-4">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      {format(new Date(caseItem.updatedAt), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                  <div>
+                    <Badge variant={statusInfo.variant}>
+                      {statusInfo.label}
+                    </Badge>
+                  </div>
                 </div>
-                <div>
-                  <Badge variant={
-                    caseItem.status === 'new' 
-                      ? 'new' 
-                      : caseItem.status === 'active' 
-                      ? 'ongoing' 
-                      : caseItem.status === 'pending' || caseItem.status === 'resolved' || caseItem.status === 'waiting'
-                      ? 'awaiting'
-                      : caseItem.status === 'completed'
-                      ? 'completed'
-                      : 'overdue'
-                  }>
-                    {caseItem.status === 'new' 
-                      ? 'New' 
-                      : caseItem.status === 'active' 
-                      ? 'Ongoing' 
-                      : caseItem.status === 'pending' || caseItem.status === 'resolved' || caseItem.status === 'waiting'
-                      ? 'Awaiting'
-                      : caseItem.status === 'completed'
-                      ? 'Completed'
-                      : 'Overdue'}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
