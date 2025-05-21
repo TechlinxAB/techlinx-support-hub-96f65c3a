@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Filter, Star, Trash2, CheckCircle, Clock, PlusCircle, AlertCircle } from 'lucide-react';
@@ -259,13 +260,13 @@ const CasesPage = () => {
               <span>Completed</span>
             </TabsTrigger>
             <TabsTrigger value="watchlist" className="flex items-center justify-center gap-2">
-              <Star className="h-4 w-4" />
+              <Star className="h-5 w-5" />
               <div className="flex items-center">
                 <span>Watchlist</span>
                 {watchlistCount > 0 && (
                   <Badge 
                     variant="secondary" 
-                    className="ml-1.5 h-[18px] min-w-[20px] px-1 py-0 flex items-center justify-center rounded-full text-xs font-medium translate-y-[-2px]"
+                    className="ml-1.5 h-[18px] min-w-[20px] px-1 py-0 flex items-center justify-center rounded-full text-xs font-medium translate-y-[-3px]"
                   >
                     {watchlistCount}
                   </Badge>
