@@ -81,6 +81,22 @@ serve(async (req) => {
       emailProvider: settings.email_provider
     });
 
+    // Handle special case for test notifications
+    if (replyId === 'test-reply-id') {
+      console.log('🔔 Processing test notification - using mock reply data');
+      
+      // Return success response for test notification
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Test notification would be sent to ${recipientType} (if email provider is configured)`,
+          provider: "test",
+          caseId: caseId
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
     // Get the case details
     console.log(`🔔 Fetching case details for case ID: ${caseId}`);
     const { data: caseData, error: caseError } = await supabase
@@ -104,22 +120,6 @@ serve(async (req) => {
 
     // Get the reply details
     console.log(`🔔 Fetching reply details for reply ID: ${replyId}`);
-    
-    // Handle special case for test notifications
-    if (replyId === 'test-reply-id') {
-      console.log('🔔 Processing test notification - using mock reply data');
-      
-      // Return success response for test notification
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Test notification would be sent to ${recipientType} (if email provider is configured)`,
-          provider: "test",
-          caseId: caseId
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    }
     
     const { data: replyData, error: replyError } = await supabase
       .from("replies")
@@ -237,30 +237,32 @@ serve(async (req) => {
       );
     } else {
       try {
-        console.log(`🔔 Attempting to send notification via Nodemailer to: ${recipientEmail}`);
+        console.log(`🔔 Starting SMTP test with Nodemailer to: ${recipientEmail}`);
         console.log(`🔔 Using SMTP server: ${settings.smtp_host}:${settings.smtp_port || 587}`);
         
-        // Configure Nodemailer transporter
+        // Configure Nodemailer transporter - Use same configuration as test-email
         const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
-          secure: settings.smtp_secure || false,
+          secure: false, // We'll use STARTTLS instead
           auth: {
             user: settings.smtp_user,
             pass: settings.smtp_password,
           },
-          requireTLS: true,
-          debug: true, // Enable debug for more information
-          logger: true, // Enable logger
+          requireTLS: true, // Force using TLS
           tls: {
             // Do not fail on invalid certs
             rejectUnauthorized: false
-          }
+          },
+          debug: true, // Enable debug output
         });
         
-        // Verify connection configuration
+        console.log("🔔 Nodemailer transporter configured, verifying...");
+        
+        // Verify SMTP configuration
         await transporter.verify();
-        console.log("🔔 SMTP connection verified successfully");
+        
+        console.log("🔔 SMTP configuration verified successfully, sending notification email...");
         
         // Send the email
         const info = await transporter.sendMail({
