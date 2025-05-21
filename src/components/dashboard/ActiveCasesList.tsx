@@ -51,16 +51,20 @@ const ActiveCasesList = ({ cases, settings }: ActiveCasesListProps) => {
                       ? 'new' 
                       : caseItem.status === 'ongoing' 
                       ? 'ongoing' 
-                      : caseItem.status === 'resolved'
+                      : caseItem.status === 'resolved' || caseItem.status === 'waiting'
                       ? 'awaiting'
+                      : caseItem.status === 'completed'
+                      ? 'completed'
                       : 'overdue'
                   }>
                     {caseItem.status === 'new' 
                       ? 'New' 
                       : caseItem.status === 'ongoing' 
                       ? 'Ongoing' 
-                      : caseItem.status === 'resolved' 
+                      : caseItem.status === 'resolved' || caseItem.status === 'waiting'
                       ? 'Awaiting'
+                      : caseItem.status === 'completed'
+                      ? 'Completed'
                       : 'Overdue'}
                   </Badge>
                 </div>
