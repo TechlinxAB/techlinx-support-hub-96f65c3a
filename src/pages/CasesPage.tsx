@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Star, Trash2 } from 'lucide-react';
+import { Loader, Search, Filter, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +36,7 @@ const CasesPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Track if initial data has been loaded
   useEffect(() => {
@@ -204,75 +205,86 @@ const CasesPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header section with title, search and action buttons */}
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight text-primary">Cases</h1>
-        <Link to="/cases/new">
-          <Button className="bg-primary hover:bg-primary/90 text-white">
-            New Case
+
+        {/* Search and filter buttons in a container */}
+        <div className="flex w-full md:w-auto space-x-2 items-center">
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search cases..."
+              className="pl-9 pr-4 w-full"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+            className={showFilters ? "bg-muted" : ""}
+          >
+            <Filter className="h-4 w-4" />
           </Button>
-        </Link>
-      </div>
-      
-      <div className="flex w-full max-w-sm items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search cases..."
-            className="pl-8"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <Link to="/cases/new">
+            <Button className="whitespace-nowrap">New Case</Button>
+          </Link>
         </div>
       </div>
       
-      <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="all">All Cases</TabsTrigger>
-          <TabsTrigger value="new">New</TabsTrigger>
-          <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
-          <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="watchlist" className="relative">
-            <span className="flex items-center">
-              <Star className="h-4 w-4 mr-1" />
-              <span>Watchlist</span>
-              {watchlistCount > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
-                  {watchlistCount}
-                </Badge>
-              )}
-            </span>
-          </TabsTrigger>
-        </TabsList>
-        
-        {(loadingCases && !initialDataLoaded) ? (
-          <div className="flex items-center justify-center p-12">
-            <Loader className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          <>
-            <TabsContent value="all" className="mt-6">
-              <CaseListTable statusFilter="all" searchQuery={searchQuery} />
-            </TabsContent>
-            <TabsContent value="new" className="mt-6">
-              <CaseListTable statusFilter="new" searchQuery={searchQuery} />
-            </TabsContent>
-            <TabsContent value="ongoing" className="mt-6">
-              <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />
-            </TabsContent>
-            <TabsContent value="resolved" className="mt-6">
-              <CaseListTable statusFilter="resolved" searchQuery={searchQuery} />
-            </TabsContent>
-            <TabsContent value="completed" className="mt-6">
-              <CaseListTable statusFilter="completed" searchQuery={searchQuery} />
-            </TabsContent>
-            <TabsContent value="watchlist" className="mt-6">
-              <CaseListTable watchlistFilter={true} searchQuery={searchQuery} />
-            </TabsContent>
-          </>
-        )}
-      </Tabs>
+      {/* Filter tabs with nicer styling */}
+      <div className={`rounded-lg border shadow-sm p-4 bg-card transition-all duration-200 ${showFilters ? 'block' : 'hidden'}`}>
+        <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
+          <TabsList className="grid w-full grid-cols-3 mb-2 lg:grid-cols-6">
+            <TabsTrigger value="all">All Cases</TabsTrigger>
+            <TabsTrigger value="new">New</TabsTrigger>
+            <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
+            <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
+            <TabsTrigger value="completed">Completed</TabsTrigger>
+            <TabsTrigger value="watchlist" className="relative">
+              <span className="flex items-center">
+                <Star className="h-4 w-4 mr-1" />
+                <span>Watchlist</span>
+                {watchlistCount > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
+                    {watchlistCount}
+                  </Badge>
+                )}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+      
+      {(loadingCases && !initialDataLoaded) ? (
+        <div className="flex items-center justify-center p-12">
+          <Loader className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <>
+          <TabsContent value="all">
+            <CaseListTable statusFilter="all" searchQuery={searchQuery} />
+          </TabsContent>
+          <TabsContent value="new">
+            <CaseListTable statusFilter="new" searchQuery={searchQuery} />
+          </TabsContent>
+          <TabsContent value="ongoing">
+            <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />
+          </TabsContent>
+          <TabsContent value="resolved">
+            <CaseListTable statusFilter="resolved" searchQuery={searchQuery} />
+          </TabsContent>
+          <TabsContent value="completed">
+            <CaseListTable statusFilter="completed" searchQuery={searchQuery} />
+          </TabsContent>
+          <TabsContent value="watchlist">
+            <CaseListTable watchlistFilter={true} searchQuery={searchQuery} />
+          </TabsContent>
+        </>
+      )}
 
       {/* Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
