@@ -70,7 +70,7 @@ Install PM2 globally:
 npm install -g pm2
 ```
 
-Start the application with PM2:
+Start the application using PM2 with Vite's preview server:
 ```bash
 # Navigate to the project directory
 cd ~/techlinx-helpdesk
@@ -85,7 +85,8 @@ Alternatively, if you prefer to use a static file server:
 npm install -g serve
 
 # Use PM2 to run serve for the dist directory
-pm2 start serve --name "techlinx-helpdesk" -- -s ~/techlinx-helpdesk/dist -l 8080
+# CORRECT COMMAND:
+pm2 start --name "techlinx-helpdesk" npx -- serve -s ~/techlinx-helpdesk/dist -l 8080
 ```
 
 Setup PM2 to start on system boot:
@@ -191,7 +192,7 @@ If you encounter issues with PM2:
 2. Try restarting the PM2 daemon:
    ```bash
    pm2 kill
-   pm2 start ecosystem.config.js
+   pm2 start techlinx-helpdesk
    ```
 
 3. Ensure PM2 has the correct permissions:
@@ -261,3 +262,4 @@ npm run dev
 - Select the "Codespaces" tab.
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
+
