@@ -70,6 +70,7 @@ const notificationFormSchema = z.object({
   smtpSecure: z.boolean().default(false).optional(),
   senderEmail: z.string().email("Invalid sender email").optional(),
   senderName: z.string().min(2, "Sender name must be at least 2 characters").optional(),
+  baseUrl: z.string().url("Must be a valid URL").default("https://helpdesk.techlinx.se"),
 });
 
 type NotificationFormValues = z.infer<typeof notificationFormSchema>;
@@ -95,6 +96,7 @@ const SettingsPage = () => {
     smtpSecure: false,
     senderEmail: "notifications@techlinx.se",
     senderName: "Techlinx Support",
+    baseUrl: "https://helpdesk.techlinx.se",
   });
   const [isEmailConfigOpen, setIsEmailConfigOpen] = useState(false);
   const [isPlaceholdersOpen, setIsPlaceholdersOpen] = useState(true);
@@ -117,6 +119,7 @@ const SettingsPage = () => {
       smtpSecure: templates.smtpSecure,
       senderEmail: templates.senderEmail,
       senderName: templates.senderName,
+      baseUrl: templates.baseUrl,
     },
   });
 
@@ -154,6 +157,7 @@ const SettingsPage = () => {
             smtpSecure: settingsData?.smtp_secure || false,
             senderEmail: settingsData?.sender_email || "notifications@techlinx.se",
             senderName: settingsData?.sender_name || "Techlinx Support",
+            baseUrl: settingsData?.base_url || "https://helpdesk.techlinx.se",
           };
           
           setTemplates(newTemplates);
@@ -187,6 +191,7 @@ const SettingsPage = () => {
             smtp_secure: data.smtpSecure,
             sender_email: data.senderEmail,
             sender_name: data.senderName,
+            base_url: data.baseUrl,
             updated_at: new Date().toISOString(),
           }
         ]);
@@ -729,6 +734,23 @@ const SettingsPage = () => {
                         </FormDescription>
                         <FormControl>
                           <Input placeholder="services@techlinx.se" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="baseUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Application URL</FormLabel>
+                        <FormDescription>
+                          The base URL for case links in notification emails
+                        </FormDescription>
+                        <FormControl>
+                          <Input placeholder="https://helpdesk.techlinx.se" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

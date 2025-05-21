@@ -78,7 +78,8 @@ serve(async (req) => {
       hasSmtpPassword: !!settings.smtp_password,
       senderName: settings.sender_name,
       senderEmail: settings.sender_email,
-      emailProvider: settings.email_provider
+      emailProvider: settings.email_provider,
+      baseUrl: settings.base_url || 'https://support.example.com'
     });
 
     // Handle special case for test notifications
@@ -166,8 +167,8 @@ serve(async (req) => {
 
     console.log("🔔 Template data:", templates || "Using fallback template");
 
-    // Create case link based on current environment
-    const baseUrl = "https://support.example.com";
+    // Create case link based on settings or default
+    const baseUrl = settings.base_url || "https://support.example.com";
     const caseLink = `${baseUrl}/cases/${caseId}`;
 
     const templateSubject = templates?.subject || 
