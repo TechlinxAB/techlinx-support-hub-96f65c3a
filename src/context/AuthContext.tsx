@@ -104,14 +104,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Initialize auth state with clean approach
   useEffect(() => {
-    console.log('AuthProvider initialized');
     setAuthState('RESTORING_SESSION');
     setLoading(true);
     
     // Set up auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
-      console.log('Auth state changed:', event, currentSession ? 'Session exists' : 'No session');
-      
       // Update session and user state
       setSession(currentSession);
       setUser(currentSession?.user || null);
@@ -126,10 +123,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             if (fetchedProfile) {
               setProfile(fetchedProfile);
-              console.log('Profile fetch successful, user authenticated');
-            } else {
-              console.log('Failed to fetch profile, but user is authenticated');
-              // Still allow user to continue, just without profile data
             }
           } catch (err) {
             console.error('Error in profile fetch:', err);
@@ -157,7 +150,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (!existingSession) {
-          console.log('No existing session found');
           setAuthState('SIGNED_OUT');
           setLoading(false);
           
@@ -281,7 +273,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Stub impersonation methods to satisfy TypeScript
   const startImpersonation = async (userId: string) => {
     toast.info("Impersonation is not implemented yet");
-    console.log("Attempted to impersonate user with ID:", userId);
   };
 
   const endImpersonation = async () => {

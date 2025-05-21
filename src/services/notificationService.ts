@@ -1,6 +1,5 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Reply } from "@/context/AppContext";
 import { toast } from "sonner";
 
 // Service for handling notifications
@@ -16,7 +15,7 @@ export const notificationService = {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
-        console.error(`Error sending notification: Authentication error - ${sessionError.message}`);
+        console.error(`Error sending notification: ${sessionError.message}`);
         throw new Error(`Authentication error: ${sessionError.message}`);
       }
       
@@ -72,7 +71,7 @@ export const notificationService = {
         // Check for HTTP errors
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
-          console.error(`Error sending notification: Edge function error - ${JSON.stringify(errorData)}`);
+          console.error(`Error sending notification: ${JSON.stringify(errorData)}`);
           throw new Error(errorData.error || `Failed to send notification (HTTP ${response.status})`);
         }
   

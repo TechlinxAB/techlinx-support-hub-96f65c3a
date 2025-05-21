@@ -21,7 +21,18 @@ const queryClient = new QueryClient({
       retry: 1,
       refetchOnWindowFocus: false,
       staleTime: 30000, // 30 seconds
+    },
+    // Hide console logs from react-query
+    mutations: {
+      onError: () => {
+        // Errors will be handled by the components
+      },
     }
+  },
+  logger: {
+    log: () => {},
+    warn: () => {},
+    error: (...args) => console.error(...args),
   }
 });
 

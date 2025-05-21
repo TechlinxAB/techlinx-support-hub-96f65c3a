@@ -19,7 +19,6 @@ export const isConsultant = async (): Promise<boolean> => {
     }
     
     if (!session) {
-      console.log("No session found in isConsultant check");
       return false;
     }
     
@@ -62,14 +61,12 @@ export const hasCompanyAccess = async (companyId: string): Promise<boolean> => {
     }
     
     if (!session) {
-      console.log("No session found in hasCompanyAccess check");
       return false;
     }
     
     // First, check if the user is a consultant (consultants have access to all companies)
     const isUserConsultant = await isConsultant();
     if (isUserConsultant) {
-      console.log("User is a consultant, granting access");
       return true;
     }
     
@@ -85,10 +82,7 @@ export const hasCompanyAccess = async (companyId: string): Promise<boolean> => {
       return false;
     }
     
-    const hasAccess = data?.company_id === companyId;
-    console.log(`User company access check: user's company=${data?.company_id}, requested company=${companyId}, access granted: ${hasAccess}`);
-    
-    return hasAccess;
+    return data?.company_id === companyId;
   } catch (err) {
     console.error('Error in hasCompanyAccess check:', err);
     return false;
