@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
@@ -162,13 +161,14 @@ const CaseList = ({
     filteredCases = filteredCases.slice(0, limit);
   }
 
+  // Update the getStatusBadgeClass function to use our new badge variants
   const getStatusBadgeClass = (status: CaseStatus) => {
     switch (status) {
-      case 'new': return 'status-new';
-      case 'ongoing': return 'status-ongoing';
-      case 'resolved': return 'status-resolved';
-      case 'completed': return 'status-completed';
-      default: return '';
+      case 'new': return 'new';
+      case 'ongoing': return 'ongoing';
+      case 'resolved': return 'awaiting';
+      case 'completed': return 'completed';
+      default: return 'default';
     }
   };
   
@@ -299,8 +299,11 @@ const CaseList = ({
                       {caseItem.title}
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
-                      <Badge variant="outline" className={cn("status-badge", getStatusBadgeClass(caseItem.status))}>
-                        {caseItem.status}
+                      <Badge variant={getStatusBadgeClass(caseItem.status)}>
+                        {caseItem.status === 'new' ? 'New' : 
+                         caseItem.status === 'ongoing' ? 'Ongoing' : 
+                         caseItem.status === 'resolved' ? 'Awaiting' : 
+                         'Completed'}
                       </Badge>
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>

@@ -135,14 +135,15 @@ const CaseDetailPage = () => {
     }
   };
   
+  // Update this function to use the new badge variants
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'new': return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
-      case 'ongoing': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-      case 'resolved': return 'bg-green-100 text-green-800 hover:bg-green-200';
-      case 'completed': return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
-      case 'draft': return 'bg-purple-100 text-purple-800 hover:bg-purple-200';
-      default: return '';
+      case 'new': return 'new';
+      case 'ongoing': return 'ongoing';
+      case 'resolved': return 'awaiting';
+      case 'completed': return 'completed';
+      case 'draft': return 'secondary';
+      default: return 'default';
     }
   };
   
@@ -172,8 +173,12 @@ const CaseDetailPage = () => {
               <h1 className="text-2xl font-bold mb-2">{currentCase.title}</h1>
               
               <div className="flex flex-wrap gap-2 mb-4">
-                <Badge variant="outline" className={cn("status-badge", getStatusBadgeClass(currentCase.status))}>
-                  {currentCase.status}
+                <Badge variant={getStatusBadgeClass(currentCase.status)}>
+                  {currentCase.status === 'new' ? 'New' : 
+                   currentCase.status === 'ongoing' ? 'Ongoing' : 
+                   currentCase.status === 'resolved' ? 'Awaiting' : 
+                   currentCase.status === 'completed' ? 'Completed' : 
+                   currentCase.status}
                 </Badge>
                 <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass(currentCase.priority))}>
                   {currentCase.priority}

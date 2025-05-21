@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
@@ -320,17 +319,18 @@ const SearchPage = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge 
-                            variant="outline" 
-                            className={cn(
-                              "status-badge",
-                              caseItem.status === 'new' ? 'status-new' :
-                              caseItem.status === 'ongoing' ? 'status-ongoing' :
-                              caseItem.status === 'resolved' ? 'status-resolved' :
-                              'status-completed'
-                            )}
+                            variant={
+                              caseItem.status === 'new' ? 'new' :
+                              caseItem.status === 'ongoing' ? 'ongoing' :
+                              caseItem.status === 'resolved' ? 'awaiting' :
+                              'completed'
+                            }
                             onClick={() => navigate(`/cases/${caseItem.id}`)}
                           >
-                            {caseItem.status}
+                            {caseItem.status === 'new' ? 'New' : 
+                             caseItem.status === 'ongoing' ? 'Ongoing' : 
+                             caseItem.status === 'resolved' ? 'Awaiting' : 
+                             'Completed'}
                           </Badge>
                           
                           {canDelete && (

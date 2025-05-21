@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle } from 'lucide-react';
@@ -159,14 +158,14 @@ const CasesPage = () => {
               <TableCell className="font-medium">{caseItem.title}</TableCell>
               <TableCell>
                 <Badge variant={
-                  caseItem.status === 'new' ? 'default' :
-                  caseItem.status === 'ongoing' ? 'secondary' :
-                  caseItem.status === 'resolved' ? 'outline' :
-                  'default'
+                  caseItem.status === 'new' ? 'new' :
+                  caseItem.status === 'ongoing' ? 'ongoing' :
+                  caseItem.status === 'resolved' ? 'awaiting' :
+                  'completed'
                 }>
                   {caseItem.status === 'new' ? 'New' :
                    caseItem.status === 'ongoing' ? 'Ongoing' :
-                   caseItem.status === 'resolved' ? 'Awaiting' : // Changed from "Awaiting Confirmation" to "Awaiting"
+                   caseItem.status === 'resolved' ? 'Awaiting' :
                    'Completed'}
                 </Badge>
               </TableCell>
