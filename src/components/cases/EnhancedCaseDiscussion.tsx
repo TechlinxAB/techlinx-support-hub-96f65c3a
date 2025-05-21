@@ -50,7 +50,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
           return;
         }
         
-        if (!pgNetData.http_post_exists) {
+        if (!pgNetData.http_post_function_exists) {
           console.error('[EnhancedCaseDiscussion] pg_net extension installed but http_post function not found');
           setNotificationServiceStatus('error');
           return;
