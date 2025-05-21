@@ -6,6 +6,7 @@ import { Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DashboardSettings } from '@/types/dashboardTypes';
 import { UserCaseItem } from '@/types/dashboardTypes';
+import { Badge } from '@/components/ui/badge';
 
 interface ActiveCasesListProps {
   cases: UserCaseItem[];
@@ -45,21 +46,23 @@ const ActiveCasesList = ({ cases, settings }: ActiveCasesListProps) => {
                   </span>
                 </div>
                 <div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                  <Badge variant={
                     caseItem.status === 'new' 
-                      ? 'bg-blue-100 text-blue-800' 
+                      ? 'new' 
                       : caseItem.status === 'ongoing' 
-                      ? 'bg-amber-100 text-amber-800' 
-                      : 'bg-green-100 text-green-800'
-                  }`}>
+                      ? 'ongoing' 
+                      : caseItem.status === 'resolved'
+                      ? 'awaiting'
+                      : 'overdue'
+                  }>
                     {caseItem.status === 'new' 
                       ? 'New' 
                       : caseItem.status === 'ongoing' 
                       ? 'Ongoing' 
                       : caseItem.status === 'resolved' 
-                      ? 'Awaiting Confirmation'
-                      : 'Draft'}
-                  </span>
+                      ? 'Awaiting'
+                      : 'Overdue'}
+                  </Badge>
                 </div>
               </div>
             </CardContent>
