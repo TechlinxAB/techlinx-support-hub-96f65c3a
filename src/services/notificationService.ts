@@ -1,7 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Reply } from "@/context/AppContext";
-import { toast } from "sonner";
 
 // Service for handling notifications
 export const notificationService = {
@@ -110,16 +108,7 @@ export const notificationService = {
         const responseData = await response.json();
         console.log("[NotificationService] Edge function response:", responseData);
         
-        // Show success toast
-        if (emailConfigured) {
-          toast.success(`Email notification sent to ${recipientType}`, {
-            description: "Email notification delivered successfully"
-          });
-        } else {
-          toast.success(`Notification for ${recipientType} logged`, {
-            description: "Email notifications not configured - check Settings to enable"
-          });
-        }
+        // No toast notifications here anymore!
         
         return true;
       } catch (fetchError: any) {
@@ -130,10 +119,7 @@ export const notificationService = {
     } catch (error: any) {
       console.error("[NotificationService] Error sending notification:", error);
       
-      // Show error toast
-      toast.error("Failed to send notification", {
-        description: error.message || "An error occurred while sending the notification"
-      });
+      // No error toast here either - silently fail when sending notifications
       
       return false;
     }
@@ -186,6 +172,8 @@ export const notificationService = {
         
         console.log("Test email response:", responseData);
         
+        // Keep the toast for test emails since this is specifically requested by the user
+        import { toast } from "sonner"; 
         toast.success("Test email sent successfully", {
           description: `Email sent to ${recipientEmail}`
         });
@@ -198,6 +186,8 @@ export const notificationService = {
     } catch (error: any) {
       console.error("Error sending test email:", error);
       
+      // Keep the toast for test emails
+      import { toast } from "sonner";
       toast.error("Failed to send test email", {
         description: error.message || "An error occurred while sending the test email"
       });

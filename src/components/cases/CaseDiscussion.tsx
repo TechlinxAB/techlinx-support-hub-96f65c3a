@@ -314,27 +314,15 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         newReply.id,
         currentUser?.role !== 'consultant' // isUserReply (if not consultant, then it's a user)
       );
-      
-      if (success) {
-        toast({
-          title: "Notification sent",
-          description: `The ${recipientType} has been notified about your reply`,
-        });
-      }
-      
-      return success;
-    } catch (error) {
-      console.error('Error sending notification:', error);
-      toast({
-        title: "Notification failed",
-        description: "Could not send notification. The recipient may not see your reply immediately.",
-        variant: "destructive"
-      });
-      return false;
-    } finally {
-      setIsSendingNotification(false);
-    }
-  };
+    
+    return success;
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    return false;
+  } finally {
+    setIsSendingNotification(false);
+  }
+};
   
   // Handle adding a reply
   const handleAddReply = async (e: React.FormEvent) => {
@@ -808,14 +796,14 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               )}
               
               {/* Show notification progress */}
-              {isSendingNotification && (
+              {/* isSendingNotification && (
                 <Alert variant="default" className="bg-blue-50 text-blue-800">
                   <AlertDescription className="flex items-center gap-2">
                     <RefreshCw className="h-4 w-4 animate-spin" />
                     Sending notification...
                   </AlertDescription>
                 </Alert>
-              )}
+              ) */}
               
               <div className="flex flex-wrap justify-between items-center gap-3">
                 <div className="flex items-center">
@@ -853,11 +841,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                       <>
                         <RefreshCw className="h-4 w-4 animate-spin" />
                         Uploading...
-                      </>
-                    ) : isSendingNotification ? (
-                      <>
-                        <Mail className="h-4 w-4" />
-                        Notifying...
                       </>
                     ) : (
                       <>

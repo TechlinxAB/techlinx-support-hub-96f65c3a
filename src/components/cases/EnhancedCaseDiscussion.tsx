@@ -2,7 +2,6 @@
 import React from 'react';
 import CaseDiscussion from './CaseDiscussion'; // Import the original component
 import { useAppContext } from '@/context/AppContext';
-import CaseDiscussionNotifier from './CaseDiscussionNotifier';
 
 interface EnhancedCaseDiscussionProps {
   caseId: string;
@@ -27,7 +26,6 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   return (
     <>
       <CaseDiscussion caseId={caseId} />
-      <CaseDiscussionNotifier caseId={caseId} replies={repliesWithRole} />
     </>
   );
 };
