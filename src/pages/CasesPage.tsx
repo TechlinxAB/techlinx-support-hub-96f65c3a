@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Filter, Star, Trash2 } from 'lucide-react';
+import { Loader, Search, Filter, Star, Trash2, CheckCircle, Clock, PlusCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -234,29 +235,42 @@ const CasesPage = () => {
         </div>
       </div>
       
-      {/* Filter tabs with nicer styling */}
+      {/* Improved filter tabs with consistent styling */}
       <div className={`rounded-lg border shadow-sm p-4 bg-card transition-all duration-200 ${showFilters ? 'block' : 'hidden'}`}>
         <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
           <TabsList className="grid w-full grid-cols-3 mb-2 lg:grid-cols-6">
-            <TabsTrigger value="all">All Cases</TabsTrigger>
-            <TabsTrigger value="new">New</TabsTrigger>
-            <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
-            <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-            <TabsTrigger value="watchlist" className="relative">
-              <span className="flex items-center">
-                <Star className="h-4 w-4 mr-1" />
-                <span>Watchlist</span>
-                {watchlistCount > 0 && (
-                  <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
-                    {watchlistCount}
-                  </Badge>
-                )}
-              </span>
+            <TabsTrigger value="all" className="flex items-center justify-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>All Cases</span>
+            </TabsTrigger>
+            <TabsTrigger value="new" className="flex items-center justify-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              <span>New</span>
+            </TabsTrigger>
+            <TabsTrigger value="ongoing" className="flex items-center justify-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span>Ongoing</span>
+            </TabsTrigger>
+            <TabsTrigger value="resolved" className="flex items-center justify-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              <span>Awaiting</span>
+            </TabsTrigger>
+            <TabsTrigger value="completed" className="flex items-center justify-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>Completed</span>
+            </TabsTrigger>
+            <TabsTrigger value="watchlist" className="flex items-center justify-center gap-2">
+              <Star className="h-4 w-4" />
+              <span>Watchlist</span>
+              {watchlistCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full text-xs">
+                  {watchlistCount}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
           
-          {/* Move TabsContent components inside the Tabs component */}
+          {/* TabsContent components inside the Tabs component */}
           <TabsContent value="all">
             <CaseListTable statusFilter="all" searchQuery={searchQuery} />
           </TabsContent>
@@ -284,7 +298,7 @@ const CasesPage = () => {
         </div>
       ) : (
         <>
-          {/* Remove duplicate TabsContent components that were outside the Tabs component */}
+          {/* Content when filters are not shown */}
           {activeTab === "all" && !showFilters && <CaseListTable statusFilter="all" searchQuery={searchQuery} />}
           {activeTab === "new" && !showFilters && <CaseListTable statusFilter="new" searchQuery={searchQuery} />}
           {activeTab === "ongoing" && !showFilters && <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />}
