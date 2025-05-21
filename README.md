@@ -32,8 +32,6 @@ Before you begin, ensure your Linux server has the following installed:
    sudo apt install nodejs npm
    ```
 
-3. **Nginx** (already installed if you're using aaPanel)
-
 ### Deployment Steps
 
 #### 1. Clone the Repository
@@ -55,7 +53,7 @@ cd techlinx-helpdesk
 #### 2. Install Dependencies
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
 #### 3. Build the Application
@@ -65,47 +63,52 @@ npm run build
 ```
 This will create a `dist` folder containing the compiled application.
 
-#### 4. Configure Nginx through aaPanel
+#### 4. Running the Application
 
-While aaPanel provides a GUI for Nginx configuration, you can also directly edit the configuration file:
-
-```bash
-sudo nano /www/server/panel/vhost/nginx/your-website-config.conf
-```
-
-Add or modify the configuration to point to the application:
-
-```nginx
-server {
-    listen 80;
-    server_name 192.168.0.102;  # Local IP address
-
-    root /home/helpdesk-user/techlinx-helpdesk/dist;
-    index index.html;
-
-    # Important for Single Page Applications
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Optional: Add cache headers for static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-        expires 30d;
-        add_header Cache-Control "public, no-transform";
-    }
-
-    # Security headers (optional but recommended)
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-XSS-Protection "1; mode=block";
-}
-```
-
-After saving the configuration, restart Nginx through aaPanel or via command line:
+##### Option 1: Using Vite's built-in server on port 80 (requires root)
 
 ```bash
-sudo /etc/init.d/nginx restart
+# You'll need to run this with sudo to bind to port 80
+sudo npm run dev
 ```
+
+##### Option 2: Using a process manager (recommended for production)
+
+Install PM2:
+```bash
+npm install -g pm2
+```
+
+Create a PM2 configuration file (ecosystem.config.js):
+```bash
+echo 'module.exports = {
+  apps: [{
+    name: "techlinx-helpdesk",
+    script: "npm",
+    args: "run dev",
+    env: {
+      NODE_ENV: "production",
+    }
+  }]
+}' > ecosystem.config.js
+```
+
+Start the application with PM2:
+```bash
+pm2 start ecosystem.config.js
+```
+
+#### 5. Configuring aaPanel Reverse Proxy
+
+In the aaPanel web interface:
+
+1. Go to the "Website" section
+2. Click on "Add site" or select an existing site
+3. In the proxy settings, add a new reverse proxy:
+   - Source address: The path you want to expose (e.g., `/helpdesk`)
+   - Target URL: `http://192.168.0.102:80` (local IP and port where the app is running)
+   - Check "Enable" for HTTPS if needed
+   - Save the configuration
 
 ### Post-Deployment Configuration
 
@@ -123,8 +126,10 @@ When you need to update the application, follow these steps:
 ```bash
 cd ~/techlinx-helpdesk
 git pull
-npm install  # In case dependencies have changed
+npm install --legacy-peer-deps
 npm run build
+# Restart the service (if using PM2)
+pm2 restart techlinx-helpdesk
 ```
 
 #### Optional: Create an Update Script
@@ -142,8 +147,10 @@ Add the following content:
 echo "Updating Techlinx Helpdesk..."
 cd ~/techlinx-helpdesk
 git pull
-npm install
+npm install --legacy-peer-deps
 npm run build
+# Restart the service (if using PM2)
+pm2 restart techlinx-helpdesk
 echo "Update completed: $(date)"
 ```
 
@@ -161,9 +168,20 @@ Now you can update by running:
 
 ### Troubleshooting
 
+#### Permission Issues with Port 80
+
+Port 80 requires root privileges. If you get permission denied errors, you have a few options:
+
+1. Use sudo to start the service (not recommended for production)
+2. Use setcap to allow Node.js to bind to privileged ports:
+   ```bash
+   sudo setcap cap_net_bind_service=+ep $(which node)
+   ```
+3. Use a reverse proxy like Nginx (included in aaPanel) to forward traffic from port 80 to another port (e.g., 3000)
+
 #### Application Shows Blank Page or 404
 
-This is often due to routing issues. Ensure your Nginx configuration has the correct `try_files` directive that redirects all requests to `index.html`.
+This is often due to routing issues. Check that your reverse proxy configuration in aaPanel is correctly set up.
 
 #### API Connection Issues
 
@@ -179,31 +197,6 @@ If you encounter permission issues:
 ```bash
 # Ensure the application files are owned by helpdesk-user
 sudo chown -R helpdesk-user:helpdesk-user ~/techlinx-helpdesk
-```
-
-#### Nginx Logs
-
-Check Nginx logs for troubleshooting:
-
-```bash
-sudo tail -f /www/wwwlogs/your-website-error.log
-sudo tail -f /www/wwwlogs/your-website-access.log
-```
-
-Or through the aaPanel interface under the website management section.
-
-### Monitoring and Maintenance
-
-Consider setting up basic monitoring for your server:
-
-```bash
-sudo apt install htop
-```
-
-For log rotation and management:
-
-```bash
-sudo apt install logrotate
 ```
 
 ## What technologies are used for this project?
@@ -237,7 +230,7 @@ git clone <YOUR_GIT_URL>
 cd <YOUR_PROJECT_NAME>
 
 # Step 3: Install the necessary dependencies.
-npm i
+npm i --legacy-peer-deps
 
 # Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
@@ -256,4 +249,3 @@ npm run dev
 - Select the "Codespaces" tab.
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
-
