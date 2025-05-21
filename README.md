@@ -63,39 +63,52 @@ npm run build
 ```
 This will create a `dist` folder containing the compiled application.
 
-#### 4. Running the Application
+#### 4. Running the Application with PM2 (Recommended for Production)
 
-##### Option 1: Using Vite's built-in server on port 80 (requires root)
-
-```bash
-# You'll need to run this with sudo to bind to port 80
-sudo npm run dev
-```
-
-##### Option 2: Using a process manager (recommended for production)
-
-Install PM2:
+Install PM2 globally:
 ```bash
 npm install -g pm2
 ```
 
-Create a PM2 configuration file (ecosystem.config.js):
-```bash
-echo 'module.exports = {
-  apps: [{
-    name: "techlinx-helpdesk",
-    script: "npm",
-    args: "run dev",
-    env: {
-      NODE_ENV: "production",
-    }
-  }]
-}' > ecosystem.config.js
-```
-
 Start the application with PM2:
 ```bash
-pm2 start ecosystem.config.js
+# Navigate to the project directory
+cd ~/techlinx-helpdesk
+
+# Start the application using PM2 with Vite's preview server
+pm2 start npm --name "techlinx-helpdesk" -- run preview -- --port 8080 --host
+```
+
+Alternatively, if you prefer to use a static file server:
+```bash
+# Install serve globally
+npm install -g serve
+
+# Use PM2 to run serve for the dist directory
+pm2 start serve --name "techlinx-helpdesk" -- -s ~/techlinx-helpdesk/dist -l 8080
+```
+
+Setup PM2 to start on system boot:
+```bash
+pm2 startup
+# Follow the instructions that PM2 outputs
+
+pm2 save
+```
+
+PM2 Useful Commands:
+```bash
+# View logs
+pm2 logs techlinx-helpdesk
+
+# Restart the application
+pm2 restart techlinx-helpdesk
+
+# Stop the application
+pm2 stop techlinx-helpdesk
+
+# View status of all applications
+pm2 status
 ```
 
 #### 5. Configuring aaPanel Reverse Proxy
@@ -106,7 +119,7 @@ In the aaPanel web interface:
 2. Click on "Add site" or select an existing site
 3. In the proxy settings, add a new reverse proxy:
    - Source address: The path you want to expose (e.g., `/helpdesk`)
-   - Target URL: `http://192.168.0.102:80` (local IP and port where the app is running)
+   - Target URL: `http://192.168.0.102:8080` (local IP and port where the app is running)
    - Check "Enable" for HTTPS if needed
    - Save the configuration
 
@@ -116,7 +129,7 @@ After deployment, you need to update the Base URL in the application settings to
 
 1. Log in to the application with admin credentials
 2. Navigate to the Settings section
-3. Find and update the "Base URL" to match your new IP address (e.g., http://192.168.0.102)
+3. Find and update the "Base URL" to match your new IP address (e.g., http://192.168.0.102:8080)
 4. Save the settings
 
 ### Updating the Application
@@ -128,7 +141,6 @@ cd ~/techlinx-helpdesk
 git pull
 npm install --legacy-peer-deps
 npm run build
-# Restart the service (if using PM2)
 pm2 restart techlinx-helpdesk
 ```
 
@@ -149,7 +161,6 @@ cd ~/techlinx-helpdesk
 git pull
 npm install --legacy-peer-deps
 npm run build
-# Restart the service (if using PM2)
 pm2 restart techlinx-helpdesk
 echo "Update completed: $(date)"
 ```
@@ -168,16 +179,26 @@ Now you can update by running:
 
 ### Troubleshooting
 
-#### Permission Issues with Port 80
+#### PM2 Issues
 
-Port 80 requires root privileges. If you get permission denied errors, you have a few options:
+If you encounter issues with PM2:
 
-1. Use sudo to start the service (not recommended for production)
-2. Use setcap to allow Node.js to bind to privileged ports:
+1. Check the PM2 logs:
    ```bash
-   sudo setcap cap_net_bind_service=+ep $(which node)
+   pm2 logs techlinx-helpdesk
    ```
-3. Use a reverse proxy like Nginx (included in aaPanel) to forward traffic from port 80 to another port (e.g., 3000)
+
+2. Try restarting the PM2 daemon:
+   ```bash
+   pm2 kill
+   pm2 start ecosystem.config.js
+   ```
+
+3. Ensure PM2 has the correct permissions:
+   ```bash
+   # Make sure the helpdesk-user owns all the files
+   sudo chown -R helpdesk-user:helpdesk-user ~/techlinx-helpdesk
+   ```
 
 #### Application Shows Blank Page or 404
 
@@ -189,15 +210,6 @@ If the application is having trouble connecting to the Supabase backend:
 
 1. Check the browser console for CORS errors
 2. Verify that your local IP address (192.168.0.102) is allowed in the Supabase project CORS settings
-
-#### Permission Issues
-
-If you encounter permission issues:
-
-```bash
-# Ensure the application files are owned by helpdesk-user
-sudo chown -R helpdesk-user:helpdesk-user ~/techlinx-helpdesk
-```
 
 ## What technologies are used for this project?
 
