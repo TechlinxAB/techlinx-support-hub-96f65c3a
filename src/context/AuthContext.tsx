@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, clearAuthState } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -243,12 +242,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Clean sign out implementation
+  // Enhanced sign out implementation for resilience
   const signOut = async () => {
     try {
       setLoading(true);
       
-      await supabase.auth.signOut();
+      // First, ensure client state is cleared which is most important
+      // This guarantees we always clean up the client side state
+      await clearAuthState();
+      
+      // Then attempt the server-side signout, but it's okay if this fails
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.log('Server-side signOut returned error (expected in some cases):', err);
+        // Continue regardless of error since we've already cleared local state
+      }
       
       // Clear state
       setSession(null);
@@ -261,10 +270,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Redirect to auth page
       navigate('/auth');
     } catch (err) {
-      console.error('Error signing out:', err);
-      toast.error("Sign out failed", {
-        description: "Please try again or refresh the page."
+      console.error('Unexpected error in signOut:', err);
+      toast.error("Sign out encountered an error", {
+        description: "But your session has been cleared locally."
       });
+      
+      // Even on critical error, attempt one more state clear
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setAuthState('SIGNED_OUT');
+      
+      // Force a page redirect as last resort
+      window.location.href = '/auth';
     } finally {
       setLoading(false);
     }

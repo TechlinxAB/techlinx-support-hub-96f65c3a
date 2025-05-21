@@ -19,30 +19,46 @@ export const STORAGE_KEY = 'sb-uaoeabhtbynyfzyfzogp-auth-token';
 // Enhanced function to clear authentication state from storage
 export const clearAuthState = async () => {
   try {
-    // Try to sign out with Supabase global scope first
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-    } catch (signOutError) {
-      console.error('Error during Supabase signOut:', signOutError);
-      // Continue to cleanup even if signOut fails
-    }
+    console.log('Starting clearAuthState process');
     
-    // Clear auth token from local storage
+    // IMPORTANT: First clear local storage to ensure client state is always cleaned
+    // This is the most critical part - clearing local state regardless of server response
     localStorage.removeItem(STORAGE_KEY);
     
-    // Clear any other related items that might be causing issues
+    // Clear any other related Supabase auth items
     const authKeys = Object.keys(localStorage).filter(key => 
       key.includes('supabase') || key.includes('auth') || key.includes('sb-')
     );
     
+    console.log(`Found ${authKeys.length} auth-related localStorage keys to remove`);
+    
     for (const key of authKeys) {
       localStorage.removeItem(key);
+      console.log(`Cleared localStorage key: ${key}`);
+    }
+    
+    // Only after client cleanup, try to sign out with Supabase
+    // But treat this as optional - the local cleanup above is what really matters
+    try {
+      console.log('Attempting server-side signOut');
+      await supabase.auth.signOut({ scope: 'global' });
+      console.log('Server-side signOut completed successfully');
+    } catch (signOutError) {
+      // This is expected in some cases (e.g., session already invalid)
+      // We just log it but continue - the important part is the local cleanup
+      console.log('Server-side signOut returned error (expected in some cases):', signOutError);
     }
     
     console.log('Auth state cleared successfully');
     return true;
   } catch (error) {
-    console.error('Error clearing auth state:', error);
+    console.error('Unexpected error in clearAuthState:', error);
+    // Even if something unexpected happens, we still want to ensure localStorage is cleared
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed final attempt to clear storage:', e);
+    }
     return false;
   }
 };

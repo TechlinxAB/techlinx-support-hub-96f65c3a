@@ -33,13 +33,16 @@ const LogoutButton = ({
       setIsLoggingOut(true);
       const toastId = toast.loading('Logging out...');
       
+      // ENHANCED: Local-first approach - guarantee client-side state is cleared first
+      await clearAuthState();
+      
+      // Then try the context's signOut method (which might also interact with the server)
+      // But if it fails, we've already cleared local state, which is what matters most
       try {
-        // Try to sign out using the AuthContext method first
         await signOut();
-      } catch (error) {
-        console.error("Primary signOut failed, trying fallback", error);
-        // Fallback - manual cleanup using the function in supabase client
-        await clearAuthState();
+      } catch (contextError) {
+        // This is not critical since we've already cleared local state
+        console.log('Context signOut returned error (not critical):', contextError);
       }
       
       toast.success('Successfully logged out', { id: toastId });
@@ -50,10 +53,13 @@ const LogoutButton = ({
         navigate('/auth', { replace: true });
       }
     } catch (error) {
-      console.error('Error during logout:', error);
-      toast.error('Failed to log out. Please try again.');
+      console.error('Error during logout process:', error);
+      toast.error('Error during logout, but session has been cleared');
       
-      // Last resort - hard redirect if still authenticated and redirectAfterLogout is true
+      // Even on error, try one more time to clear client state
+      await clearAuthState();
+      
+      // Force navigation to auth page as a last resort if redirectAfterLogout is true
       if (redirectAfterLogout) {
         window.location.href = '/auth';
       }
