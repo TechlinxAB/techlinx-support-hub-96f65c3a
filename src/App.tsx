@@ -28,11 +28,6 @@ const queryClient = new QueryClient({
         // Errors will be handled by the components
       },
     }
-  },
-  logger: {
-    log: () => {},
-    warn: () => {},
-    error: (...args) => console.error(...args),
   }
 });
 
