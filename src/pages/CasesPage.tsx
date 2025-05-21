@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Filter, Star, Trash2 } from 'lucide-react';
@@ -256,15 +255,8 @@ const CasesPage = () => {
               </span>
             </TabsTrigger>
           </TabsList>
-        </Tabs>
-      </div>
-      
-      {(loadingCases && !initialDataLoaded) ? (
-        <div className="flex items-center justify-center p-12">
-          <Loader className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : (
-        <>
+          
+          {/* Move TabsContent components inside the Tabs component */}
           <TabsContent value="all">
             <CaseListTable statusFilter="all" searchQuery={searchQuery} />
           </TabsContent>
@@ -283,6 +275,22 @@ const CasesPage = () => {
           <TabsContent value="watchlist">
             <CaseListTable watchlistFilter={true} searchQuery={searchQuery} />
           </TabsContent>
+        </Tabs>
+      </div>
+      
+      {(loadingCases && !initialDataLoaded) ? (
+        <div className="flex items-center justify-center p-12">
+          <Loader className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <>
+          {/* Remove duplicate TabsContent components that were outside the Tabs component */}
+          {activeTab === "all" && !showFilters && <CaseListTable statusFilter="all" searchQuery={searchQuery} />}
+          {activeTab === "new" && !showFilters && <CaseListTable statusFilter="new" searchQuery={searchQuery} />}
+          {activeTab === "ongoing" && !showFilters && <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />}
+          {activeTab === "resolved" && !showFilters && <CaseListTable statusFilter="resolved" searchQuery={searchQuery} />}
+          {activeTab === "completed" && !showFilters && <CaseListTable statusFilter="completed" searchQuery={searchQuery} />}
+          {activeTab === "watchlist" && !showFilters && <CaseListTable watchlistFilter={true} searchQuery={searchQuery} />}
         </>
       )}
 
