@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Filter, Star, Trash2 } from 'lucide-react';
+import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -165,7 +166,7 @@ const CasesPage = () => {
                 }>
                   {caseItem.status === 'new' ? 'New' :
                    caseItem.status === 'ongoing' ? 'Ongoing' :
-                   caseItem.status === 'resolved' ? 'Awaiting Confirmation' :
+                   caseItem.status === 'resolved' ? 'Awaiting' : // Changed from "Awaiting Confirmation" to "Awaiting"
                    'Completed'}
                 </Badge>
               </TableCell>
@@ -238,21 +239,34 @@ const CasesPage = () => {
       <div className={`rounded-lg border shadow-sm p-4 bg-card transition-all duration-200 ${showFilters ? 'block' : 'hidden'}`}>
         <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
           <TabsList className="grid w-full grid-cols-3 mb-2 lg:grid-cols-6">
-            <TabsTrigger value="all">All Cases</TabsTrigger>
-            <TabsTrigger value="new">New</TabsTrigger>
-            <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
-            <TabsTrigger value="resolved">Awaiting Confirmation</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-            <TabsTrigger value="watchlist" className="relative">
-              <span className="flex items-center">
-                <Star className="h-4 w-4 mr-1" />
-                <span>Watchlist</span>
-                {watchlistCount > 0 && (
-                  <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
-                    {watchlistCount}
-                  </Badge>
-                )}
-              </span>
+            <TabsTrigger value="all" className="flex items-center gap-1.5">
+              <FileText className="h-4 w-4" />
+              <span>All Cases</span>
+            </TabsTrigger>
+            <TabsTrigger value="new" className="flex items-center gap-1.5">
+              <PlusCircle className="h-4 w-4" />
+              <span>New</span>
+            </TabsTrigger>
+            <TabsTrigger value="ongoing" className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4" />
+              <span>Ongoing</span>
+            </TabsTrigger>
+            <TabsTrigger value="resolved" className="flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Awaiting</span> 
+            </TabsTrigger>
+            <TabsTrigger value="completed" className="flex items-center gap-1.5">
+              <CheckCircle className="h-4 w-4" />
+              <span>Completed</span>
+            </TabsTrigger>
+            <TabsTrigger value="watchlist" className="relative flex items-center gap-1.5">
+              <Star className="h-4 w-4" />
+              <span>Watchlist</span>
+              {watchlistCount > 0 && (
+                <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
+                  {watchlistCount}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
           
