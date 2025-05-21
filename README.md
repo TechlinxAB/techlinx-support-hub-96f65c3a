@@ -5,9 +5,9 @@
 
 **URL**: https://lovable.dev/projects/80450ba2-c1fd-4148-b4a9-aa60bba380e9
 
-## Deployment Guide for Linux Servers
+## Deployment Guide for Linux Servers with aaPanel
 
-This guide will walk you through the process of deploying the Techlinx Helpdesk frontend application on a Linux server while maintaining the existing Supabase backend.
+This guide will walk you through the process of deploying the Techlinx Helpdesk frontend application on a Linux server with aaPanel, running on a local IP (192.168.0.102) using the helpdesk-user account.
 
 ### Prerequisites
 
@@ -32,18 +32,17 @@ Before you begin, ensure your Linux server has the following installed:
    sudo apt install nodejs npm
    ```
 
-3. **Nginx** - Web server to serve the static files
-   ```bash
-   sudo apt update
-   sudo apt install nginx
-   ```
+3. **Nginx** (already installed if you're using aaPanel)
 
 ### Deployment Steps
 
 #### 1. Clone the Repository
 
 ```bash
-# Navigate to your home directory
+# Login as helpdesk-user or switch to that user
+su - helpdesk-user
+
+# Navigate to home directory
 cd ~
 
 # Clone the repository
@@ -66,22 +65,22 @@ npm run build
 ```
 This will create a `dist` folder containing the compiled application.
 
-#### 4. Configure Nginx
+#### 4. Configure Nginx through aaPanel
 
-Create a new Nginx site configuration:
+While aaPanel provides a GUI for Nginx configuration, you can also directly edit the configuration file:
 
 ```bash
-sudo nano /etc/nginx/sites-available/techlinx-helpdesk
+sudo nano /www/server/panel/vhost/nginx/your-website-config.conf
 ```
 
-Add the following configuration (adjust as needed):
+Add or modify the configuration to point to the application:
 
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;  # Replace with your actual domain
+    server_name 192.168.0.102;  # Local IP address
 
-    root /home/YOUR_USERNAME/techlinx-helpdesk/dist;  # Replace YOUR_USERNAME with your actual username
+    root /home/helpdesk-user/techlinx-helpdesk/dist;
     index index.html;
 
     # Important for Single Page Applications
@@ -102,30 +101,19 @@ server {
 }
 ```
 
-Enable the site and restart Nginx:
+After saving the configuration, restart Nginx through aaPanel or via command line:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/techlinx-helpdesk /etc/nginx/sites-enabled/
-sudo nginx -t  # Test configuration
-sudo systemctl restart nginx
-```
-
-#### 5. Set Up SSL (Recommended)
-
-Using Certbot for Let's Encrypt SSL:
-
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
+sudo /etc/init.d/nginx restart
 ```
 
 ### Post-Deployment Configuration
 
-After deployment, you need to update the Base URL in the application settings:
+After deployment, you need to update the Base URL in the application settings to match your local IP address:
 
 1. Log in to the application with admin credentials
 2. Navigate to the Settings section
-3. Find and update the "Base URL" to match your new domain
+3. Find and update the "Base URL" to match your new IP address (e.g., http://192.168.0.102)
 4. Save the settings
 
 ### Updating the Application
@@ -182,15 +170,15 @@ This is often due to routing issues. Ensure your Nginx configuration has the cor
 If the application is having trouble connecting to the Supabase backend:
 
 1. Check the browser console for CORS errors
-2. Verify that your domain is allowed in the Supabase project CORS settings
+2. Verify that your local IP address (192.168.0.102) is allowed in the Supabase project CORS settings
 
 #### Permission Issues
 
 If you encounter permission issues:
 
 ```bash
-# Ensure the application files are owned by your user
-sudo chown -R $USER:$USER ~/techlinx-helpdesk
+# Ensure the application files are owned by helpdesk-user
+sudo chown -R helpdesk-user:helpdesk-user ~/techlinx-helpdesk
 ```
 
 #### Nginx Logs
@@ -198,9 +186,11 @@ sudo chown -R $USER:$USER ~/techlinx-helpdesk
 Check Nginx logs for troubleshooting:
 
 ```bash
-sudo tail -f /var/log/nginx/error.log
-sudo tail -f /var/log/nginx/access.log
+sudo tail -f /www/wwwlogs/your-website-error.log
+sudo tail -f /www/wwwlogs/your-website-access.log
 ```
+
+Or through the aaPanel interface under the website management section.
 
 ### Monitoring and Maintenance
 
@@ -266,3 +256,4 @@ npm run dev
 - Select the "Codespaces" tab.
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
+
