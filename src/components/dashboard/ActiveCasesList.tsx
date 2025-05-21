@@ -49,9 +49,9 @@ const ActiveCasesList = ({ cases, settings }: ActiveCasesListProps) => {
                   <Badge variant={
                     caseItem.status === 'new' 
                       ? 'new' 
-                      : caseItem.status === 'ongoing' 
+                      : caseItem.status === 'active' 
                       ? 'ongoing' 
-                      : caseItem.status === 'resolved' || caseItem.status === 'waiting'
+                      : caseItem.status === 'pending' || caseItem.status === 'resolved' || caseItem.status === 'waiting'
                       ? 'awaiting'
                       : caseItem.status === 'completed'
                       ? 'completed'
@@ -59,9 +59,9 @@ const ActiveCasesList = ({ cases, settings }: ActiveCasesListProps) => {
                   }>
                     {caseItem.status === 'new' 
                       ? 'New' 
-                      : caseItem.status === 'ongoing' 
+                      : caseItem.status === 'active' 
                       ? 'Ongoing' 
-                      : caseItem.status === 'resolved' || caseItem.status === 'waiting'
+                      : caseItem.status === 'pending' || caseItem.status === 'resolved' || caseItem.status === 'waiting'
                       ? 'Awaiting'
                       : caseItem.status === 'completed'
                       ? 'Completed'
