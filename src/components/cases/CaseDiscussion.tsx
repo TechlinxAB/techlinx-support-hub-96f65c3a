@@ -134,6 +134,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   } = useAppContext();
   
   const [replyContent, setReplyContent] = useState('');
+  const [noteContent, setNoteContent] = useState(''); // Add the missing state variable
   const [isInternalReply, setIsInternalReply] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
