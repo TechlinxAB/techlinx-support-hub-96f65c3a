@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -61,10 +62,10 @@ const discussionCache = {
     }
   },
   
-  set: (caseId: string, replies: any[], notes: any[], attachments: any[]) => {
+  set: (caseId: string, replies: any[], attachments: any[]) => {
     try {
       localStorage.setItem(`discussion-cache-${caseId}`, JSON.stringify({
-        data: { replies, notes, attachments },
+        data: { replies, attachments },
         timestamp: Date.now()
       }));
     } catch (error) {
@@ -118,15 +119,11 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const { 
     currentUser, 
     replies, 
-    notes, 
     addReply, 
-    addNote, 
     deleteReply,
     users, 
     loadingReplies, 
-    loadingNotes, 
     refetchReplies,
-    refetchNotes,
     caseAttachments,
     loadingAttachments,
     refetchAttachments,
@@ -134,13 +131,11 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   } = useAppContext();
   
   const [replyContent, setReplyContent] = useState('');
-  const [noteContent, setNoteContent] = useState(''); // Add the missing state variable
   const [isInternalReply, setIsInternalReply] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isRefetching, setIsRefetching] = useState(false);
   const [localReplies, setLocalReplies] = useState<any[]>([]);
-  const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
   const [isUploading, setIsUploading] = useState(false);
   const [offlineMode, setOfflineMode] = useState(false);
@@ -159,7 +154,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     const cached = discussionCache.get(caseId);
     if (cached) {
       setLocalReplies(cached.replies || []);
-      setLocalNotes(cached.notes || []);
       
       // Still fetch fresh data, but we have something to show immediately
       console.log('Using cached discussion data while fetching fresh data');
@@ -191,16 +185,14 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     
     Promise.all([
       retryOperation(() => refetchReplies(caseId)),
-      retryOperation(() => refetchNotes(caseId)),
       retryOperation(() => refetchAttachments(caseId))
     ])
       .then(() => {
         setOfflineMode(false);
         // Update the cache with fresh data
         const caseReplies = replies.filter(r => r.caseId === caseId);
-        const caseNotes = notes.filter(n => n.caseId === caseId);
         const caseFiles = caseAttachments.filter(a => a.caseId === caseId);
-        discussionCache.set(caseId, caseReplies, caseNotes, caseFiles);
+        discussionCache.set(caseId, caseReplies, caseFiles);
         setDataFetched(true);
       })
       .catch(error => {
@@ -218,7 +210,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       .finally(() => {
         setIsRefetching(false);
       });
-  }, [caseId, refetchReplies, refetchNotes, refetchAttachments, replies, notes, caseAttachments, toast]);
+  }, [caseId, refetchReplies, refetchAttachments, replies, caseAttachments, toast]);
   
   // Initial data fetch with limited frequency, but only ONCE
   useEffect(() => {
@@ -233,24 +225,16 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     };
   }, [caseId, debouncedFetch, dataFetched]);
   
-  // Merge replies and notes from context and local state (for optimistic updates)
+  // Merge replies from context and local state (for optimistic updates)
   const mergedReplies = [...(offlineMode ? localReplies : replies.filter(r => r.caseId === caseId))];
-  const mergedNotes = [...(offlineMode ? localNotes : notes.filter(n => n.caseId === caseId))];
   const caseFiles = caseAttachments.filter(a => a.caseId === caseId);
   
-  // Combine all items for display, sorted by date
-  const allItems = [
-    ...mergedReplies.map(r => ({
-      ...r,
-      type: 'reply',
-      createdAt: new Date(r.createdAt)
-    })),
-    ...mergedNotes.map(n => ({
-      ...n,
-      type: 'note',
-      createdAt: new Date(n.createdAt)
-    }))
-  ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // Sort all items by date
+  const allItems = mergedReplies.map(r => ({
+    ...r,
+    type: 'reply',
+    createdAt: new Date(r.createdAt)
+  })).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   
   const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -315,14 +299,14 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         currentUser?.role !== 'consultant' // isUserReply (if not consultant, then it's a user)
       );
     
-    return success;
-  } catch (error) {
-    console.error('Error sending notification:', error);
-    return false;
-  } finally {
-    setIsSendingNotification(false);
-  }
-};
+      return success;
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      return false;
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
   
   // Handle adding a reply
   const handleAddReply = async (e: React.FormEvent) => {
@@ -527,7 +511,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   };
 
   // If there's an error and no cached data
-  if (fetchError && !offlineMode && localReplies.length === 0 && localNotes.length === 0) {
+  if (fetchError && !offlineMode && localReplies.length === 0) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
@@ -552,7 +536,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   }
   
   // Show loading state only when we have no data at all
-  if ((loadingReplies || loadingNotes || loadingAttachments || isRefetching) && allItems.length === 0) {
+  if ((loadingReplies || loadingAttachments || isRefetching) && allItems.length === 0) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
@@ -601,11 +585,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               {allItems.map((item, index) => {
                 const author = users.find(u => u.id === item.userId);
                 
-                if (item.type === 'note' && !isConsultant) {
-                  // Don't show internal notes to regular users
-                  return null;
-                }
-                
                 const isOptimistic = (item as any).isOptimistic;
                 const initials = author?.name ? getInitials(author.name) : "??";
                 
@@ -634,13 +613,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                             {formatDistanceToNow(item.createdAt, { addSuffix: true })}
                           </span>
                           
-                          {item.type === 'note' && (
-                            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
-                              Internal Note
-                            </Badge>
-                          )}
-                          
-                          {item.type === 'reply' && (item as any).isInternal && (
+                          {item.isInternal && (
                             <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
                               <Lock className="h-3 w-3" /> Internal
                             </Badge>
@@ -653,7 +626,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                           )}
                         </div>
                         
-                        {isConsultant && item.type === 'reply' && !isOptimistic && (
+                        {isConsultant && !isOptimistic && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button 
@@ -694,11 +667,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                       </div>
                       
                       <div className={`p-3 rounded-md ${
-                        item.type === 'note' 
-                          ? 'bg-orange-50 border border-orange-200' 
-                          : (item as any).isInternal 
-                            ? 'bg-gray-50 border border-gray-200'
-                            : 'bg-white border border-gray-200'
+                        item.isInternal 
+                          ? 'bg-gray-50 border border-gray-200'
+                          : 'bg-white border border-gray-200'
                       } ${isOptimistic ? 'opacity-70' : ''}`}>
                         <p className="whitespace-pre-wrap">{item.content}</p>
                         
@@ -795,16 +766,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 </div>
               )}
               
-              {/* Show notification progress */}
-              {/* isSendingNotification && (
-                <Alert variant="default" className="bg-blue-50 text-blue-800">
-                  <AlertDescription className="flex items-center gap-2">
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    Sending notification...
-                  </AlertDescription>
-                </Alert>
-              ) */}
-              
               <div className="flex flex-wrap justify-between items-center gap-3">
                 <div className="flex items-center">
                   <Input 
@@ -855,55 +816,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           </div>
         </CardContent>
       </Card>
-      
-      {/* Internal Notes for consultants */}
-      {isConsultant && (
-        <Card className="mt-6">
-          <CardHeader className="pb-3">
-            <h3 className="text-lg font-semibold">Internal Notes</h3>
-            <p className="text-sm text-muted-foreground">
-              Notes are only visible to consultants
-            </p>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (!noteContent.trim()) return;
-              
-              addNote({
-                caseId,
-                userId: currentUser!.id,
-                content: noteContent,
-              }).then(() => {
-                setNoteContent('');
-                debouncedFetch(caseId);
-                toast({
-                  title: "Note added",
-                  description: "Your internal note has been added."
-                });
-              }).catch(error => {
-                console.error('Error adding note:', error);
-                toast({
-                  title: "Failed to add note",
-                  description: "There was an error adding your note.",
-                  variant: "destructive"
-                });
-              });
-            }} className="space-y-3">
-              <Textarea 
-                placeholder="Add internal note..." 
-                value={noteContent}
-                onChange={(e) => setNoteContent(e.target.value)}
-                rows={4}
-              />
-              
-              <div className="flex justify-end">
-                <Button type="submit" disabled={!noteContent.trim()}>Add Note</Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };
