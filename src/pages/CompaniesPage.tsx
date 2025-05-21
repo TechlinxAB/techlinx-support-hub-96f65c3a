@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -7,7 +6,6 @@ import {
   Building, 
   MessageCircle, 
   Clock, 
-  FileText, 
   LayoutDashboard, 
   Plus,
   Trash2,
@@ -299,18 +297,8 @@ const CompaniesPage = () => {
                     </div>
                   </div>
                   
-                  {/* Main buttons row - Documentation, Dashboard, Cases */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex gap-1 items-center justify-center h-11"
-                      onClick={() => handleNavigation(`/companies/${company.id}`)}
-                    >
-                      <FileText className="h-4 w-4" />
-                      <span className="hidden sm:inline">Documentation</span>
-                      <span className="sm:hidden">Docs</span>
-                    </Button>
-                    
+                  {/* Main buttons row - Dashboard & Cases (removed Documentation) */}
+                  <div className="grid grid-cols-2 gap-2">                    
                     <Button 
                       variant="outline" 
                       className="flex gap-1 items-center justify-center h-11"

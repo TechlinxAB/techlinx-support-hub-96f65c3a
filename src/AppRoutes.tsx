@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import NavigationService from "./services/navigationService";
@@ -63,7 +63,6 @@ const AppRoutes = () => {
               <Route path="cases/new" element={<NewCasePage />} />
               <Route path="cases/:id" element={<CaseDetailPage />} />
               <Route path="companies" element={<CompaniesPage />} />
-              <Route path="companies/:id" element={<CompaniesPage />} />
               <Route path="company/:id/settings" element={<CompanySettingsPage />} />
               <Route path="company-dashboard" element={<CompanyDashboardPage />} />
               <Route path="company-dashboard-builder/:companyId" element={<CompanyDashboardBuilderPage />} />
