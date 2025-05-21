@@ -320,7 +320,7 @@ const EnhancedCaseDiscussion: React.FC<EnhancedCaseDiscussionProps> = ({ caseId 
   return (
     <>
       {notificationServiceStatus !== 'checking' && notificationServiceStatus !== 'ok' && (
-        <Alert variant="warning" className="mb-4">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Notification System Issue</AlertTitle>
           <AlertDescription>
