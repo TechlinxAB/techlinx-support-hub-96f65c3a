@@ -32,6 +32,9 @@ import Layout from "./components/layout/Layout";
 const AppRoutes = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Determine if we're on the auth page
+  const isAuthPage = location.pathname === '/auth';
 
   // Configure the navigation service with the current navigate function
   React.useEffect(() => {
@@ -41,8 +44,8 @@ const AppRoutes = () => {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen bg-white" style={{ backgroundColor: 'white' }}> 
-        {/* Persistent Sidebar */}
-        <PersistentSidebar />
+        {/* Only render the sidebar when not on the auth page */}
+        {!isAuthPage && <PersistentSidebar />}
 
         {/* Main content wrapper with explicit white background */}
         <div className="w-full h-full bg-white flex-1" style={{ backgroundColor: 'white', position: 'relative', zIndex: 1 }}> 

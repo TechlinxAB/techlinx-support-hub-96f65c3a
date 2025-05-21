@@ -34,11 +34,11 @@ const LogoutButton = ({
       const toastId = toast.loading('Logging out...');
       
       try {
-        // Use enhanced signOut method
+        // Try to sign out using the AuthContext method first
         await signOut();
       } catch (error) {
         console.error("Primary signOut failed, trying fallback", error);
-        // Fallback - manual cleanup
+        // Fallback - manual cleanup using the function in supabase client
         await clearAuthState();
       }
       
@@ -53,7 +53,7 @@ const LogoutButton = ({
       console.error('Error during logout:', error);
       toast.error('Failed to log out. Please try again.');
       
-      // Last resort - hard redirect, but only if redirectAfterLogout is true
+      // Last resort - hard redirect if still authenticated and redirectAfterLogout is true
       if (redirectAfterLogout) {
         window.location.href = '/auth';
       }
