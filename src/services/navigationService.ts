@@ -36,6 +36,19 @@ class NavigationService {
     return this.isInitialized && this.navigateFunction !== null;
   }
   
+  // Helper method to get any stored redirect URL
+  public getStoredRedirectUrl(): string | null {
+    const storedUrl = sessionStorage.getItem('auth_redirect_url');
+    console.log('NavigationService: Retrieved stored redirect URL:', storedUrl);
+    return storedUrl;
+  }
+  
+  // Helper method to clear stored redirect URL
+  public clearStoredRedirectUrl(): void {
+    sessionStorage.removeItem('auth_redirect_url');
+    console.log('NavigationService: Cleared stored redirect URL');
+  }
+  
   // Returns true if navigation was successful, false if blocked
   public navigate(to: string, options?: { replace?: boolean, state?: any }): boolean {
     console.log(`NavigationService: Attempting to navigate to ${to}`, options);

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, clearAuthState } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
@@ -73,16 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Get the redirect URL from query parameters if we're on the auth page
   const isAuthPage = location.pathname === '/auth';
-  const searchParams = new URLSearchParams(location.search);
-  const redirectPath = isAuthPage ? (searchParams.get('redirect') || '/') : '/';
   
-  // Debug log intended redirect
-  useEffect(() => {
-    if (isAuthPage && redirectPath !== '/') {
-      console.log('Auth page loaded with redirect path:', redirectPath);
-    }
-  }, [isAuthPage, redirectPath]);
-
   // Function to fetch user profile
   const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
@@ -114,21 +106,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Helper function for centralized redirect handling
+  // Centralized redirect handler
   const handleAuthRedirect = () => {
-    // Only redirect if we're authenticated and on the auth page
-    if (isAuthenticated && isAuthPage) {
-      console.log('Authenticated and on auth page, redirecting to:', redirectPath);
+    if (!isAuthenticated) return;
+    
+    // First check sessionStorage for stored redirect URL 
+    const storedRedirectUrl = NavigationService.getStoredRedirectUrl();
+    console.log('AuthContext: Checking stored redirect URL:', storedRedirectUrl);
+    
+    if (storedRedirectUrl && storedRedirectUrl !== '/') {
+      console.log('AuthContext: Redirecting to stored URL:', storedRedirectUrl);
       
-      // Use NavigationService to handle redirects - this prevents navigation loops
-      // and ensures consistent navigation handling
-      if (redirectPath && redirectPath !== '/') {
-        console.log('Using NavigationService to navigate to:', redirectPath);
-        NavigationService.navigate(redirectPath, { replace: true });
-      } else {
-        console.log('No specific redirect path, navigating to home');
-        NavigationService.navigate('/', { replace: true });
-      }
+      // Clear the stored URL to prevent future redirects
+      NavigationService.clearStoredRedirectUrl();
+      
+      // Use NavigationService to handle the redirect
+      NavigationService.navigate(storedRedirectUrl, { replace: true });
+      return;
+    }
+    
+    // If we're on the auth page with no stored URL, redirect to home
+    if (isAuthPage) {
+      console.log('AuthContext: No specific redirect found, redirecting to home');
+      NavigationService.navigate('/', { replace: true });
     }
   };
 
@@ -208,16 +208,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (fetchedProfile) {
             setProfile(fetchedProfile);
           }
-          
-          // If on auth page, redirect to the proper destination
-          if (isAuthPage) {
-            // Don't use navigate here to avoid conflict with the auth state change handler
-            // Instead, we'll let handleAuthRedirect do its job once loading is set to false
-            console.log('Existing session found on auth page, will redirect to:', redirectPath);
-          }
         }
         
         setLoading(false);
+        
+        // Once authenticated and loaded, handle redirect
+        handleAuthRedirect();
       } catch (err) {
         console.error('Error in session init:', err);
         setAuthState('SIGNED_OUT');
@@ -232,14 +228,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       subscription.unsubscribe();
     };
   }, [navigate, location.pathname]);
-  
-  // Effect specifically for handling redirects after the initial load
-  useEffect(() => {
-    // Only attempt redirect if not loading and we're on the auth page
-    if (!loading && isAuthenticated && isAuthPage) {
-      handleAuthRedirect();
-    }
-  }, [loading, isAuthenticated, isAuthPage]);
 
   // Sign in with email and password - enhanced implementation with redirect handling
   const signIn = async (email: string, password: string) => {
@@ -275,10 +263,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         toast.success("Successfully signed in!");
-        console.log('Sign in successful, redirect path is:', redirectPath);
         
-        // Don't redirect here - let the useEffect handle it
-        // This avoids race conditions with the auth state change
+        // Let the handleAuthRedirect function handle the redirect
+        // after the auth state change is processed
       }
       
       setLoading(false);

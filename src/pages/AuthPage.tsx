@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -9,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import NavigationService from '@/services/navigationService';
 
 const AuthPage = () => {
   const [email, setEmail] = useState('');
@@ -20,12 +22,17 @@ const AuthPage = () => {
   const { signIn, loading: authLoading } = useAuth();
   const location = useLocation();
   
-  // Get the redirect URL from query parameters - for debugging only
+  // Get the redirect URL from query parameters and store it in sessionStorage
   const searchParams = new URLSearchParams(location.search);
   const redirectPath = searchParams.get('redirect') || '/';
   
   useEffect(() => {
-    // Log the redirect path on component mount
+    // Store the redirect path in sessionStorage when the component mounts
+    if (redirectPath && redirectPath !== '/') {
+      console.log('AuthPage: Storing redirect path in sessionStorage:', redirectPath);
+      sessionStorage.setItem('auth_redirect_url', redirectPath);
+    }
+    
     console.log('AuthPage mounted with redirect path:', redirectPath);
   }, [redirectPath]);
   
@@ -85,7 +92,7 @@ const AuthPage = () => {
       if (error) {
         setError(error.message || 'Failed to sign in. Please check your credentials.');
       }
-      // No need to navigate here, the AuthContext will handle it
+      // No need to navigate here, the AuthContext will handle it using the stored redirect URL
     } catch (err: any) {
       console.error('Exception during sign in:', err);
       setError(err.message || 'An unexpected error occurred. Please try again.');
@@ -104,6 +111,7 @@ const AuthPage = () => {
       
       // Clear auth-related storage
       localStorage.removeItem('sb-uaoeabhtbynyfzyfzogp-auth-token');
+      sessionStorage.removeItem('auth_redirect_url');
       
       toast.success("Auth state has been reset", {
         description: "Please try logging in again."

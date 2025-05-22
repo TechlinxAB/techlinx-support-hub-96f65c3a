@@ -18,6 +18,9 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
       const fullPath = location.pathname + location.search;
       console.log('ProtectedRoute: Redirecting unauthenticated user from', fullPath, 'to auth page');
       
+      // Store the exact URL we want to redirect to
+      sessionStorage.setItem('auth_redirect_url', fullPath);
+      
       // Use React Router navigate to avoid page reloads
       navigate(`/auth?redirect=${encodeURIComponent(fullPath)}`, { replace: true });
     }
