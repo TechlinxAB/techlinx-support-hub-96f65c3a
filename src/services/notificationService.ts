@@ -93,8 +93,9 @@ export const notificationService = {
   /**
    * Send a test email to verify email configuration
    * @param recipientEmail The email address to send the test to
+   * @param highPriority Whether to send a high priority test email
    */
-  async sendTestEmail(recipientEmail: string): Promise<boolean> {
+  async sendTestEmail(recipientEmail: string, highPriority: boolean = false): Promise<boolean> {
     try {
       // Get the session
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -123,6 +124,7 @@ export const notificationService = {
             },
             body: JSON.stringify({
               recipientEmail,
+              highPriority
             }),
           }
         );
@@ -136,7 +138,7 @@ export const notificationService = {
   
         const responseData = await response.json();
         
-        toast.success("Test email sent successfully", {
+        toast.success(`${highPriority ? "High priority" : "Regular"} test email sent successfully`, {
           description: `Email sent to ${recipientEmail}`
         });
         

@@ -3,213 +3,209 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
 import nodemailer from "npm:nodemailer@6.9.9";
 
+// CORS headers for browser requests
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface NotificationPayload {
+interface CaseNotificationRequest {
   caseId: string;
   replyId: string;
   recipientType: "user" | "consultant";
 }
 
-serve(async (req) => {
-  console.log("🔔 send-case-notification function called");
-  console.log(`🔔 Request method: ${req.method}`);
-  console.log(`🔔 Request URL: ${req.url}`);
-  
+serve(async (req: Request) => {
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
-    console.log("🔔 Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders, status: 204 });
   }
 
-  // Parse request data
-  let payload: NotificationPayload;
   try {
-    const text = await req.text();
-    console.log(`🔔 Raw request body: ${text}`);
-    payload = JSON.parse(text);
-    console.log(`🔔 Parsed payload:`, payload);
-  } catch (error) {
-    console.error(`🔔 Failed to parse request payload:`, error);
-    return new Response(
-      JSON.stringify({ error: "Invalid request payload", details: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-    );
-  }
-
-  const { caseId, replyId, recipientType } = payload;
-  
-  console.log(`🔔 Processing notification - Case: ${caseId}, Reply: ${replyId}, Recipient: ${recipientType}`);
-  
-  try {
-    // Create a Supabase client with the Supabase URL and service key
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
+    // Parse the request body
+    const { caseId, replyId, recipientType } = await req.json() as CaseNotificationRequest;
     
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("🔔 Missing required environment variables for Supabase connection");
-      throw new Error("Server configuration error: Missing Supabase credentials");
+    if (!caseId) {
+      return new Response(
+        JSON.stringify({ error: "Case ID is required" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
     }
     
-    console.log(`🔔 Connecting to Supabase at ${supabaseUrl}`);
+    if (!recipientType) {
+      return new Response(
+        JSON.stringify({ error: "Recipient type is required" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+    
+    console.log(`Sending notification for case ${caseId}, reply ${replyId}, to ${recipientType}`);
+    
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get case details
+    const { data: caseData, error: caseError } = await supabase
+      .from("cases")
+      .select(`
+        id, 
+        title,
+        description,
+        priority,
+        status,
+        category:categories(name),
+        user:profiles!cases_user_id_fkey(id, name, email),
+        company:companies!cases_company_id_fkey(id, name)
+      `)
+      .eq("id", caseId)
+      .single();
+      
+    if (caseError) {
+      console.error("Error fetching case:", caseError);
+      throw new Error(`Failed to fetch case: ${caseError.message}`);
+    }
+    
+    if (!caseData) {
+      throw new Error(`Case not found with id: ${caseId}`);
+    }
 
-    // Get the notification settings
-    console.log(`🔔 Fetching notification settings`);
+    // Get settings and templates
     const { data: settings, error: settingsError } = await supabase
       .from("notification_settings")
       .select("*")
       .single();
-
-    if (settingsError) {
-      console.error(`🔔 Error fetching notification settings:`, settingsError);
-      throw new Error(`Error fetching notification settings: ${settingsError.message}`);
-    }
-    
-    console.log("🔔 Notification settings retrieved:", {
-      smtpConfigured: !!settings.smtp_host,
-      smtpHost: settings.smtp_host,
-      smtpPort: settings.smtp_port || 587,
-      servicesEmail: settings.services_email,
-      hasSmtpUser: !!settings.smtp_user,
-      hasSmtpPassword: !!settings.smtp_password,
-      senderName: settings.sender_name,
-      senderEmail: settings.sender_email,
-      emailProvider: settings.email_provider,
-      baseUrl: settings.base_url || 'https://helpdesk.techlinx.se'
-    });
-
-    // Handle special case for test notifications
-    if (replyId === 'test-reply-id') {
-      console.log('🔔 Processing test notification - using mock reply data');
       
-      // Return success response for test notification
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Test notification would be sent to ${recipientType} (if email provider is configured)`,
-          provider: "test",
-          caseId: caseId
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    }
-
-    // Get the case details
-    console.log(`🔔 Fetching case details for case ID: ${caseId}`);
-    const { data: caseData, error: caseError } = await supabase
-      .from("cases")
-      .select("*, profiles!cases_user_id_fkey(*), categories(*)")
-      .eq("id", caseId)
-      .single();
-
-    if (caseError) {
-      console.error(`🔔 Error fetching case:`, caseError);
-      throw new Error(`Error fetching case: ${caseError.message}`);
+    if (settingsError) {
+      console.error("Error fetching settings:", settingsError);
+      throw new Error(`Failed to fetch notification settings: ${settingsError.message}`);
     }
     
-    console.log("🔔 Case data retrieved:", {
-      caseId: caseData.id,
-      caseTitle: caseData.title,
-      userId: caseData.user_id,
-      userEmail: caseData.profiles?.email,
-      userName: caseData.profiles?.name
-    });
-
-    // Get the reply details
-    console.log(`🔔 Fetching reply details for reply ID: ${replyId}`);
+    // Get the appropriate notification template based on recipient type and case priority
+    let templateType = recipientType === "user" ? "user_notification" : "consultant_notification";
     
-    const { data: replyData, error: replyError } = await supabase
-      .from("replies")
-      .select("*, profiles(*)")
-      .eq("id", replyId)
-      .single();
-
-    if (replyError) {
-      console.error(`🔔 Error fetching reply:`, replyError);
-      throw new Error(`Error fetching reply: ${replyError.message}`);
+    // If this is a high priority case and the feature is enabled, use the high priority template
+    const isHighPriority = caseData.priority === "high";
+    if (isHighPriority && settings.enable_priority_notifications && recipientType === "consultant") {
+      templateType = "high_priority_notification";
     }
     
-    console.log("🔔 Reply data retrieved:", {
-      replyId: replyData.id,
-      replyAuthor: replyData.profiles?.name,
-      isInternal: replyData.is_internal,
-      contentPreview: replyData.content.substring(0, 50) + (replyData.content.length > 50 ? '...' : '')
-    });
+    console.log(`Using template type: ${templateType} for ${recipientType} notification`);
     
-    // Skip sending if the reply is marked as internal and we're notifying a user
-    if (replyData.is_internal && recipientType === "user") {
-      console.log("🔔 Skipping notification for internal reply to user");
+    // Get the appropriate template
+    const { data: templates, error: templatesError } = await supabase
+      .from("notification_templates")
+      .select("*")
+      .in("type", [templateType, recipientType === "user" ? "user_notification" : "consultant_notification"]);
+      
+    if (templatesError) {
+      console.error("Error fetching templates:", templatesError);
+      throw new Error(`Failed to fetch notification templates: ${templatesError.message}`);
+    }
+    
+    // Find the specific template we need with fallback to standard template if high priority not found
+    const primaryTemplate = templates.find(t => t.type === templateType);
+    const fallbackTemplate = templates.find(t => 
+      t.type === (recipientType === "user" ? "user_notification" : "consultant_notification")
+    );
+    
+    const template = primaryTemplate || fallbackTemplate;
+    
+    if (!template) {
+      throw new Error(`No template found for type: ${templateType}`);
+    }
+
+    // Get reply content if a reply ID is provided
+    let replyContent = "";
+    if (replyId) {
+      const { data: replyData, error: replyError } = await supabase
+        .from("replies")
+        .select("content, user:profiles!replies_user_id_fkey(name)")
+        .eq("id", replyId)
+        .single();
+        
+      if (replyError) {
+        console.error("Error fetching reply:", replyError);
+        throw new Error(`Failed to fetch reply: ${replyError.message}`);
+      }
+      
+      if (replyData) {
+        replyContent = replyData.content;
+      }
+    }
+    
+    // Determine who to send the notification to
+    let recipientEmail: string;
+    
+    if (recipientType === "user") {
+      // Send to the user who owns the case
+      recipientEmail = caseData.user?.email;
+    } else if (recipientType === "consultant") {
+      // Send to consultants (service email)
+      recipientEmail = settings.services_email;
+    } else {
+      throw new Error(`Invalid recipient type: ${recipientType}`);
+    }
+    
+    if (!recipientEmail) {
+      throw new Error(`No recipient email found for recipient type: ${recipientType}`);
+    }
+    
+    // Check if email provider is configured
+    if (settings.email_provider === "none") {
+      console.log(`Email provider is set to 'none'. Skipping email sending to ${recipientEmail}`);
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Notification skipped - internal reply" 
+          message: "Email provider is set to 'none'. Email would have been sent to: " + recipientEmail,
+          debug_mode: true
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    // Get the notification template
-    const { data: templates, error: templateError } = await supabase
-      .from("notification_templates")
-      .select("*")
-      .eq("type", recipientType === "user" ? "user_notification" : "consultant_notification")
-      .single();
-
-    if (templateError) {
-      console.log("🔔 Template error:", templateError);
-      // Fall back to default template if not found
-      console.log("🔔 Using fallback template");
+    // Check if SMTP settings are valid when using SMTP
+    if (settings.email_provider === "smtp" && (!settings.smtp_host || !settings.smtp_user)) {
+      console.error("Invalid SMTP settings");
+      throw new Error("SMTP settings are not properly configured");
     }
-
-    console.log("🔔 Template data:", templates || "Using fallback template");
-
-    // Create case link based on settings or default
-    const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
-    const caseLink = `${baseUrl}/cases/${caseId}`;
-
-    const templateSubject = templates?.subject || 
-      (recipientType === "user" 
-        ? "Your case has been updated" 
-        : "New case reply notification");
-
-    const templateBody = templates?.body || 
-      (recipientType === "user" 
-        ? "Your case {case_title} has received a new reply. You can view and respond to this case by following this link: {case_link}" 
-        : "Case {case_title} has received a new reply from {user_name}. You can view and respond to this case by following this link: {case_link}");
-
-    // Replace template variables
-    const subject = templateSubject.replace("{case_title}", caseData.title);
     
-    const body = templateBody
-      .replace("{case_title}", caseData.title)
-      .replace("{user_name}", replyData.profiles?.name || "a user")
+    // Prepare the base URL for links
+    const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
+    
+    // Prepare template variables
+    const caseTitle = caseData.title;
+    const caseId = caseData.id;
+    const caseStatus = caseData.status;
+    const casePriority = caseData.priority;
+    const categoryName = caseData.category?.name || "";
+    const userName = replyId ? `${caseData.user?.name || "Unknown"}` : "System";
+    const caseLink = `${baseUrl}/cases/${caseId}`;
+    
+    // Replace template variables in subject and body
+    let subject = template.subject
+      .replace("{case_title}", caseTitle)
       .replace("{case_id}", caseId)
-      .replace("{case_status}", caseData.status)
-      .replace("{case_priority}", caseData.priority)
-      .replace("{category}", caseData.categories?.name || "")
-      .replace("{reply_content}", replyData.content)
+      .replace("{case_status}", caseStatus)
+      .replace("{case_priority}", casePriority)
+      .replace("{category}", categoryName)
+      .replace("{user_name}", userName)
       .replace("{case_link}", caseLink);
-
-    console.log("🔔 Notification content prepared:", { 
-      subject,
-      bodyPreview: body.substring(0, 100) + (body.length > 100 ? '...' : '') 
-    });
-
-    // Add signature if available
-    const emailContent = settings.email_signature 
-      ? `${body}\n\n${settings.email_signature}`
-      : body;
-
-    // Determine recipient email
-    let recipientEmail;
-    if (recipientType === "user") {
-      recipientEmail = caseData.profiles?.email; // The case owner's email
-    } else {
-      recipientEmail = settings.services_email || "services@techlinx.se";
+    
+    let body = template.body
+      .replace("{case_title}", caseTitle)
+      .replace("{case_id}", caseId)
+      .replace("{case_status}", caseStatus)
+      .replace("{case_priority}", casePriority)
+      .replace("{category}", categoryName)
+      .replace("{user_name}", userName)
+      .replace("{reply_content}", replyContent)
+      .replace("{case_link}", caseLink);
+    
+    // Add email signature if available
+    if (settings.email_signature) {
+      body += `\n\n${settings.email_signature}`;
     }
     
     console.log(`🔔 Sending notification to ${recipientEmail} (${recipientType})`);
@@ -247,25 +243,50 @@ serve(async (req) => {
           padding: 30px;
           line-height: 1.6;
         }
+        .email-content h1 {
+          color: #387A3D;
+          margin-top: 0;
+        }
         .email-content p {
           margin: 0 0 16px;
         }
-        .message-box {
-          background-color: #f9f9f9;
-          border-left: 4px solid #387A3D;
+        .case-info {
+          background-color: ${isHighPriority ? settings.high_priority_color || '#ffebeb' : '#f0f7f0'};
+          border-left: 4px solid ${isHighPriority ? '#e53e3e' : '#387A3D'};
           padding: 15px;
           margin: 20px 0;
           border-radius: 4px;
         }
-        .button {
+        .case-info h2 {
+          margin-top: 0;
+          color: ${isHighPriority ? '#e53e3e' : '#387A3D'};
+        }
+        .case-info table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .case-info table td {
+          padding: 5px 0;
+        }
+        .case-info table td:first-child {
+          font-weight: bold;
+          width: 30%;
+        }
+        .reply-content {
+          background-color: #f9f9f9;
+          border: 1px solid #e0e0e0;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 4px;
+        }
+        .action-button {
           display: inline-block;
           background-color: #387A3D;
           color: white;
-          padding: 12px 25px;
           text-decoration: none;
+          padding: 10px 20px;
           border-radius: 4px;
-          margin: 20px 0;
-          font-weight: 600;
+          margin-top: 20px;
         }
         .email-footer {
           background-color: #f5f5f5;
@@ -273,15 +294,6 @@ serve(async (req) => {
           text-align: center;
           font-size: 12px;
           color: #777777;
-        }
-        .case-info {
-          background-color: #f0f7f0;
-          border-radius: 4px;
-          padding: 15px;
-          margin-bottom: 20px;
-        }
-        .case-info span {
-          font-weight: 600;
         }
       </style>
     </head>
@@ -292,135 +304,123 @@ serve(async (req) => {
         </div>
         <div class="email-content">
           <div class="case-info">
-            <p>Case: <span>${caseData.title}</span></p>
-            <p>Status: <span>${caseData.status}</span></p>
-            ${caseData.categories?.name ? `<p>Category: <span>${caseData.categories.name}</span></p>` : ''}
-            <p>Priority: <span>${caseData.priority}</span></p>
+            <h2>${isHighPriority ? 'URGENT: High Priority Case' : 'Case Update'}</h2>
+            <table>
+              <tr>
+                <td>Title:</td>
+                <td>${caseTitle}</td>
+              </tr>
+              <tr>
+                <td>Status:</td>
+                <td>${caseStatus}</td>
+              </tr>
+              <tr>
+                <td>Priority:</td>
+                <td>${caseData.priority}</td>
+              </tr>
+              <tr>
+                <td>Category:</td>
+                <td>${categoryName}</td>
+              </tr>
+            </table>
           </div>
           
-          <h2>${recipientType === "user" ? "Your case has been updated" : "New reply on a support case"}</h2>
-          
-          <p>${recipientType === "user" 
-            ? `Your case has received a new reply from ${replyData.profiles?.name || "our support team"}.` 
-            : `${replyData.profiles?.name || "A user"} has replied to case "${caseData.title}".`}</p>
-          
-          <div class="message-box">
-            ${replyData.content.replace(/\n/g, '<br>')}
+          ${replyContent ? `
+          <div class="reply-content">
+            <p><strong>${userName} wrote:</strong></p>
+            <p>${replyContent}</p>
           </div>
+          ` : ''}
           
-          <a href="${caseLink}" class="button">View Case</a>
+          <p>${body}</p>
           
-          <p>You can view and respond to this case by clicking the button above or following this link: <a href="${caseLink}">${caseLink}</a></p>
-          
-          ${settings.email_signature ? `<p>${settings.email_signature.replace(/\n/g, '<br>')}</p>` : ''}
+          <a href="${caseLink}" class="action-button">View Case</a>
         </div>
         <div class="email-footer">
           <p>&copy; ${new Date().getFullYear()} Techlinx. All rights reserved.</p>
-          <p>This is an automated message from your support system. Please do not reply directly to this email.</p>
+          <p>This is an automated message from your support system.</p>
         </div>
       </div>
     </body>
     </html>
     `;
 
-    // Check if we have valid SMTP settings
-    if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_password) {
-      console.log(`🔔 Would send ${recipientType} notification email to: ${recipientEmail}`);
-      console.log(`🔔 Subject: ${subject}`);
-      console.log(`🔔 Body: ${emailContent}`);
-      
-      // Return log-only response when SMTP is not configured
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Notification for ${recipientType} would be sent to ${recipientEmail} (email provider not configured)`,
-          provider: "none",
-          recipient: recipientEmail,
-          subject: subject
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    } else {
-      try {
-        console.log(`🔔 Starting SMTP test with Nodemailer to: ${recipientEmail}`);
-        console.log(`🔔 Using SMTP server: ${settings.smtp_host}:${settings.smtp_port || 587}`);
-        
-        // Configure Nodemailer transporter - Use same configuration as test-email
+    // Create transporter using settings from the database
+    try {
+      // Handle email sending based on provider
+      if (settings.email_provider === "smtp") {
+        console.log("Attempting to send via SMTP...");
         const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
-          secure: false, // We'll use STARTTLS instead
+          secure: !!settings.smtp_secure,
           auth: {
             user: settings.smtp_user,
             pass: settings.smtp_password,
           },
-          requireTLS: true, // Force using TLS
           tls: {
             // Do not fail on invalid certs
-            rejectUnauthorized: false
+            rejectUnauthorized: false,
           },
-          debug: true, // Enable debug output
         });
         
-        console.log("🔔 Nodemailer transporter configured, verifying...");
-        
-        // Verify SMTP configuration
-        await transporter.verify();
-        
-        console.log("🔔 SMTP configuration verified successfully, sending notification email...");
-        
-        // Send the email
         const info = await transporter.sendMail({
           from: settings.sender_email ? 
             `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
             `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
           to: recipientEmail,
           subject: subject,
-          text: emailContent, // Plain text version
-          html: htmlContent // HTML version
+          text: body,
+          html: htmlContent,
         });
         
-        console.log("🔔 Email sent via SMTP to", recipientEmail, "Message ID:", info.messageId);
+        console.log(`Email sent successfully via SMTP: ${info.messageId}`);
         
-        // Return success response
         return new Response(
           JSON.stringify({
             success: true,
-            message: `Notification sent to ${recipientEmail} via SMTP`,
+            message: `Notification sent to ${recipientEmail}`,
             provider: "smtp",
             messageId: info.messageId,
-            recipient: recipientEmail
+            isHighPriority
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
-      } catch (smtpError) {
-        console.error("🔔 SMTP Error Details:", smtpError);
+      } else {
+        // Fallback to just logging for debug
+        console.log("No valid email provider configured, would have sent:", {
+          to: recipientEmail,
+          subject: subject,
+          text: body,
+        });
         
-        // Provide more specific error message based on common SMTP issues
-        let errorMessage = `SMTP Error: ${smtpError.message || "Failed to send email via SMTP"}`;
-        
-        if (smtpError.message?.includes("authentication")) {
-          errorMessage = "SMTP Authentication failed: Please check your username and password";
-        } else if (smtpError.message?.includes("connection") || smtpError.code === 'ECONNECTION') {
-          errorMessage = "SMTP Connection error: Unable to establish connection to the SMTP server";
-        } else if (smtpError.message?.includes("timeout") || smtpError.code === 'ETIMEDOUT') {
-          errorMessage = "SMTP Timeout: The connection to the SMTP server timed out";
-        } else if (smtpError.code === 'ESOCKET') {
-          errorMessage = "SMTP Socket error: Problem with the connection";
-        }
-        
-        throw new Error(errorMessage);
+        // Return success for debug mode
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Debug mode: Notification would have been sent to ${recipientEmail}`,
+            debug: { subject, body },
+            isHighPriority
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
       }
+    } catch (sendError) {
+      console.error("Error sending notification email:", sendError);
+      
+      return new Response(
+        JSON.stringify({ 
+          error: `Failed to send email notification: ${sendError.message}`,
+          details: sendError 
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
     }
   } catch (error) {
-    console.error("🔔 Error in send-case-notification function:", error.message, error.stack);
+    console.error("Error processing notification request:", error);
     
     return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        stack: error.stack, // Include stack trace for debugging
-        timestamp: new Date().toISOString()
-      }),
+      JSON.stringify({ error: `Failed to process notification request: ${error.message}` }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }

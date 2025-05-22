@@ -15,7 +15,7 @@ serve(async (req) => {
   }
 
   // Parse request data
-  let payload: { recipientEmail: string };
+  let payload: { recipientEmail: string, highPriority?: boolean };
   try {
     payload = await req.json();
   } catch (error) {
@@ -25,7 +25,7 @@ serve(async (req) => {
     );
   }
 
-  const { recipientEmail } = payload;
+  const { recipientEmail, highPriority = false } = payload;
 
   if (!recipientEmail) {
     return new Response(
@@ -110,8 +110,8 @@ serve(async (req) => {
           margin: 0 0 16px;
         }
         .success-box {
-          background-color: #f0f7f0;
-          border-left: 4px solid #387A3D;
+          background-color: ${highPriority ? (settings.high_priority_color || '#ffebeb') : '#f0f7f0'};
+          border-left: 4px solid ${highPriority ? '#e53e3e' : '#387A3D'};
           padding: 15px;
           margin: 20px 0;
           border-radius: 4px;
@@ -131,11 +131,13 @@ serve(async (req) => {
           <h2 style="color: white; margin: 0;">Techlinx Helpdesk</h2>
         </div>
         <div class="email-content">
-          <h1>Email Configuration Test</h1>
+          <h1>${highPriority ? 'URGENT: High Priority Test Email' : 'Email Configuration Test'}</h1>
           <p>This is a test email from your Techlinx Helpdesk support system.</p>
           
           <div class="success-box">
-            <p style="font-weight: bold; color: #387A3D;">If you're seeing this, your email configuration is working correctly! ✓</p>
+            <p style="font-weight: bold; color: ${highPriority ? '#e53e3e' : '#387A3D'};">
+              ${highPriority ? 'This is how high priority notifications will appear! ⚠️' : 'If you\'re seeing this, your email configuration is working correctly! ✓'}
+            </p>
           </div>
           
           <p>Your support system is now properly configured to send email notifications.</p>
@@ -145,6 +147,7 @@ serve(async (req) => {
             <li>Your SMTP server connection is working</li>
             <li>Authentication is successful</li>
             <li>Email delivery is properly configured</li>
+            ${highPriority ? '<li>High priority notifications are working</li>' : ''}
           </ul>
           
           <p>You can now start using email notifications for case updates.</p>
@@ -192,8 +195,10 @@ serve(async (req) => {
           `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
           `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
         to: recipientEmail,
-        subject: "Test Email from Techlinx Helpdesk",
-        text: "This is a test email from your Techlinx Helpdesk support system.\n\nIf you're seeing this, your email configuration is working correctly!",
+        subject: highPriority ? "URGENT: High Priority Test Email from Techlinx Helpdesk" : "Test Email from Techlinx Helpdesk",
+        text: highPriority 
+          ? "This is a high priority test email from your Techlinx Helpdesk support system.\n\nIf you're seeing this, your high priority email configuration is working correctly!"
+          : "This is a test email from your Techlinx Helpdesk support system.\n\nIf you're seeing this, your email configuration is working correctly!",
         html: htmlContent,
       });
       
@@ -205,7 +210,8 @@ serve(async (req) => {
           success: true,
           message: `Test email sent to ${recipientEmail}`,
           provider: "smtp",
-          messageId: info.messageId
+          messageId: info.messageId,
+          highPriority
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );

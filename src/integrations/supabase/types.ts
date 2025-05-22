@@ -532,6 +532,8 @@ export type Database = {
           debug_mode: boolean | null
           email_provider: string | null
           email_signature: string | null
+          enable_priority_notifications: boolean | null
+          high_priority_color: string | null
           id: number
           log_level: string | null
           resend_api_key: string | null
@@ -551,6 +553,8 @@ export type Database = {
           debug_mode?: boolean | null
           email_provider?: string | null
           email_signature?: string | null
+          enable_priority_notifications?: boolean | null
+          high_priority_color?: string | null
           id?: number
           log_level?: string | null
           resend_api_key?: string | null
@@ -570,6 +574,8 @@ export type Database = {
           debug_mode?: boolean | null
           email_provider?: string | null
           email_signature?: string | null
+          enable_priority_notifications?: boolean | null
+          high_priority_color?: string | null
           id?: number
           log_level?: string | null
           resend_api_key?: string | null

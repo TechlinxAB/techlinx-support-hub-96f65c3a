@@ -71,6 +71,10 @@ const notificationFormSchema = z.object({
   senderEmail: z.string().email("Invalid sender email").optional(),
   senderName: z.string().min(2, "Sender name must be at least 2 characters").optional(),
   baseUrl: z.string().url("Must be a valid URL").default("https://helpdesk.techlinx.se"),
+  enablePriorityNotifications: z.boolean().default(true),
+  highPrioritySubject: z.string().min(5, "Subject must be at least 5 characters"),
+  highPriorityBody: z.string().min(20, "Template must be at least 20 characters"),
+  highPriorityColor: z.string().default("#ffebeb"),
 });
 
 type NotificationFormValues = z.infer<typeof notificationFormSchema>;
@@ -87,6 +91,8 @@ const SettingsPage = () => {
     userBody: "Your case {case_title} has received a new reply. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}",
     consultantSubject: "New case reply notification",
     consultantBody: "Case {case_title} has received a new reply from {user_name}. You can view and respond to this case by following this link: https://support.example.com/cases/{case_id}",
+    highPrioritySubject: "URGENT: High Priority Case {case_title}",
+    highPriorityBody: "URGENT: A high priority case {case_title} has been created and requires immediate attention. You can view and respond to this case by following this link: {case_link}",
     emailSignature: "Best regards,\nThe Techlinx Support Team",
     emailProvider: "none",
     smtpHost: "",
@@ -97,6 +103,8 @@ const SettingsPage = () => {
     senderEmail: "notifications@techlinx.se",
     senderName: "Techlinx Support",
     baseUrl: "https://helpdesk.techlinx.se",
+    enablePriorityNotifications: true,
+    highPriorityColor: "#ffebeb",
   });
   const [isEmailConfigOpen, setIsEmailConfigOpen] = useState(false);
   const [isPlaceholdersOpen, setIsPlaceholdersOpen] = useState(true);
@@ -120,6 +128,10 @@ const SettingsPage = () => {
       senderEmail: templates.senderEmail,
       senderName: templates.senderName,
       baseUrl: templates.baseUrl,
+      enablePriorityNotifications: templates.enablePriorityNotifications,
+      highPrioritySubject: templates.highPrioritySubject,
+      highPriorityBody: templates.highPriorityBody,
+      highPriorityColor: templates.highPriorityColor,
     },
   });
 
@@ -141,6 +153,7 @@ const SettingsPage = () => {
         if (templatesData) {
           const userTemplate = templatesData.find(t => t.type === 'user_notification');
           const consultantTemplate = templatesData.find(t => t.type === 'consultant_notification');
+          const highPriorityTemplate = templatesData.find(t => t.type === 'high_priority_notification');
           
           const newTemplates = {
             servicesEmail: settingsData?.services_email || "services@techlinx.se",
@@ -148,6 +161,8 @@ const SettingsPage = () => {
             userBody: userTemplate?.body || templates.userBody,
             consultantSubject: consultantTemplate?.subject || templates.consultantSubject,
             consultantBody: consultantTemplate?.body || templates.consultantBody,
+            highPrioritySubject: highPriorityTemplate?.subject || templates.highPrioritySubject,
+            highPriorityBody: highPriorityTemplate?.body || templates.highPriorityBody,
             emailSignature: settingsData?.email_signature || templates.emailSignature,
             emailProvider: settingsData?.email_provider || "none",
             smtpHost: settingsData?.smtp_host || "",
@@ -158,6 +173,8 @@ const SettingsPage = () => {
             senderEmail: settingsData?.sender_email || "notifications@techlinx.se",
             senderName: settingsData?.sender_name || "Techlinx Support",
             baseUrl: settingsData?.base_url || "https://helpdesk.techlinx.se",
+            enablePriorityNotifications: settingsData?.enable_priority_notifications !== false,
+            highPriorityColor: settingsData?.high_priority_color || "#ffebeb",
           };
           
           setTemplates(newTemplates);
@@ -192,6 +209,8 @@ const SettingsPage = () => {
             sender_email: data.senderEmail,
             sender_name: data.senderName,
             base_url: data.baseUrl,
+            enable_priority_notifications: data.enablePriorityNotifications,
+            high_priority_color: data.highPriorityColor,
             updated_at: new Date().toISOString(),
           }
         ]);
@@ -226,6 +245,20 @@ const SettingsPage = () => {
 
       if (consultantTemplateError) throw consultantTemplateError;
 
+      // Update high priority notification template
+      const { error: highPriorityTemplateError } = await supabase
+        .from('notification_templates')
+        .upsert([
+          {
+            type: 'high_priority_notification',
+            subject: data.highPrioritySubject,
+            body: data.highPriorityBody,
+            updated_at: new Date().toISOString(),
+          }
+        ]);
+
+      if (highPriorityTemplateError) throw highPriorityTemplateError;
+
       toast.success("Notification settings saved successfully");
     } catch (error) {
       console.error("Error saving notification settings:", error);
@@ -236,7 +269,7 @@ const SettingsPage = () => {
   };
 
   // Send a test email
-  const sendTestEmail = async () => {
+  const sendTestEmail = async (highPriority: boolean = false) => {
     if (!testEmailAddress) {
       toast.error("Please enter a test email address");
       return;
@@ -245,7 +278,7 @@ const SettingsPage = () => {
     setTestEmailLoading(true);
     
     try {
-      const success = await notificationService.sendTestEmail(testEmailAddress);
+      const success = await notificationService.sendTestEmail(testEmailAddress, highPriority);
       if (!success) {
         throw new Error("Failed to send test email");
       }
@@ -321,7 +354,7 @@ const SettingsPage = () => {
   ];
 
   // Display a placeholder in the textarea
-  const insertPlaceholder = (placeholder: string, fieldName: "userBody" | "consultantBody") => {
+  const insertPlaceholder = (placeholder: string, fieldName: "userBody" | "consultantBody" | "highPriorityBody" as any) => {
     const field = form.getValues(fieldName);
     const textarea = document.getElementById(fieldName) as HTMLTextAreaElement;
     
@@ -703,7 +736,7 @@ const SettingsPage = () => {
                       <Button 
                         type="button" 
                         variant="outline" 
-                        onClick={sendTestEmail}
+                        onClick={() => sendTestEmail()}
                         disabled={testEmailLoading || form.watch("emailProvider") === "none"}
                       >
                         {testEmailLoading ? "Sending..." : "Test"}
@@ -929,6 +962,139 @@ const SettingsPage = () => {
                       </FormItem>
                     )}
                   />
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>High Priority Notification Template</CardTitle>
+                  <CardDescription>Template for emails sent to consultants when a high priority case is created or updated</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="enablePriorityNotifications"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2">
+                        <FormLabel>Enable</FormLabel>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  {form.watch("enablePriorityNotifications") && (
+                    <CardContent>
+                      <FormField
+                        control={form.control}
+                        name="highPriorityColor"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Alert Color</FormLabel>
+                            <FormDescription>
+                              Background color for high priority notifications
+                            </FormDescription>
+                            <div className="flex items-center gap-2">
+                              <FormControl>
+                                <Input type="text" {...field} />
+                              </FormControl>
+                              <div 
+                                className="w-10 h-10 rounded border"
+                                style={{ backgroundColor: field.value || '#ffebeb' }}
+                              />
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="highPrioritySubject"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email Subject</FormLabel>
+                            <FormControl>
+                              <Input placeholder="URGENT: High Priority Case {case_title}" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="highPriorityBody"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center justify-between">
+                              <span>Email Body</span>
+                              <div className="flex gap-1">
+                                {templatePlaceholders.map((placeholder) => (
+                                  <TooltipProvider key={placeholder.name}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button 
+                                          type="button" 
+                                          variant="outline" 
+                                          size="sm"
+                                          onClick={() => insertPlaceholder(placeholder.name, "highPriorityBody" as any)}
+                                        >
+                                          {placeholder.name.replace(/[{}]/g, '')}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{placeholder.description}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ))}
+                              </div>
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea 
+                                id="highPriorityBody"
+                                rows={6} 
+                                placeholder="URGENT: A high priority case {case_title} has been created and requires immediate attention. You can view and respond to this case by following this link: {case_link}" 
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="pt-2 border-t mt-4">
+                        <h4 className="text-sm font-medium mb-2">Send Test High Priority Email</h4>
+                        <div className="flex space-x-2">
+                          <Input 
+                            type="email" 
+                            placeholder="recipient@example.com" 
+                            value={testEmailAddress} 
+                            onChange={(e) => setTestEmailAddress(e.target.value)} 
+                            className="max-w-md"
+                          />
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            className="bg-red-50 hover:bg-red-100 border-red-200 text-red-600 hover:text-red-700"
+                            onClick={() => sendTestEmail(true)}
+                            disabled={testEmailLoading || form.watch("emailProvider") === "none"}
+                          >
+                            {testEmailLoading ? "Sending..." : "Test High Priority"}
+                            {testEmailLoading ? null : <AlertCircle className="ml-2 h-4 w-4" />}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Send a test high priority email to verify your configuration
+                        </p>
+                      </div>
+                    </CardContent>
+                  )}
                 </CardContent>
               </Card>
               
