@@ -79,6 +79,9 @@ const notificationFormSchema = z.object({
 
 type NotificationFormValues = z.infer<typeof notificationFormSchema>;
 
+// Define valid field names type for insertPlaceholder function
+type TemplateFieldName = "userBody" | "consultantBody" | "highPriorityBody";
+
 const SettingsPage = () => {
   const { currentUser, categories, refetchCategories } = useAppContext();
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -353,8 +356,8 @@ const SettingsPage = () => {
     { name: '{case_link}', description: 'The full URL to view the case' },
   ];
 
-  // Display a placeholder in the textarea
-  const insertPlaceholder = (placeholder: string, fieldName: "userBody" | "consultantBody" | "highPriorityBody" as any) => {
+  // Display a placeholder in the textarea - FIXED TYPE DEFINITION
+  const insertPlaceholder = (placeholder: string, fieldName: TemplateFieldName) => {
     const field = form.getValues(fieldName);
     const textarea = document.getElementById(fieldName) as HTMLTextAreaElement;
     
