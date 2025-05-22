@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Filter, RefreshCw, Star, Trash2 } from 'lucide-react';
+import { Filter, RefreshCw, Star, Trash2, Flag } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useStarredCases } from '@/hooks/useStarredCases';
@@ -308,6 +308,7 @@ const CaseList = ({
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass(caseItem.priority))}>
+                        <Flag className={`h-4 w-4 mr-1 ${caseItem.priority === 'high' ? 'text-red-500' : caseItem.priority === 'medium' ? 'text-amber-500' : 'text-green-500'}`} />
                         {caseItem.priority}
                       </Badge>
                     </TableCell>
