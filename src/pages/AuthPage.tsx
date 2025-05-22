@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,11 @@ const AuthPage = () => {
   
   const { signIn, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get the redirect URL from query parameters
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = searchParams.get('redirect') || '/';
   
   // Check Supabase service availability
   useEffect(() => {
@@ -55,9 +60,10 @@ const AuthPage = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      navigate('/', { replace: true });
+      // Navigate to the redirect path instead of hardcoded '/'
+      navigate(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, authLoading, navigate, redirectPath]);
   
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,6 +90,7 @@ const AuthPage = () => {
       if (error) {
         setError(error.message || 'Failed to sign in. Please check your credentials.');
       }
+      // No need to navigate here, the useEffect will handle it
     } catch (err: any) {
       console.error('Exception during sign in:', err);
       setError(err.message || 'An unexpected error occurred. Please try again.');

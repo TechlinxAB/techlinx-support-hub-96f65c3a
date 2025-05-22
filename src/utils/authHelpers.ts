@@ -1,4 +1,3 @@
-
 /**
  * Helper functions for authentication and authorization with improved error handling
  */
@@ -135,4 +134,20 @@ export const validateSession = async (): Promise<{
     console.error('Error validating session:', err);
     return { valid: false, error: 'Exception during validation' };
   }
+};
+
+/**
+ * Gets a redirect URL from the current location
+ * Used for preserving the intended navigation after authentication
+ */
+export const getRedirectUrlFromLocation = (location: Location): string => {
+  const searchParams = new URLSearchParams(location.search);
+  return searchParams.get('redirect') || '/';
+};
+
+/**
+ * Creates an authentication redirect URL with the current path as redirect parameter
+ */
+export const createAuthRedirectUrl = (currentPath: string): string => {
+  return `/auth?redirect=${encodeURIComponent(currentPath)}`;
 };

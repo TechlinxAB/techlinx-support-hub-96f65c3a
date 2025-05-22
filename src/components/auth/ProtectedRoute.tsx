@@ -14,10 +14,11 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   
   useEffect(() => {
     if (!loading && !user) {
+      // Store the current path to redirect back after login
       // Use React Router navigate to avoid page reloads
-      navigate(`/auth?redirect=${encodeURIComponent(location.pathname)}`, { replace: true });
+      navigate(`/auth?redirect=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
     }
-  }, [user, loading, navigate, location.pathname]);
+  }, [user, loading, navigate, location.pathname, location.search]);
 
   if (loading) {
     return (

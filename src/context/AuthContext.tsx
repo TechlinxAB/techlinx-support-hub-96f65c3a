@@ -70,6 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Get the redirect URL from query parameters if we're on the auth page
+  const isAuthPage = location.pathname === '/auth';
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = isAuthPage ? (searchParams.get('redirect') || '/') : '/';
+
   // Function to fetch user profile
   const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
@@ -193,7 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [navigate, location.pathname]);
 
-  // Sign in with email and password - simple implementation
+  // Sign in with email and password - enhanced implementation with redirect handling
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
@@ -227,7 +232,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         toast.success("Successfully signed in!");
-        navigate('/');
+        
+        // Check if we're on the auth page and have a redirect parameter
+        if (isAuthPage && redirectPath && redirectPath !== '/') {
+          navigate(redirectPath);
+        } else {
+          navigate('/');
+        }
       }
       
       setLoading(false);
