@@ -130,10 +130,11 @@ serve(async (req: Request) => {
 
     // Get reply content if a reply ID is provided
     let replyContent = "";
+    let replyUser = null;
     if (replyId) {
       const { data: replyData, error: replyError } = await supabase
         .from("replies")
-        .select("content, user:profiles!replies_user_id_fkey(name)")
+        .select("content, user:profiles!replies_user_id_fkey(name, id, role)")
         .eq("id", replyId)
         .single();
         
@@ -144,6 +145,7 @@ serve(async (req: Request) => {
       
       if (replyData) {
         replyContent = replyData.content;
+        replyUser = replyData.user;
       }
     }
     
@@ -196,7 +198,7 @@ serve(async (req: Request) => {
     const caseStatus = caseData.status;
     const casePriority = caseData.priority;
     const categoryName = caseData.category?.name || "";
-    const userName = replyId ? `${caseData.user?.name || "Unknown"}` : "System";
+    const userName = replyUser ? `${replyUser.name || "Unknown"}` : "System";
     const caseLink = `${baseUrl}/cases/${caseId}`;
     
     // Replace template variables in subject and body
@@ -361,11 +363,13 @@ serve(async (req: Request) => {
     </html>
     `;
 
-    // Create transporter using settings from the database
+    // Create transporter using settings from the database with enhanced error handling
     try {
       // Handle email sending based on provider
       if (settings.email_provider === "smtp") {
         console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriority ? 'high priority' : 'normal'} email via SMTP...`);
+        
+        // Create transporter with additional timeout and connection options
         const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
@@ -374,31 +378,90 @@ serve(async (req: Request) => {
             user: settings.smtp_user,
             pass: settings.smtp_password,
           },
+          connectionTimeout: 10000, // 10 seconds
+          greetingTimeout: 5000,    // 5 seconds
+          socketTimeout: 10000,     // 10 seconds
           tls: {
             // Do not fail on invalid certs
             rejectUnauthorized: false,
           },
+          pool: true, // Use pooled connections
+          maxConnections: 5, // Limit to 5 concurrent connections
+          rateDelta: 1000,  // Max of 1 messages per second
+          rateLimit: 5,     // Max of 5 messages per rateDelta
         });
         
-        const info = await transporter.sendMail({
-          from: settings.sender_email ? 
-            `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
-            `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
-          to: recipientEmail,
-          subject: subject,
-          text: body,
-          html: htmlContent,
-        });
+        // Verify connection works before sending
+        try {
+          await transporter.verify();
+          console.log("[HIGH PRIORITY DEBUG] SMTP connection verified successfully");
+        } catch (verifyError) {
+          console.error("[HIGH PRIORITY DEBUG] SMTP connection verification failed:", verifyError);
+          
+          // Return a success response even though we couldn't send the email
+          // This prevents the frontend from showing an error and allows the user to continue
+          return new Response(
+            JSON.stringify({
+              success: false,
+              warning: true,
+              message: `Could not connect to email server. The case/reply was saved, but the notification email could not be sent.`,
+              error: verifyError.message,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          );
+        }
         
-        console.log(`[HIGH PRIORITY DEBUG] Email sent successfully via SMTP: ${info.messageId}`);
+        // Try sending the email with retry logic
+        let attempt = 0;
+        const maxAttempts = 2;
+        let lastError = null;
         
+        while (attempt < maxAttempts) {
+          try {
+            const info = await transporter.sendMail({
+              from: settings.sender_email ? 
+                `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
+                `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
+              to: recipientEmail,
+              subject: subject,
+              text: body,
+              html: htmlContent,
+            });
+            
+            console.log(`[HIGH PRIORITY DEBUG] Email sent successfully via SMTP: ${info.messageId}`);
+            
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: `Notification sent to ${recipientEmail}`,
+                provider: "smtp",
+                messageId: info.messageId,
+                isHighPriority
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+            );
+          } catch (sendError) {
+            attempt++;
+            lastError = sendError;
+            console.error(`[HIGH PRIORITY DEBUG] Error sending email (attempt ${attempt}/${maxAttempts}):`, sendError);
+            
+            // Wait a bit before retrying
+            if (attempt < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        }
+        
+        // If we reach here, all attempts failed
+        console.error(`[HIGH PRIORITY DEBUG] All ${maxAttempts} attempts to send email failed. Last error:`, lastError);
+        
+        // Return a "success" response with warning flag so frontend doesn't block the user
         return new Response(
           JSON.stringify({
-            success: true,
-            message: `Notification sent to ${recipientEmail}`,
-            provider: "smtp",
-            messageId: info.messageId,
-            isHighPriority
+            success: false,
+            warning: true, 
+            message: `The case/reply was saved, but the notification email could not be sent after ${maxAttempts} attempts.`,
+            error: lastError?.message,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
@@ -423,22 +486,33 @@ serve(async (req: Request) => {
         );
       }
     } catch (sendError) {
-      console.error(`[HIGH PRIORITY DEBUG] Error sending notification email:`, sendError);
+      console.error(`[HIGH PRIORITY DEBUG] Error in email sending process:`, sendError);
       
+      // Return a non-error response even though there was an error
+      // This prevents the frontend from showing an error and allows the user to continue
       return new Response(
         JSON.stringify({ 
-          error: `Failed to send email notification: ${sendError.message}`,
+          success: false,
+          warning: true,
+          message: "The case/reply was saved, but there was an issue with the notification system.",
+          error: `Email notification error: ${sendError.message}`,
           details: sendError 
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
   } catch (error) {
     console.error("[HIGH PRIORITY DEBUG] Error processing notification request:", error);
     
+    // Return a non-error response with warning to prevent frontend from showing an error
     return new Response(
-      JSON.stringify({ error: `Failed to process notification request: ${error.message}` }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      JSON.stringify({ 
+        success: false,
+        warning: true,
+        message: "Your case/reply was saved, but there was an issue with the notification system.",
+        error: `Notification system error: ${error.message}` 
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   }
 });

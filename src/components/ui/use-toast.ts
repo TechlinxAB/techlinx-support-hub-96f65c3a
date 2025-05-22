@@ -1,8 +1,9 @@
+
 import { toast as sonnerToast } from "sonner";
 
 type ToastProps = {
   description?: string;
-  variant?: "default" | "destructive" | "success";
+  variant?: "default" | "destructive" | "success" | "warning";
   title?: string;
   duration?: number;
   id?: string | number;
@@ -31,13 +32,17 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
     // Add to active toasts
     activeToasts.add(key);
     
+    // Determine class based on variant
+    const variantClass = props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
+                          props?.variant === "success" ? "bg-green-500 text-white" :
+                          props?.variant === "warning" ? "bg-yellow-500 text-white" : "bg-white";
+    
     // Create toast
     const toastId = sonnerToast(messageOrObject, {
       description: props?.description,
       duration: props?.duration || 3000,
       id: props?.id,
-      className: `custom-toast toast-wrapper ${props?.variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-               props?.variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
+      className: `custom-toast toast-wrapper ${variantClass}`,
       // Force close button to the right
       closeButton: true
     });
@@ -63,13 +68,17 @@ function toast(messageOrObject: string | ToastProps, props?: ToastProps) {
   // Add to active toasts
   activeToasts.add(key);
   
+  // Determine class based on variant
+  const variantClass = variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
+                       variant === "success" ? "bg-green-500 text-white" :
+                       variant === "warning" ? "bg-yellow-500 text-white" : "bg-white";
+  
   // Create toast
   const toastId = sonnerToast(title || "", {
     description,
     duration: duration || 3000,
     id,
-    className: `custom-toast toast-wrapper ${variant === "destructive" ? "bg-destructive text-destructive-foreground" : 
-             variant === "success" ? "bg-green-500 text-white" : "bg-white"}`,
+    className: `custom-toast toast-wrapper ${variantClass}`,
     // Force close button to the right
     closeButton: true
   });

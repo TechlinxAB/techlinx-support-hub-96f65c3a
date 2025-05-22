@@ -1,5 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 
 // Service for handling notifications
 export const notificationService = {
@@ -72,32 +73,52 @@ export const notificationService = {
           }
         );
         
-        // Check for HTTP errors
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
-          console.error(`Error sending notification: ${JSON.stringify(errorData)}`);
-          throw new Error(errorData.error || `Failed to send notification (HTTP ${response.status})`);
+        const responseData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+        
+        // Check for warnings in the response (new feature)
+        if (responseData.warning) {
+          console.warn(`Notification warning: ${responseData.message}`);
+          
+          // Show a toast warning when notification has issues but didn't fail completely
+          toast({
+            title: "Notification delivery issue",
+            description: responseData.message || "The notification may not have been delivered, but your reply was saved.",
+            variant: "warning",
+            duration: 5000,
+          });
+          
+          // We still return true because the case/reply was successful
+          return true;
         }
   
-        const responseData = await response.json();
+        // If there's an error in the response
+        if (!response.ok || responseData.error) {
+          console.error(`Error sending notification: ${JSON.stringify(responseData)}`);
+          throw new Error(responseData.error || `Failed to send notification (HTTP ${response.status})`);
+        }
+        
         console.log(`Notification edge function response:`, responseData);
         
         return true;
       } catch (fetchError: any) {
         console.error(`Error sending notification: ${fetchError.message}`);
         
-        // Display a toast warning when notification fails
-        toast.warning("Notification delivery issue", {
-          description: "The case update was saved, but notification delivery failed. The recipient may not be notified.",
+        // Display a toast warning when notification fails but don't prevent the UI from working
+        toast({
+          title: "Notification delivery issue",
+          description: "Your reply was saved, but the notification delivery had an issue. The recipient may not be notified immediately.",
+          variant: "warning",
           duration: 5000,
         });
         
-        return false;
+        // We return true here because the case/reply was successful even if notification had issues
+        return true;
       }
       
     } catch (error: any) {
       console.error(`Error sending notification: ${error.message}`);
       
+      // Even if notification fails, we don't want to block the UI
       return false;
     }
   },
@@ -164,31 +185,61 @@ export const notificationService = {
           }
         );
         
-        // Check for HTTP errors
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
-          console.error(`Error sending high priority notification: ${JSON.stringify(errorData)}`);
+        const responseData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+        
+        // Check for warnings in the response (new feature)
+        if (responseData.warning) {
+          console.warn(`High priority notification warning: ${responseData.message}`);
           
-          // Show a toast warning that notification failed
-          toast.warning("High priority notification issue", {
-            description: "The high priority case was created, but notification to consultants failed.",
+          // Show a toast warning when notification has issues
+          toast({
+            title: "High priority notification issue",
+            description: responseData.message || "The case was created, but the priority notification delivery had an issue.",
+            variant: "warning",
             duration: 5000,
           });
           
-          throw new Error(errorData.error || `Failed to send high priority notification (HTTP ${response.status})`);
+          // We still return true because the case creation was successful
+          return true;
+        }
+        
+        // If there's an error in the response
+        if (!response.ok || responseData.error) {
+          console.error(`Error sending high priority notification: ${JSON.stringify(responseData)}`);
+          
+          toast({
+            title: "High priority notification issue",
+            description: "The high priority case was created, but notification to consultants may not have been delivered.",
+            variant: "warning",
+            duration: 5000,
+          });
+          
+          // Don't throw error, just return false
+          return false;
         }
   
-        const responseData = await response.json();
-        console.log(`High priority notification response:`, responseData);
+        const data = responseData;
+        console.log(`High priority notification response:`, data);
         
-        toast.success("High priority case created", {
+        toast({
+          title: "High priority case created",
           description: "Consultants have been notified about this high priority case.",
+          variant: "success",
         });
         
         return true;
       } catch (fetchError: any) {
         console.error(`Error sending high priority notification: ${fetchError.message}`);
-        return false;
+        
+        // Show warning but don't block the UI
+        toast({
+          title: "High priority notification issue",
+          description: "Your high priority case was created, but there was an issue notifying consultants.",
+          variant: "warning",
+          duration: 5000,
+        });
+        
+        return true; // We return true because the case creation was successful
       }
     } catch (error: any) {
       console.error(`Error in sendHighPriorityCaseNotification: ${error.message}`);
@@ -244,8 +295,10 @@ export const notificationService = {
   
         const responseData = await response.json();
         
-        toast.success(`${highPriority ? "High priority" : "Regular"} test email sent successfully`, {
-          description: `Email sent to ${recipientEmail}`
+        toast({
+          title: `${highPriority ? "High priority" : "Regular"} test email sent successfully`,
+          description: `Email sent to ${recipientEmail}`,
+          variant: "success"
         });
         
         return true;
@@ -256,8 +309,10 @@ export const notificationService = {
     } catch (error: any) {
       console.error(`Error sending test email: ${error.message}`);
       
-      toast.error("Failed to send test email", {
-        description: error.message || "An error occurred while sending the test email"
+      toast({
+        title: "Failed to send test email",
+        description: error.message || "An error occurred while sending the test email",
+        variant: "destructive"
       });
       
       return false;
