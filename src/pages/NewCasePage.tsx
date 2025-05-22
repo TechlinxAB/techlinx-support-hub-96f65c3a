@@ -1,239 +1,239 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAppContext } from '@/context/AppContext';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Send, Save } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAppContext } from '@/context/AppContext';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { notificationService } from '@/services/notificationService';
+
+// Form schema for creating a new case
+const newCaseSchema = z.object({
+  title: z.string().min(3, { message: 'Title must be at least 3 characters long' }),
+  description: z.string().min(10, { message: 'Description must be at least 10 characters long' }),
+  categoryId: z.string({ required_error: 'Please select a category' }),
+  priority: z.enum(['low', 'medium', 'high'], { required_error: 'Please select a priority' }),
+});
+
+// Form values type
+type NewCaseFormValues = z.infer<typeof newCaseSchema>;
 
 const NewCasePage = () => {
+  const { categories, companies, currentUser, addCase } = useAppContext();
   const navigate = useNavigate();
-  const { 
-    addCase, 
-    categories, 
-    users, 
-    companies, 
-    currentUser 
-  } = useAppContext();
-  
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [priority, setPriority] = useState('medium');
-  const [userId, setUserId] = useState(currentUser?.id || '');
-  const [companyId, setCompanyId] = useState(currentUser?.companyId || '');
-  const [language, setLanguage] = useState('en');
-  const [files, setFiles] = useState<FileList | null>(null);
-  
-  const handleSubmit = (e: React.FormEvent, isDraft: boolean = false) => {
-    e.preventDefault();
-    
-    if (!title || !description || !categoryId || !priority || !userId || !companyId) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Initialize form with default values
+  const form = useForm<NewCaseFormValues>({
+    resolver: zodResolver(newCaseSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      categoryId: '',
+      priority: 'medium',
+    },
+  });
+
+  // Form submission handler
+  const onSubmit = async (values: NewCaseFormValues) => {
+    if (!currentUser) {
+      toast.error('You must be logged in to create a case');
       return;
     }
-    
-    addCase({
-      title,
-      description,
-      status: isDraft ? 'draft' : 'new',
-      priority: priority as any,
-      userId,
-      companyId,
-      categoryId,
-    });
-    
-    navigate('/cases');
-  };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(e.target.files);
+    setIsSubmitting(true);
+    
+    const isHighPriority = values.priority === 'high';
+    console.log(`[HIGH PRIORITY DEBUG] Creating new case with priority: ${values.priority}, isHighPriority: ${isHighPriority}`);
+
+    try {
+      // Add the case to the database
+      const newCase = await addCase({
+        title: values.title,
+        description: values.description,
+        categoryId: values.categoryId,
+        userId: currentUser.id,
+        companyId: currentUser.companyId || '',
+        priority: values.priority,
+        status: 'new',
+      });
+
+      if (!newCase) {
+        throw new Error('Failed to create case');
+      }
+      
+      // If this is a high priority case, send a notification
+      if (isHighPriority) {
+        console.log(`[HIGH PRIORITY DEBUG] Sending high priority notification for new case ${newCase.id}`);
+        notificationService.sendHighPriorityCaseNotification(newCase.id)
+          .then(success => {
+            if (success) {
+              console.log(`[HIGH PRIORITY DEBUG] High priority notification sent successfully for case ${newCase.id}`);
+            } else {
+              console.error(`[HIGH PRIORITY DEBUG] Failed to send high priority notification for case ${newCase.id}`);
+            }
+          })
+          .catch(error => {
+            console.error(`[HIGH PRIORITY DEBUG] Error sending high priority notification: ${error.message}`);
+          });
+      }
+
+      toast.success('Case created successfully');
+      navigate(`/cases/${newCase.id}`);
+    } catch (error) {
+      console.error('Error creating case:', error);
+      toast.error('Failed to create case');
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  
-  const isConsultant = currentUser?.role === 'consultant';
-  
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/cases')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Cases
-        </Button>
-      </div>
-      
-      <Card>
-        <form onSubmit={(e) => handleSubmit(e, false)}>
+
+  // If user isn't logged in or doesn't have a companyId, show a message
+  if (!currentUser || !currentUser.companyId) {
+    return (
+      <div className="max-w-3xl mx-auto mt-8 p-4">
+        <Card>
           <CardHeader>
-            <h1 className="text-xl font-bold">Create New Case</h1>
+            <CardTitle>Unable to Create Case</CardTitle>
+            <CardDescription>
+              You need to be logged in and associated with a company to create a case.
+            </CardDescription>
           </CardHeader>
-          
-          <CardContent className="space-y-4">
-            {isConsultant && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">User</label>
-                  <Select 
-                    value={userId} 
-                    onValueChange={setUserId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select User" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Company</label>
-                  <Select 
-                    value={companyId} 
-                    onValueChange={setCompanyId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Company" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {companies.map(company => (
-                        <SelectItem key={company.id} value={company.id}>
-                          {company.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input 
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder="Brief summary of the issue"
-                required
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto mt-8 p-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Case</CardTitle>
+          <CardDescription>
+            Fill out the form below to submit a new support case.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Case Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter a title for your case" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
-                <Select 
-                  value={categoryId} 
-                  onValueChange={setCategoryId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <Select 
-                  value={priority} 
-                  onValueChange={setPriority}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Language</label>
-                <Select 
-                  value={language} 
-                  onValueChange={setLanguage}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Language" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="sv">Swedish</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Textarea 
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Detailed description of the issue..."
-                rows={8}
-                required
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe your issue in detail..."
+                        className="min-h-[120px]"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Attachments</label>
-              <Input 
-                type="file" 
-                onChange={handleFileChange}
-                multiple
-              />
-              <p className="text-xs text-muted-foreground">
-                You can upload multiple files (max 5MB each)
-              </p>
-            </div>
-          </CardContent>
-          
-          <CardFooter className="flex justify-end gap-2">
-            <Button 
-              type="button" 
-              variant="outline"
-              onClick={() => navigate('/cases')}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="button" 
-              variant="outline"
-              onClick={(e) => handleSubmit(e, true)}
-              disabled={!title || !categoryId || !priority}
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Save Draft
-            </Button>
-            <Button 
-              type="submit"
-              disabled={!title || !description || !categoryId || !priority}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Submit Case
-            </Button>
-          </CardFooter>
-        </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Priority</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select priority" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => navigate(-1)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Submitting...' : 'Submit Case'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </CardContent>
       </Card>
     </div>
   );

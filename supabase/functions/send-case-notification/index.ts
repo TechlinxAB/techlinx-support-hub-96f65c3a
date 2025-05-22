@@ -39,7 +39,7 @@ serve(async (req: Request) => {
       );
     }
     
-    console.log(`Sending notification for case ${caseId}, reply ${replyId}, to ${recipientType}`);
+    console.log(`[HIGH PRIORITY DEBUG] Starting notification process for case ${caseId}, reply ${replyId}, to ${recipientType}`);
     
     // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
@@ -63,13 +63,17 @@ serve(async (req: Request) => {
       .single();
       
     if (caseError) {
-      console.error("Error fetching case:", caseError);
+      console.error("[HIGH PRIORITY DEBUG] Error fetching case:", caseError);
       throw new Error(`Failed to fetch case: ${caseError.message}`);
     }
     
     if (!caseData) {
-      throw new Error(`Case not found with id: ${caseId}`);
+      throw new Error(`[HIGH PRIORITY DEBUG] Case not found with id: ${caseId}`);
     }
+
+    // Check if this is a high priority case and log it clearly
+    const isHighPriority = caseData.priority === "high";
+    console.log(`[HIGH PRIORITY DEBUG] Case priority: ${caseData.priority}, High priority: ${isHighPriority}`);
 
     // Get settings and templates
     const { data: settings, error: settingsError } = await supabase
@@ -78,20 +82,23 @@ serve(async (req: Request) => {
       .single();
       
     if (settingsError) {
-      console.error("Error fetching settings:", settingsError);
+      console.error("[HIGH PRIORITY DEBUG] Error fetching settings:", settingsError);
       throw new Error(`Failed to fetch notification settings: ${settingsError.message}`);
     }
+    
+    // Log settings to check if high priority notifications are enabled
+    console.log(`[HIGH PRIORITY DEBUG] Settings: enable_priority_notifications = ${settings.enable_priority_notifications}`);
     
     // Get the appropriate notification template based on recipient type and case priority
     let templateType = recipientType === "user" ? "user_notification" : "consultant_notification";
     
     // If this is a high priority case and the feature is enabled, use the high priority template
-    const isHighPriority = caseData.priority === "high";
     if (isHighPriority && settings.enable_priority_notifications && recipientType === "consultant") {
       templateType = "high_priority_notification";
+      console.log(`[HIGH PRIORITY DEBUG] Using high priority template type: ${templateType}`);
+    } else {
+      console.log(`[HIGH PRIORITY DEBUG] Using standard template type: ${templateType}`);
     }
-    
-    console.log(`Using template type: ${templateType} for ${recipientType} notification`);
     
     // Get the appropriate template
     const { data: templates, error: templatesError } = await supabase
@@ -100,9 +107,12 @@ serve(async (req: Request) => {
       .in("type", [templateType, recipientType === "user" ? "user_notification" : "consultant_notification"]);
       
     if (templatesError) {
-      console.error("Error fetching templates:", templatesError);
+      console.error("[HIGH PRIORITY DEBUG] Error fetching templates:", templatesError);
       throw new Error(`Failed to fetch notification templates: ${templatesError.message}`);
     }
+
+    console.log(`[HIGH PRIORITY DEBUG] Templates found: ${templates.length}`);
+    templates.forEach(t => console.log(`[HIGH PRIORITY DEBUG] Template: ${t.type}, Subject: ${t.subject}`));
     
     // Find the specific template we need with fallback to standard template if high priority not found
     const primaryTemplate = templates.find(t => t.type === templateType);
@@ -113,8 +123,10 @@ serve(async (req: Request) => {
     const template = primaryTemplate || fallbackTemplate;
     
     if (!template) {
-      throw new Error(`No template found for type: ${templateType}`);
+      throw new Error(`[HIGH PRIORITY DEBUG] No template found for type: ${templateType}`);
     }
+
+    console.log(`[HIGH PRIORITY DEBUG] Selected template: ${template.type}, Subject: ${template.subject}`);
 
     // Get reply content if a reply ID is provided
     let replyContent = "";
@@ -126,7 +138,7 @@ serve(async (req: Request) => {
         .single();
         
       if (replyError) {
-        console.error("Error fetching reply:", replyError);
+        console.error("[HIGH PRIORITY DEBUG] Error fetching reply:", replyError);
         throw new Error(`Failed to fetch reply: ${replyError.message}`);
       }
       
@@ -145,21 +157,24 @@ serve(async (req: Request) => {
       // Send to consultants (service email)
       recipientEmail = settings.services_email;
     } else {
-      throw new Error(`Invalid recipient type: ${recipientType}`);
+      throw new Error(`[HIGH PRIORITY DEBUG] Invalid recipient type: ${recipientType}`);
     }
     
     if (!recipientEmail) {
-      throw new Error(`No recipient email found for recipient type: ${recipientType}`);
+      throw new Error(`[HIGH PRIORITY DEBUG] No recipient email found for recipient type: ${recipientType}`);
     }
+
+    console.log(`[HIGH PRIORITY DEBUG] Selected recipient email: ${recipientEmail}`);
     
     // Check if email provider is configured
     if (settings.email_provider === "none") {
-      console.log(`Email provider is set to 'none'. Skipping email sending to ${recipientEmail}`);
+      console.log(`[HIGH PRIORITY DEBUG] Email provider is set to 'none'. Skipping email sending to ${recipientEmail}`);
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: "Email provider is set to 'none'. Email would have been sent to: " + recipientEmail,
-          debug_mode: true
+          debug_mode: true,
+          isHighPriority
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
@@ -167,16 +182,17 @@ serve(async (req: Request) => {
 
     // Check if SMTP settings are valid when using SMTP
     if (settings.email_provider === "smtp" && (!settings.smtp_host || !settings.smtp_user)) {
-      console.error("Invalid SMTP settings");
+      console.error("[HIGH PRIORITY DEBUG] Invalid SMTP settings");
       throw new Error("SMTP settings are not properly configured");
     }
+
+    console.log(`[HIGH PRIORITY DEBUG] Email provider: ${settings.email_provider}, SMTP host: ${settings.smtp_host}, SMTP user: ${settings.smtp_user}`);
     
     // Prepare the base URL for links
     const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
     
     // Prepare template variables
     const caseTitle = caseData.title;
-    const caseId = caseData.id;
     const caseStatus = caseData.status;
     const casePriority = caseData.priority;
     const categoryName = caseData.category?.name || "";
@@ -208,7 +224,7 @@ serve(async (req: Request) => {
       body += `\n\n${settings.email_signature}`;
     }
     
-    console.log(`🔔 Sending notification to ${recipientEmail} (${recipientType})`);
+    console.log(`[HIGH PRIORITY DEBUG] 🔔 Sending ${isHighPriority ? 'high priority' : 'normal'} notification to ${recipientEmail} (${recipientType})`);
 
     // Create the styled HTML email template with Techlinx branding
     const htmlContent = `
@@ -349,7 +365,7 @@ serve(async (req: Request) => {
     try {
       // Handle email sending based on provider
       if (settings.email_provider === "smtp") {
-        console.log("Attempting to send via SMTP...");
+        console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriority ? 'high priority' : 'normal'} email via SMTP...`);
         const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
@@ -374,7 +390,7 @@ serve(async (req: Request) => {
           html: htmlContent,
         });
         
-        console.log(`Email sent successfully via SMTP: ${info.messageId}`);
+        console.log(`[HIGH PRIORITY DEBUG] Email sent successfully via SMTP: ${info.messageId}`);
         
         return new Response(
           JSON.stringify({
@@ -388,10 +404,11 @@ serve(async (req: Request) => {
         );
       } else {
         // Fallback to just logging for debug
-        console.log("No valid email provider configured, would have sent:", {
+        console.log(`[HIGH PRIORITY DEBUG] No valid email provider configured, would have sent:`, {
           to: recipientEmail,
           subject: subject,
           text: body,
+          isHighPriority
         });
         
         // Return success for debug mode
@@ -406,7 +423,7 @@ serve(async (req: Request) => {
         );
       }
     } catch (sendError) {
-      console.error("Error sending notification email:", sendError);
+      console.error(`[HIGH PRIORITY DEBUG] Error sending notification email:`, sendError);
       
       return new Response(
         JSON.stringify({ 
@@ -417,7 +434,7 @@ serve(async (req: Request) => {
       );
     }
   } catch (error) {
-    console.error("Error processing notification request:", error);
+    console.error("[HIGH PRIORITY DEBUG] Error processing notification request:", error);
     
     return new Response(
       JSON.stringify({ error: `Failed to process notification request: ${error.message}` }),
