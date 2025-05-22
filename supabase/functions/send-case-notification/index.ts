@@ -405,48 +405,25 @@ serve(async (req: Request) => {
       if (settings.email_provider === "smtp") {
         console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriorityCase ? 'high priority' : 'normal'} email via SMTP...`);
         
-        // Create transporter with additional timeout and connection options
+        // --- KEY CHANGE: Align with successful test-email configuration ---
+        // Modified SMTP configuration to match working test-email function
         const transporter = nodemailer.createTransport({
           host: settings.smtp_host,
           port: settings.smtp_port || 587,
-          secure: !!settings.smtp_secure,
+          secure: false, // Use STARTTLS instead (important change!)
           auth: {
             user: settings.smtp_user,
             pass: settings.smtp_password,
           },
-          connectionTimeout: 10000, // 10 seconds
-          greetingTimeout: 5000,    // 5 seconds
-          socketTimeout: 10000,     // 10 seconds
+          requireTLS: true, // Force using TLS (important change!)
           tls: {
             // Do not fail on invalid certs
-            rejectUnauthorized: false,
+            rejectUnauthorized: false
           },
-          pool: true, // Use pooled connections
-          maxConnections: 5, // Limit to 5 concurrent connections
-          rateDelta: 1000,  // Max of 1 messages per second
-          rateLimit: 5,     // Max of 5 messages per rateDelta
-          debug: true,      // Enable debug logging
+          debug: true, // Enable debug output
         });
         
-        // Verify connection works before sending
-        try {
-          await transporter.verify();
-          console.log("[HIGH PRIORITY DEBUG] SMTP connection verified successfully");
-        } catch (verifyError: any) {
-          console.error("[HIGH PRIORITY DEBUG] SMTP connection verification failed:", verifyError);
-          
-          // Return a success response even though we couldn't send the email
-          // This prevents the frontend from showing an error and allows the user to continue
-          return new Response(
-            JSON.stringify({
-              success: false,
-              warning: true,
-              message: `Could not connect to email server. The case/reply was saved, but the notification email could not be sent.`,
-              error: verifyError.message,
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-          );
-        }
+        console.log("[HIGH PRIORITY DEBUG] SMTP transporter configured, sending email directly without verify...");
         
         // Try sending the email with retry logic
         let attempt = 0;
@@ -455,6 +432,8 @@ serve(async (req: Request) => {
         
         while (attempt < maxAttempts) {
           try {
+            // --- KEY CHANGE: Skip verify and send directly ---
+            // Send email directly without verify step that fails
             const info = await transporter.sendMail({
               from: settings.sender_email ? 
                 `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
