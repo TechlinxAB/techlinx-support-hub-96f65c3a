@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle, ArrowUpDown, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CaseStatus } from '@/context/AppContext';
+import { CaseStatus, CasePriority } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
 import { useStarredCases } from '@/hooks/useStarredCases';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +73,11 @@ const CasesPage = () => {
   // Navigate to case detail
   const viewCase = (caseId: string) => {
     navigate(`/cases/${caseId}`);
+  };
+
+  // Format the priority value to capitalize the first letter
+  const formatPriority = (priority: CasePriority): string => {
+    return priority.charAt(0).toUpperCase() + priority.slice(1);
   };
 
   // Handle star toggle with stopPropagation to prevent row click
@@ -191,6 +195,7 @@ const CasesPage = () => {
           <TableRow>
             <TableHead>Title</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Priority</TableHead>
             <TableHead>
               <div className="flex items-center cursor-pointer" 
                    onClick={() => setSortOption(sortOption === 'date-desc' ? 'date-asc' : 'date-desc')}>
@@ -220,6 +225,21 @@ const CasesPage = () => {
                    caseItem.status === 'ongoing' ? 'Ongoing' :
                    caseItem.status === 'resolved' ? 'Awaiting' :
                    'Completed'}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline" className={cn(
+                  "status-badge",
+                  caseItem.priority === 'low' ? 'priority-low' :
+                  caseItem.priority === 'medium' ? 'priority-medium' :
+                  'priority-high'
+                )}>
+                  <Flag className={`h-4 w-4 mr-1 ${
+                    caseItem.priority === 'high' ? 'text-red-500' : 
+                    caseItem.priority === 'medium' ? 'text-amber-500' : 
+                    'text-green-500'
+                  }`} />
+                  {formatPriority(caseItem.priority)}
                 </Badge>
               </TableCell>
               <TableCell>

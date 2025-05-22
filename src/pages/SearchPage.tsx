@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
@@ -53,6 +52,11 @@ const SearchPage = () => {
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Format the priority value to capitalize the first letter
+  const formatPriority = (priority: CasePriority): string => {
+    return priority.charAt(0).toUpperCase() + priority.slice(1);
+  };
   
   const handleSearch = () => {
     setIsSearched(true);
@@ -365,7 +369,12 @@ const SearchPage = () => {
                               'priority-high'
                             )}
                           >
-                            {caseItem.priority}
+                            <Flag className={`h-4 w-4 mr-1 ${
+                              caseItem.priority === 'high' ? 'text-red-500' : 
+                              caseItem.priority === 'medium' ? 'text-amber-500' : 
+                              'text-green-500'
+                            }`} />
+                            {formatPriority(caseItem.priority)}
                           </Badge>
                           <span>
                             {formatDistanceToNow(new Date(caseItem.updatedAt), { addSuffix: true })}

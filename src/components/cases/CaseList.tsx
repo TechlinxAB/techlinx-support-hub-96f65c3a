@@ -113,6 +113,11 @@ const CaseList = ({
     }
   };
   
+  // Format the priority value to capitalize the first letter
+  const formatPriority = (priority: CasePriority): string => {
+    return priority.charAt(0).toUpperCase() + priority.slice(1);
+  };
+  
   // Filter cases based on user role and impersonation state
   let filteredCases = cases;
   
@@ -309,7 +314,7 @@ const CaseList = ({
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
                       <Badge variant="outline" className={cn("status-badge", getPriorityBadgeClass(caseItem.priority))}>
                         <Flag className={`h-4 w-4 mr-1 ${caseItem.priority === 'high' ? 'text-red-500' : caseItem.priority === 'medium' ? 'text-amber-500' : 'text-green-500'}`} />
-                        {caseItem.priority}
+                        {formatPriority(caseItem.priority)}
                       </Badge>
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{user || currentUser?.name}</TableCell>
