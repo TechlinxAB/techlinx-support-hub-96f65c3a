@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,13 +17,17 @@ const AuthPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [serviceAvailable, setServiceAvailable] = useState(true);
   
-  const { signIn, isAuthenticated, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
+  const { signIn, loading: authLoading } = useAuth();
   const location = useLocation();
   
-  // Get the redirect URL from query parameters
+  // Get the redirect URL from query parameters - for debugging only
   const searchParams = new URLSearchParams(location.search);
   const redirectPath = searchParams.get('redirect') || '/';
+  
+  useEffect(() => {
+    // Log the redirect path on component mount
+    console.log('AuthPage mounted with redirect path:', redirectPath);
+  }, [redirectPath]);
   
   // Check Supabase service availability
   useEffect(() => {
@@ -57,14 +60,6 @@ const AuthPage = () => {
     checkService();
   }, []);
   
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated && !authLoading) {
-      // Navigate to the redirect path instead of hardcoded '/'
-      navigate(redirectPath, { replace: true });
-    }
-  }, [isAuthenticated, authLoading, navigate, redirectPath]);
-  
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +85,7 @@ const AuthPage = () => {
       if (error) {
         setError(error.message || 'Failed to sign in. Please check your credentials.');
       }
-      // No need to navigate here, the useEffect will handle it
+      // No need to navigate here, the AuthContext will handle it
     } catch (err: any) {
       console.error('Exception during sign in:', err);
       setError(err.message || 'An unexpected error occurred. Please try again.');

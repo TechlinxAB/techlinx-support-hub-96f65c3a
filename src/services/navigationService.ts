@@ -38,6 +38,8 @@ class NavigationService {
   
   // Returns true if navigation was successful, false if blocked
   public navigate(to: string, options?: { replace?: boolean, state?: any }): boolean {
+    console.log(`NavigationService: Attempting to navigate to ${to}`, options);
+    
     if (!this.navigateFunction) {
       console.warn('Navigate function not set in NavigationService');
       

@@ -14,9 +14,12 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   
   useEffect(() => {
     if (!loading && !user) {
-      // Store the current path to redirect back after login
+      // Store the current path with search params to redirect back after login
+      const fullPath = location.pathname + location.search;
+      console.log('ProtectedRoute: Redirecting unauthenticated user from', fullPath, 'to auth page');
+      
       // Use React Router navigate to avoid page reloads
-      navigate(`/auth?redirect=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
+      navigate(`/auth?redirect=${encodeURIComponent(fullPath)}`, { replace: true });
     }
   }, [user, loading, navigate, location.pathname, location.search]);
 

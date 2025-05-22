@@ -3,6 +3,7 @@ import { supabase, clearAuthState } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { useNavigate, useLocation } from 'react-router-dom';
+import NavigationService from '@/services/navigationService';
 
 // Define user profile type
 export type UserProfile = {
@@ -74,6 +75,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuthPage = location.pathname === '/auth';
   const searchParams = new URLSearchParams(location.search);
   const redirectPath = isAuthPage ? (searchParams.get('redirect') || '/') : '/';
+  
+  // Debug log intended redirect
+  useEffect(() => {
+    if (isAuthPage && redirectPath !== '/') {
+      console.log('Auth page loaded with redirect path:', redirectPath);
+    }
+  }, [isAuthPage, redirectPath]);
 
   // Function to fetch user profile
   const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -106,6 +114,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Helper function for centralized redirect handling
+  const handleAuthRedirect = () => {
+    // Only redirect if we're authenticated and on the auth page
+    if (isAuthenticated && isAuthPage) {
+      console.log('Authenticated and on auth page, redirecting to:', redirectPath);
+      
+      // Use NavigationService to handle redirects - this prevents navigation loops
+      // and ensures consistent navigation handling
+      if (redirectPath && redirectPath !== '/') {
+        console.log('Using NavigationService to navigate to:', redirectPath);
+        NavigationService.navigate(redirectPath, { replace: true });
+      } else {
+        console.log('No specific redirect path, navigating to home');
+        NavigationService.navigate('/', { replace: true });
+      }
+    }
+  };
+
   // Initialize auth state with clean approach
   useEffect(() => {
     setAuthState('RESTORING_SESSION');
@@ -113,6 +139,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     // Set up auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      console.log('Auth state changed:', event);
+      
       // Update session and user state
       setSession(currentSession);
       setUser(currentSession?.user || null);
@@ -132,6 +160,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error in profile fetch:', err);
           } finally {
             setLoading(false);
+            
+            // After authentication is complete and loading is done,
+            // handle redirects if needed
+            handleAuthRedirect();
           }
         }, 0);
       } else {
@@ -158,7 +190,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setLoading(false);
           
           // If on protected route, redirect to auth
-          if (location.pathname !== '/auth') {
+          if (!isAuthPage) {
+            console.log('No session, redirecting from', location.pathname, 'to auth');
             navigate('/auth');
           }
           return;
@@ -176,9 +209,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setProfile(fetchedProfile);
           }
           
-          // If on auth page, redirect to main
-          if (location.pathname === '/auth') {
-            navigate('/');
+          // If on auth page, redirect to the proper destination
+          if (isAuthPage) {
+            // Don't use navigate here to avoid conflict with the auth state change handler
+            // Instead, we'll let handleAuthRedirect do its job once loading is set to false
+            console.log('Existing session found on auth page, will redirect to:', redirectPath);
           }
         }
         
@@ -197,6 +232,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       subscription.unsubscribe();
     };
   }, [navigate, location.pathname]);
+  
+  // Effect specifically for handling redirects after the initial load
+  useEffect(() => {
+    // Only attempt redirect if not loading and we're on the auth page
+    if (!loading && isAuthenticated && isAuthPage) {
+      handleAuthRedirect();
+    }
+  }, [loading, isAuthenticated, isAuthPage]);
 
   // Sign in with email and password - enhanced implementation with redirect handling
   const signIn = async (email: string, password: string) => {
@@ -232,13 +275,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         toast.success("Successfully signed in!");
+        console.log('Sign in successful, redirect path is:', redirectPath);
         
-        // Check if we're on the auth page and have a redirect parameter
-        if (isAuthPage && redirectPath && redirectPath !== '/') {
-          navigate(redirectPath);
-        } else {
-          navigate('/');
-        }
+        // Don't redirect here - let the useEffect handle it
+        // This avoids race conditions with the auth state change
       }
       
       setLoading(false);
