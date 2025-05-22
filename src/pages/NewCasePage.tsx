@@ -64,7 +64,7 @@ const NewCasePage = () => {
     setIsSubmitting(true);
     
     const isHighPriority = values.priority === 'high';
-    console.log(`[HIGH PRIORITY DEBUG] Creating new case with priority: ${values.priority}, isHighPriority: ${isHighPriority}`);
+    console.log(`Creating new case with priority: ${values.priority}, isHighPriority: ${isHighPriority}`);
 
     try {
       // Add the case to the database
@@ -84,17 +84,29 @@ const NewCasePage = () => {
       
       // If this is a high priority case, send a notification
       if (isHighPriority) {
-        console.log(`[HIGH PRIORITY DEBUG] Sending high priority notification for new case ${newCase.id}`);
+        console.log(`Sending high priority notification for new case ${newCase.id}`);
+        
+        // Add a loading toast to indicate that notification is being sent
+        const notificationToastId = toast.loading("Sending high priority notification...");
+        
         notificationService.sendHighPriorityCaseNotification(newCase.id)
           .then(success => {
+            // Dismiss the loading toast
+            toast.dismiss(notificationToastId);
+            
             if (success) {
-              console.log(`[HIGH PRIORITY DEBUG] High priority notification sent successfully for case ${newCase.id}`);
+              console.log(`High priority notification sent successfully for case ${newCase.id}`);
             } else {
-              console.error(`[HIGH PRIORITY DEBUG] Failed to send high priority notification for case ${newCase.id}`);
+              console.error(`Failed to send high priority notification for case ${newCase.id}`);
+              toast.warning("Notification delivery issue", {
+                description: "Your high priority case was created, but the notification to consultants may have failed.",
+              });
             }
           })
           .catch(error => {
-            console.error(`[HIGH PRIORITY DEBUG] Error sending high priority notification: ${error.message}`);
+            // Dismiss the loading toast
+            toast.dismiss(notificationToastId);
+            console.error(`Error sending high priority notification: ${error.message}`);
           });
       }
 

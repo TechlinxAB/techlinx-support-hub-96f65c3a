@@ -1,4 +1,3 @@
-
 import { toast as sonnerToast } from "sonner";
 
 type ToastProps = {
@@ -115,6 +114,18 @@ toast.loading = (message: string, options?: { id?: string | number; duration?: n
 // Add dismiss method to the toast function
 toast.dismiss = (toastId?: string | number) => {
   sonnerToast.dismiss(toastId);
+};
+
+// Add warning method with yellow styling
+toast.warning = (message: string, options?: ToastProps) => {
+  const props = {
+    ...options,
+    className: "custom-toast toast-wrapper bg-yellow-50 border-yellow-200",
+    description: options?.description,
+    duration: options?.duration || 5000,
+  };
+  
+  return sonnerToast(message, props);
 };
 
 export const useToast = () => {
