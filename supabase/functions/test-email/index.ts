@@ -67,6 +67,101 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
+    
+    // Create the styled HTML email template with Techlinx branding
+    const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
+    const techlinxLogoUrl = `${baseUrl}/lovable-uploads/6ccedc19-181d-4786-9b9f-62fc5f4131e1.png`;
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Test Email from Support System</title>
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          color: #333333;
+          margin: 0;
+          padding: 0;
+          background-color: #f5f5f5;
+        }
+        .email-wrapper {
+          max-width: 600px;
+          margin: 0 auto;
+          background-color: #ffffff;
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .email-header {
+          background-color: #387A3D;
+          padding: 20px;
+          text-align: left;
+        }
+        .email-logo {
+          max-height: 60px;
+          width: auto;
+        }
+        .email-content {
+          padding: 30px;
+          line-height: 1.6;
+        }
+        .email-content h1 {
+          color: #387A3D;
+          margin-top: 0;
+        }
+        .email-content p {
+          margin: 0 0 16px;
+        }
+        .success-box {
+          background-color: #f0f7f0;
+          border-left: 4px solid #387A3D;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 4px;
+        }
+        .email-footer {
+          background-color: #f5f5f5;
+          padding: 20px;
+          text-align: center;
+          font-size: 12px;
+          color: #777777;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-wrapper">
+        <div class="email-header">
+          <img src="${techlinxLogoUrl}" alt="Techlinx" class="email-logo">
+        </div>
+        <div class="email-content">
+          <h1>Email Configuration Test</h1>
+          <p>This is a test email from your Techlinx Helpdesk support system.</p>
+          
+          <div class="success-box">
+            <p style="font-weight: bold; color: #387A3D;">If you're seeing this, your email configuration is working correctly! ✓</p>
+          </div>
+          
+          <p>Your support system is now properly configured to send email notifications.</p>
+          
+          <p>This message confirms that:</p>
+          <ul>
+            <li>Your SMTP server connection is working</li>
+            <li>Authentication is successful</li>
+            <li>Email delivery is properly configured</li>
+          </ul>
+          
+          <p>You can now start using email notifications for case updates.</p>
+        </div>
+        <div class="email-footer">
+          <p>&copy; ${new Date().getFullYear()} Techlinx. All rights reserved.</p>
+          <p>This is an automated message from your support system.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
       
     try {
       console.log(`Starting SMTP test with Nodemailer to: ${recipientEmail}`);
@@ -102,18 +197,9 @@ serve(async (req) => {
           `"${settings.sender_name || "Support"}" <${settings.sender_email}>` : 
           `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
         to: recipientEmail,
-        subject: "Test Email from Support System",
-        text: "This is a test email from your support system.\n\nIf you're seeing this, your email configuration is working correctly!",
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
-            <h2 style="color: #333;">Email Configuration Test</h2>
-            <p>This is a test email from your support system.</p>
-            <p style="font-weight: bold; color: #22c55e;">If you're seeing this, your email configuration is working correctly! ✓</p>
-            <p style="color: #666; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.9em;">
-              Sent from your support system using SMTP.
-            </p>
-          </div>
-        `,
+        subject: "Test Email from Techlinx Helpdesk",
+        text: "This is a test email from your Techlinx Helpdesk support system.\n\nIf you're seeing this, your email configuration is working correctly!",
+        html: htmlContent,
       });
       
       console.log("Test email sent successfully", info.messageId);

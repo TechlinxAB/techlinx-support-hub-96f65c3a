@@ -214,10 +214,119 @@ serve(async (req) => {
     
     console.log(`🔔 Sending notification to ${recipientEmail} (${recipientType})`);
 
-    // Format the HTML content
-    const htmlContent = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      ${emailContent.replace(/\n/g, "<br>")}
-    </div>`;
+    // Create the styled HTML email template with Techlinx branding
+    const techlinxLogoUrl = `${baseUrl}/lovable-uploads/6ccedc19-181d-4786-9b9f-62fc5f4131e1.png`;
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${subject}</title>
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          color: #333333;
+          margin: 0;
+          padding: 0;
+          background-color: #f5f5f5;
+        }
+        .email-wrapper {
+          max-width: 600px;
+          margin: 0 auto;
+          background-color: #ffffff;
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .email-header {
+          background-color: #387A3D;
+          padding: 20px;
+          text-align: left;
+        }
+        .email-logo {
+          max-height: 60px;
+          width: auto;
+        }
+        .email-content {
+          padding: 30px;
+          line-height: 1.6;
+        }
+        .email-content p {
+          margin: 0 0 16px;
+        }
+        .message-box {
+          background-color: #f9f9f9;
+          border-left: 4px solid #387A3D;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 4px;
+        }
+        .button {
+          display: inline-block;
+          background-color: #387A3D;
+          color: white;
+          padding: 12px 25px;
+          text-decoration: none;
+          border-radius: 4px;
+          margin: 20px 0;
+          font-weight: 600;
+        }
+        .email-footer {
+          background-color: #f5f5f5;
+          padding: 20px;
+          text-align: center;
+          font-size: 12px;
+          color: #777777;
+        }
+        .case-info {
+          background-color: #f0f7f0;
+          border-radius: 4px;
+          padding: 15px;
+          margin-bottom: 20px;
+        }
+        .case-info span {
+          font-weight: 600;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-wrapper">
+        <div class="email-header">
+          <img src="${techlinxLogoUrl}" alt="Techlinx" class="email-logo">
+        </div>
+        <div class="email-content">
+          <div class="case-info">
+            <p>Case: <span>${caseData.title}</span></p>
+            <p>Status: <span>${caseData.status}</span></p>
+            ${caseData.categories?.name ? `<p>Category: <span>${caseData.categories.name}</span></p>` : ''}
+            <p>Priority: <span>${caseData.priority}</span></p>
+          </div>
+          
+          <h2>${recipientType === "user" ? "Your case has been updated" : "New reply on a support case"}</h2>
+          
+          <p>${recipientType === "user" 
+            ? `Your case has received a new reply from ${replyData.profiles?.name || "our support team"}.` 
+            : `${replyData.profiles?.name || "A user"} has replied to case "${caseData.title}".`}</p>
+          
+          <div class="message-box">
+            ${replyData.content.replace(/\n/g, '<br>')}
+          </div>
+          
+          <a href="${caseLink}" class="button">View Case</a>
+          
+          <p>You can view and respond to this case by clicking the button above or following this link: <a href="${caseLink}">${caseLink}</a></p>
+          
+          ${settings.email_signature ? `<p>${settings.email_signature.replace(/\n/g, '<br>')}</p>` : ''}
+        </div>
+        <div class="email-footer">
+          <p>&copy; ${new Date().getFullYear()} Techlinx. All rights reserved.</p>
+          <p>This is an automated message from your support system. Please do not reply directly to this email.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
 
     // Check if we have valid SMTP settings
     if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_password) {
@@ -272,8 +381,8 @@ serve(async (req) => {
             `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
           to: recipientEmail,
           subject: subject,
-          text: emailContent,
-          html: htmlContent
+          text: emailContent, // Plain text version
+          html: htmlContent // HTML version
         });
         
         console.log("🔔 Email sent via SMTP to", recipientEmail, "Message ID:", info.messageId);
