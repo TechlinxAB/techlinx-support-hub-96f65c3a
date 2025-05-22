@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/layout/Header';
 import { RefreshCw } from 'lucide-react';
@@ -16,6 +16,7 @@ import {
 import PageTransition from '@/components/layout/PageTransition';
 import { useSidebar } from '@/context/SidebarContext';
 import Container from '@/components/layout/Container';
+import { fbPixel } from '@/utils/facebookPixel';
 
 // Create a separate LoadingOverlay component
 const LoadingOverlay = ({ message }: { message?: string }) => (
@@ -33,6 +34,12 @@ const Layout = () => {
   const [pageTransitioning, setPageTransitioning] = useState(false);
   const { loading, session, isAuthenticated, authState } = useAuth();
   const { sidebarWidth, isSidebarOpen, isMobile } = useSidebar();
+  const location = useLocation();
+  
+  // Track page views when route changes
+  useEffect(() => {
+    fbPixel.trackPageView(document.title);
+  }, [location.pathname]);
   
   // Calculate content margin based on sidebar state
   // Mobile devices should have no margin for the sidebar
