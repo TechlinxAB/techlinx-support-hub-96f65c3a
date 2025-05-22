@@ -48,15 +48,7 @@ export async function ensureSmtpFieldsExist() {
       ALTER TABLE public.notification_settings ADD COLUMN high_priority_color VARCHAR(20) DEFAULT '#ffebeb';
     END IF;
     
-    -- Ensure high priority notification template exists
-    INSERT INTO public.notification_templates (type, subject, body)
-    VALUES (
-      'high_priority_notification', 
-      'URGENT: High Priority Case {case_title}', 
-      'URGENT: A high priority case {case_title} has been created and requires immediate attention. You can view and respond to this case by following this link: {case_link}'
-    )
-    ON CONFLICT (type) DO NOTHING;
-    
+    -- We no longer create notification templates since they're hardcoded in the code
   END $$;
   `;
   
