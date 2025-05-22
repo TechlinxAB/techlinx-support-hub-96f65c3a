@@ -70,7 +70,6 @@ serve(async (req) => {
     
     // Create the styled HTML email template with Techlinx branding
     const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
-    const techlinxLogoUrl = `${baseUrl}/lovable-uploads/6ccedc19-181d-4786-9b9f-62fc5f4131e1.png`;
     const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -98,10 +97,6 @@ serve(async (req) => {
           background-color: #387A3D;
           padding: 20px;
           text-align: left;
-        }
-        .email-logo {
-          max-height: 60px;
-          width: auto;
         }
         .email-content {
           padding: 30px;
@@ -133,7 +128,7 @@ serve(async (req) => {
     <body>
       <div class="email-wrapper">
         <div class="email-header">
-          <img src="${techlinxLogoUrl}" alt="Techlinx" class="email-logo">
+          <h2 style="color: white; margin: 0;">Techlinx Helpdesk</h2>
         </div>
         <div class="email-content">
           <h1>Email Configuration Test</h1>
