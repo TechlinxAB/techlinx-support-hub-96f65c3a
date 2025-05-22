@@ -12,10 +12,11 @@ class NavigationService {
   private minNavigationInterval = 1000; // Increased to prevent rapid navigation
   private resetTimeout = 10000; // 10 seconds
   private isInitialized = false;
+  private redirectLock = false;
   
   private constructor() {
     // Private constructor to enforce singleton
-    console.log('NavigationService singleton created');
+    console.log('[NavigationService] Singleton created');
   }
   
   public static getInstance(): NavigationService {
@@ -29,7 +30,7 @@ class NavigationService {
     // IMPROVED: Always update the navigate function to ensure it's fresh
     this.navigateFunction = navigate;
     this.isInitialized = true;
-    console.log('NavigationService: Navigate function ' + (this.navigateFunction ? 'already set' : 'set'));
+    console.log('[NavigationService] Navigate function ' + (this.navigateFunction ? 'already set' : 'set'));
   }
   
   public isReady(): boolean {
@@ -39,25 +40,31 @@ class NavigationService {
   // Helper method to get any stored redirect URL
   public getStoredRedirectUrl(): string | null {
     const storedUrl = sessionStorage.getItem('auth_redirect_url');
-    console.log('NavigationService: Retrieved stored redirect URL:', storedUrl);
+    console.log('[NavigationService] Retrieved stored redirect URL:', storedUrl);
     return storedUrl;
   }
   
   // Helper method to clear stored redirect URL
   public clearStoredRedirectUrl(): void {
     sessionStorage.removeItem('auth_redirect_url');
-    console.log('NavigationService: Cleared stored redirect URL');
+    console.log('[NavigationService] Cleared stored redirect URL');
   }
   
   // Returns true if navigation was successful, false if blocked
   public navigate(to: string, options?: { replace?: boolean, state?: any }): boolean {
-    console.log(`NavigationService: Attempting to navigate to ${to}`, options);
+    console.log(`[NavigationService] Attempting to navigate to ${to}`, options);
+    
+    // Don't navigate if we're already navigating to avoid race conditions
+    if (this.redirectLock) {
+      console.log('[NavigationService] Navigation in progress, blocking new navigation');
+      return false;
+    }
     
     if (!this.navigateFunction) {
-      console.warn('Navigate function not set in NavigationService');
+      console.warn('[NavigationService] Navigate function not set');
       
       // Never use window.location as fallback - this causes page reloads
-      console.error('Cannot navigate without navigate function');
+      console.error('[NavigationService] Cannot navigate without navigate function');
       return false;
     }
     
@@ -65,7 +72,7 @@ class NavigationService {
     
     // Check if this is a rapid navigation to the same path
     if (to === this.lastNavigationPath && now - this.lastNavigationTime < this.minNavigationInterval) {
-      console.log(`Navigation throttled: too many rapid requests to ${to}`);
+      console.log(`[NavigationService] Navigation throttled: too many rapid requests to ${to}`);
       return false;
     }
     
@@ -83,7 +90,7 @@ class NavigationService {
       
       // If too many navigations in a short time, block it
       if (timeSinceFirst < this.resetTimeout) {
-        console.log(`Navigation loop detected to ${to}. Blocking navigation.`);
+        console.log(`[NavigationService] Navigation loop detected to ${to}. Blocking navigation.`);
         
         // Reset this path's counter after blocking
         setTimeout(() => {
@@ -104,13 +111,22 @@ class NavigationService {
     this.lastNavigationTime = now;
     this.lastNavigationPath = to;
     
+    // Set redirect lock to prevent race conditions
+    this.redirectLock = true;
+    
     // Perform navigation
     try {
-      console.log(`NavigationService: Navigating to ${to}`);
+      console.log(`[NavigationService] Navigating to ${to}`);
       this.navigateFunction(to, options);
+      
+      // Release lock after short delay to allow navigation to complete
+      setTimeout(() => {
+        this.redirectLock = false;
+      }, 200);
       return true;
     } catch (error) {
-      console.error('Navigation error:', error);
+      console.error('[NavigationService] Navigation error:', error);
+      this.redirectLock = false;
       return false;
     }
   }
@@ -118,7 +134,7 @@ class NavigationService {
   // Special method for hard redirects when needed - use only for auth redirects
   // or when absolutely necessary (external URLs)
   public hardRedirect(to: string): void {
-    console.log(`NavigationService: Hard redirect to ${to}`);
+    console.log(`[NavigationService] Hard redirect to ${to}`);
     if (typeof window !== 'undefined') {
       // Only use for external URLs or complete resets
       if (to.startsWith('http') || to.includes('reset=') || to.includes('force=')) {
@@ -139,7 +155,8 @@ class NavigationService {
     this.navigationCount = {};
     this.lastNavigationTime = 0;
     this.lastNavigationPath = '';
-    console.log('NavigationService: Navigation tracking reset');
+    this.redirectLock = false;
+    console.log('[NavigationService] Navigation tracking reset');
   }
 }
 

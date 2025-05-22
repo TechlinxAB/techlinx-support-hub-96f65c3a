@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +18,7 @@ const AuthPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [serviceAvailable, setServiceAvailable] = useState(true);
   
-  const { signIn, loading: authLoading } = useAuth();
+  const { signIn, loading: authLoading, isAuthenticated } = useAuth();
   const location = useLocation();
   
   // Get the redirect URL from query parameters and store it in sessionStorage
@@ -29,12 +28,26 @@ const AuthPage = () => {
   useEffect(() => {
     // Store the redirect path in sessionStorage when the component mounts
     if (redirectPath && redirectPath !== '/') {
-      console.log('AuthPage: Storing redirect path in sessionStorage:', redirectPath);
+      console.log('[AuthPage] Storing redirect path:', redirectPath);
       sessionStorage.setItem('auth_redirect_url', redirectPath);
     }
     
-    console.log('AuthPage mounted with redirect path:', redirectPath);
-  }, [redirectPath]);
+    console.log('[AuthPage] Mounted with redirect path:', redirectPath, 'isAuthenticated:', isAuthenticated);
+    
+    // If user is already authenticated, trigger redirect via NavigationService
+    if (isAuthenticated) {
+      console.log('[AuthPage] User is already authenticated, attempting redirect');
+      const storedUrl = NavigationService.getStoredRedirectUrl();
+      if (storedUrl) {
+        console.log('[AuthPage] Redirecting to stored URL:', storedUrl);
+        NavigationService.navigate(storedUrl, { replace: true });
+        NavigationService.clearStoredRedirectUrl();
+      } else {
+        console.log('[AuthPage] No stored URL, redirecting to home');
+        NavigationService.navigate('/', { replace: true });
+      }
+    }
+  }, [redirectPath, isAuthenticated]);
   
   // Check Supabase service availability
   useEffect(() => {
@@ -49,7 +62,7 @@ const AuthPage = () => {
         setServiceAvailable(isAvailable);
         
         if (!isAvailable) {
-          console.warn('Supabase service unavailable or slow - may be in cold start');
+          console.warn('[AuthPage] Supabase service unavailable or slow - may be in cold start');
           setError('Service is currently starting up. Please wait a moment...');
           
           // Retry after 3 seconds
@@ -58,7 +71,7 @@ const AuthPage = () => {
           setError(null);
         }
       } catch (err) {
-        console.error('Error checking service:', err);
+        console.error('[AuthPage] Error checking service:', err);
         setServiceAvailable(false);
         setError('Service is currently unavailable. Please try again later.');
       }
@@ -87,14 +100,15 @@ const AuthPage = () => {
     setError(null);
     
     try {
+      console.log('[AuthPage] Attempting sign in');
       const { error } = await signIn(email, password);
       
       if (error) {
         setError(error.message || 'Failed to sign in. Please check your credentials.');
-      }
-      // No need to navigate here, the AuthContext will handle it using the stored redirect URL
+      } 
+      // No need to navigate here, the AuthContext will handle it
     } catch (err: any) {
-      console.error('Exception during sign in:', err);
+      console.error('[AuthPage] Exception during sign in:', err);
       setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -120,7 +134,7 @@ const AuthPage = () => {
       // Force page reload to ensure clean state
       window.location.href = '/auth';
     } catch (err) {
-      console.error('Error during hard reset:', err);
+      console.error('[AuthPage] Error during hard reset:', err);
       toast.error("Reset failed", {
         description: "Please try refreshing the page."
       });

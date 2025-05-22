@@ -66,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedProfile, setImpersonatedProfile] = useState<ImpersonatedProfile | null>(null);
   const [authState, setAuthState] = useState<'INITIAL_SESSION' | 'RESTORING_SESSION' | 'AUTHENTICATED' | 'SIGNED_OUT'>('INITIAL_SESSION');
+  const [redirectInProgress, setRedirectInProgress] = useState(false);
   
   // Simple derived state
   const isAuthenticated = !!session && !!user;
@@ -106,40 +107,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Centralized redirect handler
+  // Centralized redirect handler with mutex protection
   const handleAuthRedirect = () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || redirectInProgress) return;
     
-    // First check sessionStorage for stored redirect URL 
-    const storedRedirectUrl = NavigationService.getStoredRedirectUrl();
-    console.log('AuthContext: Checking stored redirect URL:', storedRedirectUrl);
-    
-    if (storedRedirectUrl && storedRedirectUrl !== '/') {
-      console.log('AuthContext: Redirecting to stored URL:', storedRedirectUrl);
+    try {
+      setRedirectInProgress(true);
+      console.log('[AuthRedirect] Starting redirect process, auth state:', isAuthenticated);
       
-      // Clear the stored URL to prevent future redirects
-      NavigationService.clearStoredRedirectUrl();
+      // First check sessionStorage for stored redirect URL 
+      const storedRedirectUrl = NavigationService.getStoredRedirectUrl();
+      console.log('[AuthRedirect] Stored redirect URL:', storedRedirectUrl);
       
-      // Use NavigationService to handle the redirect
-      NavigationService.navigate(storedRedirectUrl, { replace: true });
-      return;
-    }
-    
-    // If we're on the auth page with no stored URL, redirect to home
-    if (isAuthPage) {
-      console.log('AuthContext: No specific redirect found, redirecting to home');
-      NavigationService.navigate('/', { replace: true });
+      if (storedRedirectUrl && storedRedirectUrl !== '/') {
+        console.log('[AuthRedirect] Redirecting to stored URL:', storedRedirectUrl);
+        
+        // Clear the stored URL to prevent future redirects
+        NavigationService.clearStoredRedirectUrl();
+        
+        // Use NavigationService to handle the redirect
+        setTimeout(() => {
+          NavigationService.navigate(storedRedirectUrl, { replace: true });
+          setRedirectInProgress(false);
+        }, 50);
+        
+        return;
+      }
+      
+      // If we're on the auth page with no stored URL, redirect to home
+      if (isAuthPage) {
+        console.log('[AuthRedirect] No specific redirect found, redirecting to home');
+        setTimeout(() => {
+          NavigationService.navigate('/', { replace: true });
+          setRedirectInProgress(false);
+        }, 50);
+      } else {
+        setRedirectInProgress(false);
+      }
+    } catch (err) {
+      console.error('[AuthRedirect] Error during redirect:', err);
+      setRedirectInProgress(false);
     }
   };
 
   // Initialize auth state with clean approach
   useEffect(() => {
+    console.log('[AuthContext] Initializing auth state');
     setAuthState('RESTORING_SESSION');
     setLoading(true);
     
     // Set up auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
-      console.log('Auth state changed:', event);
+      console.log('[AuthContext] Auth state changed:', event);
       
       // Update session and user state
       setSession(currentSession);
@@ -148,7 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (currentSession?.user) {
         setAuthState('AUTHENTICATED');
         
-        // Use setTimeout to avoid potential conflicts with Supabase client
+        // Set timeout to avoid potential conflicts with Supabase client
         setTimeout(async () => {
           try {
             const fetchedProfile = await fetchProfile(currentSession.user.id);
@@ -161,11 +180,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           } finally {
             setLoading(false);
             
-            // After authentication is complete and loading is done,
-            // handle redirects if needed
-            handleAuthRedirect();
+            // After authentication is complete, handle redirects if needed
+            // We add a small delay to ensure state is fully updated
+            setTimeout(() => handleAuthRedirect(), 100);
           }
-        }, 0);
+        }, 100);
       } else {
         setAuthState('SIGNED_OUT');
         setProfile(null);
@@ -191,7 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           // If on protected route, redirect to auth
           if (!isAuthPage) {
-            console.log('No session, redirecting from', location.pathname, 'to auth');
+            console.log('[AuthContext] No session, redirecting from', location.pathname, 'to auth');
             navigate('/auth');
           }
           return;
@@ -212,8 +231,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         setLoading(false);
         
-        // Once authenticated and loaded, handle redirect
-        handleAuthRedirect();
+        // Once authenticated and loaded, handle redirect with small delay to ensure state is updated
+        setTimeout(() => handleAuthRedirect(), 100);
       } catch (err) {
         console.error('Error in session init:', err);
         setAuthState('SIGNED_OUT');
@@ -240,7 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       
       if (error) {
-        console.error('Sign in error:', error);
+        console.error('[AuthContext] Sign in error:', error);
         toast.error("Authentication failed", { 
           description: error.message || "Please check your credentials and try again."
         });
@@ -250,6 +269,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // On successful sign in, update session and user
       if (data?.session) {
+        console.log('[AuthContext] Sign in successful, updating state');
         setSession(data.session);
         setUser(data.session.user);
         setAuthState('AUTHENTICATED');
@@ -264,14 +284,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         toast.success("Successfully signed in!");
         
-        // Let the handleAuthRedirect function handle the redirect
-        // after the auth state change is processed
+        // We don't call handleAuthRedirect here - let the auth state change listener handle it
       }
       
       setLoading(false);
       return { error: null };
     } catch (err) {
-      console.error('Exception during sign in:', err);
+      console.error('[AuthContext] Exception during sign in:', err);
       toast.error("Authentication error", { 
         description: "An unexpected error occurred. Please try again."
       });
