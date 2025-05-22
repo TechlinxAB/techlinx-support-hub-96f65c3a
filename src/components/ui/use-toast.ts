@@ -137,6 +137,32 @@ toast.warning = (message: string, options?: ToastProps) => {
   return sonnerToast(message, props);
 };
 
+// Add info method with blue styling for informational messages
+toast.info = (message: string, options?: ToastProps) => {
+  const props = {
+    ...options,
+    className: "custom-toast toast-wrapper bg-blue-50 border-blue-200 text-blue-700",
+    description: options?.description,
+    duration: options?.duration || 4000,
+  };
+  
+  return sonnerToast(message, props);
+};
+
+// Add offline notification method for when email services are down
+toast.emailOffline = (options?: { title?: string; description?: string }) => {
+  const title = options?.title || "Email Service Unavailable";
+  const description = options?.description || 
+    "The notification system can't send emails right now. Your action was saved, but no email notifications will be sent.";
+  
+  return toast({
+    title,
+    description,
+    variant: "warning",
+    duration: 6000
+  });
+};
+
 export const useToast = () => {
   return {
     toast

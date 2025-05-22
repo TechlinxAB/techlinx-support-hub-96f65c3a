@@ -13,6 +13,8 @@ interface CaseNotificationRequest {
   caseId: string;
   replyId: string;
   recipientType: "user" | "consultant";
+  skipEmail?: boolean; // Optional flag to skip actual email sending
+  isHighPriority?: boolean; // Optional flag to explicitly mark high priority
 }
 
 serve(async (req: Request) => {
@@ -22,24 +24,36 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Parse the request body
-    const { caseId, replyId, recipientType } = await req.json() as CaseNotificationRequest;
+    // Parse the request body with better error handling
+    let parsedBody: CaseNotificationRequest;
+    try {
+      parsedBody = await req.json() as CaseNotificationRequest;
+    } catch (parseError) {
+      console.error("[HIGH PRIORITY DEBUG] Error parsing request body:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body", warning: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+    
+    const { caseId, replyId, recipientType, skipEmail = false, isHighPriority = false } = parsedBody;
     
     if (!caseId) {
       return new Response(
-        JSON.stringify({ error: "Case ID is required" }),
+        JSON.stringify({ error: "Case ID is required", warning: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
     
     if (!recipientType) {
       return new Response(
-        JSON.stringify({ error: "Recipient type is required" }),
+        JSON.stringify({ error: "Recipient type is required", warning: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
     
     console.log(`[HIGH PRIORITY DEBUG] Starting notification process for case ${caseId}, reply ${replyId}, to ${recipientType}`);
+    console.log(`[HIGH PRIORITY DEBUG] Explicitly marked as high priority: ${isHighPriority}`);
     
     // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
@@ -72,8 +86,9 @@ serve(async (req: Request) => {
     }
 
     // Check if this is a high priority case and log it clearly
-    const isHighPriority = caseData.priority === "high";
-    console.log(`[HIGH PRIORITY DEBUG] Case priority: ${caseData.priority}, High priority: ${isHighPriority}`);
+    // Use either explicit flag or case data
+    const isHighPriorityCase = isHighPriority || caseData.priority === "high";
+    console.log(`[HIGH PRIORITY DEBUG] Case priority: ${caseData.priority}, High priority: ${isHighPriorityCase}`);
 
     // Get settings and templates
     const { data: settings, error: settingsError } = await supabase
@@ -93,7 +108,7 @@ serve(async (req: Request) => {
     let templateType = recipientType === "user" ? "user_notification" : "consultant_notification";
     
     // If this is a high priority case and the feature is enabled, use the high priority template
-    if (isHighPriority && settings.enable_priority_notifications && recipientType === "consultant") {
+    if (isHighPriorityCase && settings.enable_priority_notifications && recipientType === "consultant") {
       templateType = "high_priority_notification";
       console.log(`[HIGH PRIORITY DEBUG] Using high priority template type: ${templateType}`);
     } else {
@@ -175,8 +190,22 @@ serve(async (req: Request) => {
         JSON.stringify({ 
           success: true, 
           message: "Email provider is set to 'none'. Email would have been sent to: " + recipientEmail,
-          debug_mode: true,
-          isHighPriority
+          debug: true,
+          isHighPriority: isHighPriorityCase
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+    
+    // If skipEmail flag is set, don't actually send the email but log it
+    if (skipEmail) {
+      console.log(`[HIGH PRIORITY DEBUG] skipEmail flag set. Not sending actual email to ${recipientEmail}`);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Email sending skipped as requested. Would have sent to: " + recipientEmail,
+          debug: true,
+          isHighPriority: isHighPriorityCase
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
@@ -185,7 +214,14 @@ serve(async (req: Request) => {
     // Check if SMTP settings are valid when using SMTP
     if (settings.email_provider === "smtp" && (!settings.smtp_host || !settings.smtp_user)) {
       console.error("[HIGH PRIORITY DEBUG] Invalid SMTP settings");
-      throw new Error("SMTP settings are not properly configured");
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          warning: true,
+          message: "SMTP settings are not properly configured. Please check your email settings.",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
     console.log(`[HIGH PRIORITY DEBUG] Email provider: ${settings.email_provider}, SMTP host: ${settings.smtp_host}, SMTP user: ${settings.smtp_user}`);
@@ -226,7 +262,7 @@ serve(async (req: Request) => {
       body += `\n\n${settings.email_signature}`;
     }
     
-    console.log(`[HIGH PRIORITY DEBUG] 🔔 Sending ${isHighPriority ? 'high priority' : 'normal'} notification to ${recipientEmail} (${recipientType})`);
+    console.log(`[HIGH PRIORITY DEBUG] 🔔 Sending ${isHighPriorityCase ? 'high priority' : 'normal'} notification to ${recipientEmail} (${recipientType})`);
 
     // Create the styled HTML email template with Techlinx branding
     const htmlContent = `
@@ -269,15 +305,15 @@ serve(async (req: Request) => {
           margin: 0 0 16px;
         }
         .case-info {
-          background-color: ${isHighPriority ? settings.high_priority_color || '#ffebeb' : '#f0f7f0'};
-          border-left: 4px solid ${isHighPriority ? '#e53e3e' : '#387A3D'};
+          background-color: ${isHighPriorityCase ? settings.high_priority_color || '#ffebeb' : '#f0f7f0'};
+          border-left: 4px solid ${isHighPriorityCase ? '#e53e3e' : '#387A3D'};
           padding: 15px;
           margin: 20px 0;
           border-radius: 4px;
         }
         .case-info h2 {
           margin-top: 0;
-          color: ${isHighPriority ? '#e53e3e' : '#387A3D'};
+          color: ${isHighPriorityCase ? '#e53e3e' : '#387A3D'};
         }
         .case-info table {
           width: 100%;
@@ -322,7 +358,7 @@ serve(async (req: Request) => {
         </div>
         <div class="email-content">
           <div class="case-info">
-            <h2>${isHighPriority ? 'URGENT: High Priority Case' : 'Case Update'}</h2>
+            <h2>${isHighPriorityCase ? 'URGENT: High Priority Case' : 'Case Update'}</h2>
             <table>
               <tr>
                 <td>Title:</td>
@@ -367,7 +403,7 @@ serve(async (req: Request) => {
     try {
       // Handle email sending based on provider
       if (settings.email_provider === "smtp") {
-        console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriority ? 'high priority' : 'normal'} email via SMTP...`);
+        console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriorityCase ? 'high priority' : 'normal'} email via SMTP...`);
         
         // Create transporter with additional timeout and connection options
         const transporter = nodemailer.createTransport({
@@ -389,13 +425,14 @@ serve(async (req: Request) => {
           maxConnections: 5, // Limit to 5 concurrent connections
           rateDelta: 1000,  // Max of 1 messages per second
           rateLimit: 5,     // Max of 5 messages per rateDelta
+          debug: true,      // Enable debug logging
         });
         
         // Verify connection works before sending
         try {
           await transporter.verify();
           console.log("[HIGH PRIORITY DEBUG] SMTP connection verified successfully");
-        } catch (verifyError) {
+        } catch (verifyError: any) {
           console.error("[HIGH PRIORITY DEBUG] SMTP connection verification failed:", verifyError);
           
           // Return a success response even though we couldn't send the email
@@ -436,11 +473,11 @@ serve(async (req: Request) => {
                 message: `Notification sent to ${recipientEmail}`,
                 provider: "smtp",
                 messageId: info.messageId,
-                isHighPriority
+                isHighPriority: isHighPriorityCase
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
             );
-          } catch (sendError) {
+          } catch (sendError: any) {
             attempt++;
             lastError = sendError;
             console.error(`[HIGH PRIORITY DEBUG] Error sending email (attempt ${attempt}/${maxAttempts}):`, sendError);
@@ -471,7 +508,7 @@ serve(async (req: Request) => {
           to: recipientEmail,
           subject: subject,
           text: body,
-          isHighPriority
+          isHighPriority: isHighPriorityCase
         });
         
         // Return success for debug mode
@@ -479,8 +516,8 @@ serve(async (req: Request) => {
           JSON.stringify({
             success: true,
             message: `Debug mode: Notification would have been sent to ${recipientEmail}`,
-            debug: { subject, body },
-            isHighPriority
+            debug: true,
+            isHighPriority: isHighPriorityCase
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
@@ -501,7 +538,7 @@ serve(async (req: Request) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("[HIGH PRIORITY DEBUG] Error processing notification request:", error);
     
     // Return a non-error response with warning to prevent frontend from showing an error

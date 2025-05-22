@@ -15,7 +15,7 @@ export const notificationService = {
       // Get the case details to check priority
       const { data: caseData, error: caseError } = await supabase
         .from('cases')
-        .select('priority')
+        .select('priority, title, status')
         .eq('id', caseId)
         .single();
         
@@ -69,15 +69,21 @@ export const notificationService = {
               caseId,
               replyId,
               recipientType,
+              skipEmail: false, // New option that allows skipping email sending but still logging the notification
             }),
+            // Add timeout to prevent hanging on network issues
+            signal: AbortSignal.timeout(15000) // 15 second timeout
           }
         );
         
-        const responseData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+        const responseData = await response.json().catch(() => ({ 
+          error: `HTTP error ${response.status}`,
+          warning: true
+        }));
         
         // Check for warnings in the response (new feature)
         if (responseData.warning) {
-          console.warn(`Notification warning: ${responseData.message}`);
+          console.warn(`Notification warning: ${responseData.message || 'Unknown warning'}`);
           
           // Show a toast warning when notification has issues but didn't fail completely
           toast({
@@ -94,22 +100,50 @@ export const notificationService = {
         // If there's an error in the response
         if (!response.ok || responseData.error) {
           console.error(`Error sending notification: ${JSON.stringify(responseData)}`);
-          throw new Error(responseData.error || `Failed to send notification (HTTP ${response.status})`);
+          
+          // Instead of throwing, just show a warning
+          toast({
+            title: "Notification delivery issue",
+            description: "Your reply was saved, but email notifications couldn't be sent at this time.",
+            variant: "warning",
+            duration: 5000,
+          });
+          
+          return true; // Still return success for the UI flow
+        }
+        
+        // Success case - notification sent properly
+        if (responseData.success && !responseData.debug) {
+          const notificationType = isHighPriority ? 'high priority ' : '';
+          toast({
+            title: `Notification sent`,
+            description: `Your reply was saved and ${notificationType}notification was sent.`,
+            variant: "success",
+          });
+        } else if (responseData.debug) {
+          // Debug mode - no emails actually sent
+          toast.info(`Debug mode: No real email sent (${recipientType})`);
         }
         
         console.log(`Notification edge function response:`, responseData);
-        
         return true;
       } catch (fetchError: any) {
         console.error(`Error sending notification: ${fetchError.message}`);
         
-        // Display a toast warning when notification fails but don't prevent the UI from working
-        toast({
-          title: "Notification delivery issue",
-          description: "Your reply was saved, but the notification delivery had an issue. The recipient may not be notified immediately.",
-          variant: "warning",
-          duration: 5000,
-        });
+        // Handle network timeout specifically
+        if (fetchError.name === 'AbortError' || fetchError.name === 'TimeoutError') {
+          toast.emailOffline({
+            description: "The notification system is currently experiencing connectivity issues. Your reply was saved, but notifications couldn't be sent."
+          });
+        } else {
+          // Display a toast warning when notification fails but don't prevent the UI from working
+          toast({
+            title: "Notification delivery issue",
+            description: "Your reply was saved, but the notification delivery had an issue. The recipient may not be notified immediately.",
+            variant: "warning",
+            duration: 5000,
+          });
+        }
         
         // We return true here because the case/reply was successful even if notification had issues
         return true;
@@ -119,6 +153,12 @@ export const notificationService = {
       console.error(`Error sending notification: ${error.message}`);
       
       // Even if notification fails, we don't want to block the UI
+      toast({
+        title: "Notification system issue",
+        description: "Your action was completed successfully, but we couldn't send notifications at this time.",
+        variant: "warning",
+      });
+      
       return false;
     }
   },
@@ -181,11 +221,17 @@ export const notificationService = {
               caseId,
               replyId: "",
               recipientType: "consultant", // High priority notifications go to consultants
+              isHighPriority: true // Explicitly mark as high priority
             }),
+            // Add timeout to prevent hanging on network issues
+            signal: AbortSignal.timeout(15000) // 15 second timeout
           }
         );
         
-        const responseData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+        const responseData = await response.json().catch(() => ({ 
+          error: `HTTP error ${response.status}`,
+          warning: true  
+        }));
         
         // Check for warnings in the response (new feature)
         if (responseData.warning) {
@@ -218,26 +264,37 @@ export const notificationService = {
           return false;
         }
   
-        const data = responseData;
-        console.log(`High priority notification response:`, data);
+        // Handle success with proper messaging
+        if (responseData.success && !responseData.debug) {
+          toast({
+            title: "High priority case created",
+            description: "Consultants have been notified about this high priority case.",
+            variant: "success",
+          });
+        } else if (responseData.debug) {
+          // Debug mode - no emails sent
+          toast.info("Debug mode: No real email sent for high priority notification");
+        }
         
-        toast({
-          title: "High priority case created",
-          description: "Consultants have been notified about this high priority case.",
-          variant: "success",
-        });
-        
+        console.log(`High priority notification response:`, responseData);
         return true;
       } catch (fetchError: any) {
         console.error(`Error sending high priority notification: ${fetchError.message}`);
         
-        // Show warning but don't block the UI
-        toast({
-          title: "High priority notification issue",
-          description: "Your high priority case was created, but there was an issue notifying consultants.",
-          variant: "warning",
-          duration: 5000,
-        });
+        // Handle network timeout specifically
+        if (fetchError.name === 'AbortError' || fetchError.name === 'TimeoutError') {
+          toast.emailOffline({
+            description: "The notification system is currently experiencing connectivity issues. Your high priority case was created, but notifications couldn't be sent."
+          });
+        } else {
+          // Show warning but don't block the UI
+          toast({
+            title: "High priority notification issue",
+            description: "Your high priority case was created, but there was an issue notifying consultants.",
+            variant: "warning",
+            duration: 5000,
+          });
+        }
         
         return true; // We return true because the case creation was successful
       }
@@ -281,8 +338,11 @@ export const notificationService = {
             },
             body: JSON.stringify({
               recipientEmail,
-              highPriority
+              highPriority,
+              offlineMode: false, // New option, set to true to test without actually sending emails
             }),
+            // Add timeout to prevent hanging
+            signal: AbortSignal.timeout(15000)
           }
         );
   
@@ -290,10 +350,29 @@ export const notificationService = {
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
           console.error(`Error sending test email: HTTP ${response.status} - ${JSON.stringify(errorData)}`);
+          
+          if (response.status === 502 || response.status === 504) {
+            // Gateway timeout or Bad Gateway usually indicates SMTP connection issues
+            toast.emailOffline({
+              title: "Email Server Unreachable",
+              description: "The email server is currently unreachable. Please check your SMTP settings or try again later."
+            });
+            return false;
+          }
+          
           throw new Error(errorData.error || `Failed to send test email (HTTP ${response.status})`);
         }
   
         const responseData = await response.json();
+        
+        if (responseData.warning) {
+          toast({
+            title: "Test email issue",
+            description: responseData.message || "There was an issue sending the test email.",
+            variant: "warning"
+          });
+          return false;
+        }
         
         toast({
           title: `${highPriority ? "High priority" : "Regular"} test email sent successfully`,
@@ -304,7 +383,17 @@ export const notificationService = {
         return true;
       } catch (fetchError: any) {
         console.error(`Error sending test email: ${fetchError.message}`);
-        throw new Error(`Test email service error: ${fetchError.message}`);
+        
+        // Handle network timeout specifically
+        if (fetchError.name === 'AbortError' || fetchError.name === 'TimeoutError') {
+          toast.emailOffline({
+            description: "The test email couldn't be sent due to a connection timeout. Please check your network and try again."
+          });
+        } else {
+          throw new Error(`Test email service error: ${fetchError.message}`);
+        }
+        
+        return false;
       }
     } catch (error: any) {
       console.error(`Error sending test email: ${error.message}`);
@@ -315,6 +404,55 @@ export const notificationService = {
         variant: "destructive"
       });
       
+      return false;
+    }
+  },
+  
+  /**
+   * Check if the notification system is operational
+   * This is a lightweight check that doesn't actually send emails
+   */
+  async checkNotificationSystemStatus(): Promise<boolean> {
+    try {
+      // Get the session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error(`Error checking notification status: ${sessionError.message}`);
+        return false;
+      }
+      
+      if (!sessionData.session) {
+        console.error("Error checking notification status: Not authenticated");
+        return false;
+      }
+      
+      // Get notification settings to check provider configuration
+      const { data: settings, error: settingsError } = await supabase
+        .from('notification_settings')
+        .select('email_provider, smtp_host, smtp_port')
+        .single();
+      
+      if (settingsError) {
+        console.error(`Error checking notification settings: ${settingsError.message}`);
+        return false;
+      }
+      
+      // If no email provider is configured, the notification system is not operational
+      if (settings.email_provider === 'none' || !settings.email_provider) {
+        console.log("Notification system status: No email provider configured");
+        return false;
+      }
+      
+      // If using SMTP, check if the basic settings are there
+      if (settings.email_provider === 'smtp' && (!settings.smtp_host || !settings.smtp_port)) {
+        console.log("Notification system status: Incomplete SMTP configuration");
+        return false;
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error(`Error checking notification system status: ${error.message}`);
       return false;
     }
   }
