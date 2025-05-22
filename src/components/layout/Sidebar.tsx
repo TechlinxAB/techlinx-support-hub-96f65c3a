@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { Computer, MessageCircle, Users, Settings, Clock, UserPlus, Building, X, LayoutDashboard } from 'lucide-react';
+import { Laptop, MessageCircle, Users, Settings, UserPlus, Building, X, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useSidebar } from '@/context/SidebarContext';
@@ -61,7 +60,7 @@ const Sidebar = () => {
     <aside className="h-screen bg-sidebar z-30 flex flex-col w-full">
       <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border bg-sidebar">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
-          <Computer className="h-6 w-6" />
+          <Laptop className="h-6 w-6" />
           <span>Techlinx Helpdesk</span>
         </Link>
         
