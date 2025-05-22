@@ -86,9 +86,8 @@ serve(async (req: Request) => {
     }
 
     // Check if this is a high priority case and log it clearly
-    // Use either explicit flag or case data
-    const isHighPriorityCase = isHighPriority || caseData.priority === "high";
-    console.log(`[HIGH PRIORITY DEBUG] Case priority: ${caseData.priority}, High priority: ${isHighPriorityCase}`);
+    const caseIsHighPriority = caseData.priority === "high";
+    console.log(`[HIGH PRIORITY DEBUG] Case priority: ${caseData.priority}, High priority case: ${caseIsHighPriority}`);
 
     // Get settings and templates
     const { data: settings, error: settingsError } = await supabase
@@ -105,10 +104,12 @@ serve(async (req: Request) => {
     console.log(`[HIGH PRIORITY DEBUG] Settings: enable_priority_notifications = ${settings.enable_priority_notifications}`);
     
     // Get the appropriate notification template based on recipient type and case priority
+    // KEY CHANGE: Only use high priority template when explicitly requested with isHighPriority flag
+    // For regular replies, even on high priority cases, use standard templates
     let templateType = recipientType === "user" ? "user_notification" : "consultant_notification";
     
-    // If this is a high priority case and the feature is enabled, use the high priority template
-    if (isHighPriorityCase && settings.enable_priority_notifications && recipientType === "consultant") {
+    // Only use high priority template for explicit high priority notifications (not regular replies)
+    if (isHighPriority && settings.enable_priority_notifications && recipientType === "consultant") {
       templateType = "high_priority_notification";
       console.log(`[HIGH PRIORITY DEBUG] Using high priority template type: ${templateType}`);
     } else {
@@ -191,7 +192,7 @@ serve(async (req: Request) => {
           success: true, 
           message: "Email provider is set to 'none'. Email would have been sent to: " + recipientEmail,
           debug: true,
-          isHighPriority: isHighPriorityCase
+          isHighPriority: isHighPriority
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
@@ -205,7 +206,7 @@ serve(async (req: Request) => {
           success: true, 
           message: "Email sending skipped as requested. Would have sent to: " + recipientEmail,
           debug: true,
-          isHighPriority: isHighPriorityCase
+          isHighPriority: isHighPriority
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
@@ -262,7 +263,10 @@ serve(async (req: Request) => {
       body += `\n\n${settings.email_signature}`;
     }
     
-    console.log(`[HIGH PRIORITY DEBUG] 🔔 Sending ${isHighPriorityCase ? 'high priority' : 'normal'} notification to ${recipientEmail} (${recipientType})`);
+    // Set notification type label for logs and email styling
+    // Only show high priority in email styling for explicitly requested high priority notifications
+    const isHighPriorityNotification = isHighPriority && settings.enable_priority_notifications;
+    console.log(`[HIGH PRIORITY DEBUG] 🔔 Sending ${isHighPriorityNotification ? 'high priority' : 'normal'} notification to ${recipientEmail} (${recipientType})`);
 
     // Create the styled HTML email template with Techlinx branding
     const htmlContent = `
@@ -305,15 +309,15 @@ serve(async (req: Request) => {
           margin: 0 0 16px;
         }
         .case-info {
-          background-color: ${isHighPriorityCase ? settings.high_priority_color || '#ffebeb' : '#f0f7f0'};
-          border-left: 4px solid ${isHighPriorityCase ? '#e53e3e' : '#387A3D'};
+          background-color: ${isHighPriorityNotification ? settings.high_priority_color || '#ffebeb' : '#f0f7f0'};
+          border-left: 4px solid ${isHighPriorityNotification ? '#e53e3e' : '#387A3D'};
           padding: 15px;
           margin: 20px 0;
           border-radius: 4px;
         }
         .case-info h2 {
           margin-top: 0;
-          color: ${isHighPriorityCase ? '#e53e3e' : '#387A3D'};
+          color: ${isHighPriorityNotification ? '#e53e3e' : '#387A3D'};
         }
         .case-info table {
           width: 100%;
@@ -358,7 +362,7 @@ serve(async (req: Request) => {
         </div>
         <div class="email-content">
           <div class="case-info">
-            <h2>${isHighPriorityCase ? 'URGENT: High Priority Case' : 'Case Update'}</h2>
+            <h2>${isHighPriorityNotification ? 'URGENT: High Priority Case' : 'Case Update'}</h2>
             <table>
               <tr>
                 <td>Title:</td>
@@ -403,7 +407,7 @@ serve(async (req: Request) => {
     try {
       // Handle email sending based on provider
       if (settings.email_provider === "smtp") {
-        console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriorityCase ? 'high priority' : 'normal'} email via SMTP...`);
+        console.log(`[HIGH PRIORITY DEBUG] Attempting to send ${isHighPriorityNotification ? 'high priority' : 'normal'} email via SMTP...`);
         
         // --- KEY CHANGE: Align with successful test-email configuration ---
         // Modified SMTP configuration to match working test-email function
@@ -452,7 +456,7 @@ serve(async (req: Request) => {
                 message: `Notification sent to ${recipientEmail}`,
                 provider: "smtp",
                 messageId: info.messageId,
-                isHighPriority: isHighPriorityCase
+                isHighPriority: isHighPriorityNotification
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
             );
@@ -487,7 +491,7 @@ serve(async (req: Request) => {
           to: recipientEmail,
           subject: subject,
           text: body,
-          isHighPriority: isHighPriorityCase
+          isHighPriority: isHighPriorityNotification
         });
         
         // Return success for debug mode
@@ -496,7 +500,7 @@ serve(async (req: Request) => {
             success: true,
             message: `Debug mode: Notification would have been sent to ${recipientEmail}`,
             debug: true,
-            isHighPriority: isHighPriorityCase
+            isHighPriority: isHighPriorityNotification
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
