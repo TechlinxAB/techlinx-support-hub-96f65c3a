@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle, ArrowUpDown, Flag } from 'lucide-react';
+import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -234,11 +234,6 @@ const CasesPage = () => {
                   caseItem.priority === 'medium' ? 'priority-medium' :
                   'priority-high'
                 )}>
-                  <Flag className={`h-4 w-4 mr-1 ${
-                    caseItem.priority === 'high' ? 'text-red-500' : 
-                    caseItem.priority === 'medium' ? 'text-amber-500' : 
-                    'text-green-500'
-                  }`} />
                   {formatPriority(caseItem.priority)}
                 </Badge>
               </TableCell>

@@ -3,7 +3,7 @@ import { useAppContext } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Search, Calendar, Trash2, Flag } from 'lucide-react';
+import { Search, Calendar, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
@@ -369,11 +369,6 @@ const SearchPage = () => {
                               'priority-high'
                             )}
                           >
-                            <Flag className={`h-4 w-4 mr-1 ${
-                              caseItem.priority === 'high' ? 'text-red-500' : 
-                              caseItem.priority === 'medium' ? 'text-amber-500' : 
-                              'text-green-500'
-                            }`} />
                             {formatPriority(caseItem.priority)}
                           </Badge>
                           <span>
