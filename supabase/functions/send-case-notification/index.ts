@@ -89,7 +89,7 @@ serve(async (req: Request) => {
     const caseIsHighPriority = caseData.priority === "high";
     console.log(`[HIGH PRIORITY DEBUG] Case priority: ${caseData.priority}, High priority case: ${caseIsHighPriority}`);
 
-    // Get settings and templates
+    // Get settings from the database (we still need SMTP settings and other configuration)
     const { data: settings, error: settingsError } = await supabase
       .from("notification_settings")
       .select("*")
@@ -102,68 +102,6 @@ serve(async (req: Request) => {
     
     // Log settings to check if high priority notifications are enabled
     console.log(`[HIGH PRIORITY DEBUG] Settings: enable_priority_notifications = ${settings.enable_priority_notifications}`);
-    
-    // Get the appropriate notification template based on recipient type and case priority
-    // KEY CHANGE: Only use high priority template when explicitly requested with isHighPriority flag
-    // For regular replies, even on high priority cases, use standard templates
-    let templateType = recipientType === "user" ? "user_notification" : "consultant_notification";
-    
-    // Only use high priority template for explicit high priority notifications (not regular replies)
-    if (isHighPriority && settings.enable_priority_notifications && recipientType === "consultant") {
-      templateType = "high_priority_notification";
-      console.log(`[HIGH PRIORITY DEBUG] Using high priority template type: ${templateType}`);
-    } else {
-      console.log(`[HIGH PRIORITY DEBUG] Using standard template type: ${templateType}`);
-    }
-    
-    // Get the appropriate template
-    const { data: templates, error: templatesError } = await supabase
-      .from("notification_templates")
-      .select("*")
-      .in("type", [templateType, recipientType === "user" ? "user_notification" : "consultant_notification"]);
-      
-    if (templatesError) {
-      console.error("[HIGH PRIORITY DEBUG] Error fetching templates:", templatesError);
-      throw new Error(`Failed to fetch notification templates: ${templatesError.message}`);
-    }
-
-    console.log(`[HIGH PRIORITY DEBUG] Templates found: ${templates.length}`);
-    templates.forEach(t => console.log(`[HIGH PRIORITY DEBUG] Template: ${t.type}, Subject: ${t.subject}`));
-    
-    // Find the specific template we need with fallback to standard template if high priority not found
-    const primaryTemplate = templates.find(t => t.type === templateType);
-    const fallbackTemplate = templates.find(t => 
-      t.type === (recipientType === "user" ? "user_notification" : "consultant_notification")
-    );
-    
-    const template = primaryTemplate || fallbackTemplate;
-    
-    if (!template) {
-      throw new Error(`[HIGH PRIORITY DEBUG] No template found for type: ${templateType}`);
-    }
-
-    console.log(`[HIGH PRIORITY DEBUG] Selected template: ${template.type}, Subject: ${template.subject}`);
-
-    // Get reply content if a reply ID is provided
-    let replyContent = "";
-    let replyUser = null;
-    if (replyId) {
-      const { data: replyData, error: replyError } = await supabase
-        .from("replies")
-        .select("content, user:profiles!replies_user_id_fkey(name, id, role)")
-        .eq("id", replyId)
-        .single();
-        
-      if (replyError) {
-        console.error("[HIGH PRIORITY DEBUG] Error fetching reply:", replyError);
-        throw new Error(`Failed to fetch reply: ${replyError.message}`);
-      }
-      
-      if (replyData) {
-        replyContent = replyData.content;
-        replyUser = replyData.user;
-      }
-    }
     
     // Determine who to send the notification to
     let recipientEmail: string;
@@ -229,38 +167,46 @@ serve(async (req: Request) => {
     
     // Prepare the base URL for links
     const baseUrl = settings.base_url || "https://helpdesk.techlinx.se";
+    const caseLink = `${baseUrl}/cases/${caseId}`;
     
-    // Prepare template variables
+    // Get reply content if a reply ID is provided
+    let replyContent = "";
+    let replyUser = null;
+    if (replyId) {
+      const { data: replyData, error: replyError } = await supabase
+        .from("replies")
+        .select("content, user:profiles!replies_user_id_fkey(name, id, role)")
+        .eq("id", replyId)
+        .single();
+        
+      if (replyError) {
+        console.error("[HIGH PRIORITY DEBUG] Error fetching reply:", replyError);
+        throw new Error(`Failed to fetch reply: ${replyError.message}`);
+      }
+      
+      if (replyData) {
+        replyContent = replyData.content;
+        replyUser = replyData.user;
+      }
+    }
+
+    // Prepare variables for email
     const caseTitle = caseData.title;
     const caseStatus = caseData.status;
     const casePriority = caseData.priority;
     const categoryName = caseData.category?.name || "";
     const userName = replyUser ? `${replyUser.name || "Unknown"}` : "System";
-    const caseLink = `${baseUrl}/cases/${caseId}`;
     
-    // Replace template variables in subject and body
-    let subject = template.subject
-      .replace("{case_title}", caseTitle)
-      .replace("{case_id}", caseId)
-      .replace("{case_status}", caseStatus)
-      .replace("{case_priority}", casePriority)
-      .replace("{category}", categoryName)
-      .replace("{user_name}", userName)
-      .replace("{case_link}", caseLink);
+    // Set email subject based on case priority and recipient
+    let subject: string;
     
-    let body = template.body
-      .replace("{case_title}", caseTitle)
-      .replace("{case_id}", caseId)
-      .replace("{case_status}", caseStatus)
-      .replace("{case_priority}", casePriority)
-      .replace("{category}", categoryName)
-      .replace("{user_name}", userName)
-      .replace("{reply_content}", replyContent)
-      .replace("{case_link}", caseLink);
-    
-    // Add email signature if available
-    if (settings.email_signature) {
-      body += `\n\n${settings.email_signature}`;
+    // Simplified hardcoded subject lines
+    if (isHighPriority && settings.enable_priority_notifications) {
+      subject = `URGENT: High Priority Case - ${caseTitle}`;
+    } else if (recipientType === "user") {
+      subject = `Your case has been updated - ${caseTitle}`;
+    } else {
+      subject = `New case activity - ${caseTitle}`;
     }
     
     // Set notification type label for logs and email styling
@@ -374,7 +320,7 @@ serve(async (req: Request) => {
               </tr>
               <tr>
                 <td>Priority:</td>
-                <td>${caseData.priority}</td>
+                <td>${casePriority}</td>
               </tr>
               <tr>
                 <td>Category:</td>
@@ -390,12 +336,10 @@ serve(async (req: Request) => {
           </div>
           ` : ''}
           
-          <p>${body}</p>
-          
           <a href="${caseLink}" class="action-button">View Case</a>
         </div>
         <div class="email-footer">
-          <p>&copy; ${new Date().getFullYear()} Techlinx. All rights reserved.</p>
+          <p>${settings.email_signature || `&copy; ${new Date().getFullYear()} Techlinx. All rights reserved.`}</p>
           <p>This is an automated message from your support system.</p>
         </div>
       </div>
@@ -444,7 +388,6 @@ serve(async (req: Request) => {
                 `"${settings.sender_name || "Support"}" <${settings.smtp_user}>`,
               to: recipientEmail,
               subject: subject,
-              text: body,
               html: htmlContent,
             });
             
@@ -490,7 +433,7 @@ serve(async (req: Request) => {
         console.log(`[HIGH PRIORITY DEBUG] No valid email provider configured, would have sent:`, {
           to: recipientEmail,
           subject: subject,
-          text: body,
+          text: `Case update for ${caseTitle}. View at ${caseLink}`,
           isHighPriority: isHighPriorityNotification
         });
         
