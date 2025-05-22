@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 
@@ -69,9 +68,8 @@ export const notificationService = {
               caseId,
               replyId,
               recipientType,
-              skipEmail: false, // New option that allows skipping email sending but still logging the notification
+              skipEmail: false,
             }),
-            // Add timeout to prevent hanging on network issues
             signal: AbortSignal.timeout(15000) // 15 second timeout
           }
         );
@@ -81,7 +79,7 @@ export const notificationService = {
           warning: true
         }));
         
-        // Check for warnings in the response (new feature)
+        // Check for warnings in the response
         if (responseData.warning) {
           console.warn(`Notification warning: ${responseData.message || 'Unknown warning'}`);
           
@@ -93,7 +91,6 @@ export const notificationService = {
             duration: 5000,
           });
           
-          // We still return true because the case/reply was successful
           return true;
         }
   
@@ -109,22 +106,10 @@ export const notificationService = {
             duration: 5000,
           });
           
-          return true; // Still return success for the UI flow
+          return true;
         }
         
-        // Success case - notification sent properly
-        if (responseData.success && !responseData.debug) {
-          const notificationType = isHighPriority ? 'high priority ' : '';
-          toast({
-            title: `Notification sent`,
-            description: `Your reply was saved and ${notificationType}notification was sent.`,
-            variant: "success",
-          });
-        } else if (responseData.debug) {
-          // Debug mode - no emails actually sent
-          toast.info(`Debug mode: No real email sent (${recipientType})`);
-        }
-        
+        // Success case - notification sent properly, but we no longer show a toast
         console.log(`Notification edge function response:`, responseData);
         return true;
       } catch (fetchError: any) {
@@ -145,7 +130,6 @@ export const notificationService = {
           });
         }
         
-        // We return true here because the case/reply was successful even if notification had issues
         return true;
       }
       
@@ -233,7 +217,7 @@ export const notificationService = {
           warning: true  
         }));
         
-        // Check for warnings in the response (new feature)
+        // Check for warnings in the response
         if (responseData.warning) {
           console.warn(`High priority notification warning: ${responseData.message}`);
           
@@ -264,18 +248,7 @@ export const notificationService = {
           return false;
         }
   
-        // Handle success with proper messaging
-        if (responseData.success && !responseData.debug) {
-          toast({
-            title: "High priority case created",
-            description: "Consultants have been notified about this high priority case.",
-            variant: "success",
-          });
-        } else if (responseData.debug) {
-          // Debug mode - no emails sent
-          toast.info("Debug mode: No real email sent for high priority notification");
-        }
-        
+        // Handle success - but no longer show success toast
         console.log(`High priority notification response:`, responseData);
         return true;
       } catch (fetchError: any) {

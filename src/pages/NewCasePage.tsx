@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -86,26 +85,9 @@ const NewCasePage = () => {
       if (isHighPriority) {
         console.log(`Sending high priority notification for new case ${newCase.id}`);
         
-        // Add a loading toast to indicate that notification is being sent
-        const notificationToastId = toast.loading("Sending high priority notification...");
-        
+        // We no longer need a loading toast
         notificationService.sendHighPriorityCaseNotification(newCase.id)
-          .then(success => {
-            // Dismiss the loading toast
-            toast.dismiss(notificationToastId);
-            
-            if (success) {
-              console.log(`High priority notification sent successfully for case ${newCase.id}`);
-            } else {
-              console.error(`Failed to send high priority notification for case ${newCase.id}`);
-              toast.warning("Notification delivery issue", {
-                description: "Your high priority case was created, but the notification to consultants may have failed.",
-              });
-            }
-          })
           .catch(error => {
-            // Dismiss the loading toast
-            toast.dismiss(notificationToastId);
             console.error(`Error sending high priority notification: ${error.message}`);
           });
       }
