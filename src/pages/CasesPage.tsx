@@ -35,7 +35,7 @@ import {
 type SortOption = 'date-desc' | 'date-asc' | 'status-asc' | 'status-desc';
 
 const CasesPage = () => {
-  const { loadingCases, cases, refetchCases } = useAppContext();
+  const { loadingCases, cases, refetchCases, users } = useAppContext();
   const { profile, isImpersonating } = useAuth();
   const [activeTab, setActiveTab] = useState<CaseStatus | 'all' | 'watchlist'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,6 +196,7 @@ const CasesPage = () => {
             <TableHead>Title</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Priority</TableHead>
+            {isConsultant && !isImpersonating && <TableHead>User</TableHead>}
             <TableHead>
               <div className="flex items-center cursor-pointer" 
                    onClick={() => setSortOption(sortOption === 'date-desc' ? 'date-asc' : 'date-desc')}>
@@ -207,64 +208,73 @@ const CasesPage = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredCases.map(caseItem => (
-            <TableRow 
-              key={caseItem.id} 
-              onClick={() => viewCase(caseItem.id)}
-              className="cursor-pointer hover:bg-muted"
-            >
-              <TableCell className="font-medium">{caseItem.title}</TableCell>
-              <TableCell>
-                <Badge variant={
-                  caseItem.status === 'new' ? 'new' :
-                  caseItem.status === 'ongoing' ? 'ongoing' :
-                  caseItem.status === 'resolved' ? 'awaiting' :
-                  'completed'
-                }>
-                  {caseItem.status === 'new' ? 'New' :
-                   caseItem.status === 'ongoing' ? 'Ongoing' :
-                   caseItem.status === 'resolved' ? 'Awaiting' :
-                   'Completed'}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline" className={cn(
-                  "status-badge",
-                  caseItem.priority === 'low' ? 'priority-low' :
-                  caseItem.priority === 'medium' ? 'priority-medium' :
-                  'priority-high'
-                )}>
-                  {formatPriority(caseItem.priority)}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {new Date(caseItem.updatedAt).toLocaleDateString()}
-              </TableCell>
-              <TableCell>
-                <div className="flex space-x-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => handleStarToggle(e, caseItem.id)}
-                  >
-                    {starredCases.includes(caseItem.id) ? 
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
-                      <Star className="h-4 w-4" />}
-                  </Button>
-                  {/* Only consultants can delete cases */}
-                  {profile?.role === 'consultant' && (
+          {filteredCases.map(caseItem => {
+            const user = users.find(u => u.id === caseItem.userId);
+            
+            return (
+              <TableRow 
+                key={caseItem.id} 
+                onClick={() => viewCase(caseItem.id)}
+                className="cursor-pointer hover:bg-muted"
+              >
+                <TableCell className="font-medium">{caseItem.title}</TableCell>
+                <TableCell>
+                  <Badge variant={
+                    caseItem.status === 'new' ? 'new' :
+                    caseItem.status === 'ongoing' ? 'ongoing' :
+                    caseItem.status === 'resolved' ? 'awaiting' :
+                    'completed'
+                  }>
+                    {caseItem.status === 'new' ? 'New' :
+                     caseItem.status === 'ongoing' ? 'Ongoing' :
+                     caseItem.status === 'resolved' ? 'Awaiting' :
+                     'Completed'}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={cn(
+                    "status-badge",
+                    caseItem.priority === 'low' ? 'priority-low' :
+                    caseItem.priority === 'medium' ? 'priority-medium' :
+                    'priority-high'
+                  )}>
+                    {formatPriority(caseItem.priority)}
+                  </Badge>
+                </TableCell>
+                {isConsultant && !isImpersonating && (
+                  <TableCell>
+                    {user?.name || 'Unknown User'}
+                  </TableCell>
+                )}
+                <TableCell>
+                  {new Date(caseItem.updatedAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  <div className="flex space-x-1">
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={(e) => handleDeleteClick(e, caseItem.id)}
+                      onClick={(e) => handleStarToggle(e, caseItem.id)}
                     >
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                      {starredCases.includes(caseItem.id) ? 
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                        <Star className="h-4 w-4" />}
                     </Button>
-                  )}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                    {/* Only consultants can delete cases */}
+                    {profile?.role === 'consultant' && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => handleDeleteClick(e, caseItem.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     );

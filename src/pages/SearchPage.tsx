@@ -58,6 +58,8 @@ const SearchPage = () => {
     return priority.charAt(0).toUpperCase() + priority.slice(1);
   };
   
+  const isConsultant = profile?.role === 'consultant';
+
   const handleSearch = () => {
     setIsSearched(true);
     
@@ -355,8 +357,12 @@ const SearchPage = () => {
                       <p className="text-sm text-muted-foreground line-clamp-2">{caseItem.description}</p>
                       <div className="flex justify-between items-center mt-3 text-xs text-muted-foreground">
                         <div className="flex items-center gap-2">
-                          <span>{user?.name}</span>
-                          <span>•</span>
+                          {isConsultant && !isImpersonating && (
+                            <>
+                              <span>{user?.name || 'Unknown User'}</span>
+                              <span>•</span>
+                            </>
+                          )}
                           <span>{company?.name}</span>
                         </div>
                         <div className="flex items-center gap-2">

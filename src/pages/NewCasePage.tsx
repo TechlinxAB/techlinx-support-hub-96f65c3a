@@ -101,7 +101,18 @@ const NewCasePage = () => {
           return;
         }
 
-        setUsers(data || []);
+        // Transform the data to match our User interface
+        const transformedUsers: User[] = (data || []).map(user => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          company_id: user.company_id,
+          companies: Array.isArray(user.companies) && user.companies.length > 0 
+            ? user.companies[0] 
+            : undefined
+        }));
+
+        setUsers(transformedUsers);
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.error('Failed to load users');

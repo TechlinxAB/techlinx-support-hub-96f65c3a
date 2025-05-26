@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Case, CaseStatus, CasePriority, useAppContext } from '@/context/AppContext';
@@ -56,7 +55,7 @@ const CaseList = ({
   watchlistFilter = false
 }: CaseListProps) => {
   const navigate = useNavigate();
-  const { cases, companies, categories, currentUser, loadingCases, refetchCases } = useAppContext();
+  const { cases, companies, categories, currentUser, loadingCases, refetchCases, users } = useAppContext();
   const { profile, isImpersonating } = useAuth();
   const { starredCases, toggleStar } = useStarredCases();
   
@@ -187,6 +186,8 @@ const CaseList = ({
     }
   };
   
+  const isConsultant = profile?.role === 'consultant';
+
   return (
     <div>
       {title && (
@@ -279,7 +280,7 @@ const CaseList = ({
                 <TableHead>Title</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Priority</TableHead>
-                <TableHead>User</TableHead>
+                {isConsultant && !isImpersonating && <TableHead>User</TableHead>}
                 <TableHead>Company</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="w-[80px]">Actions</TableHead>
@@ -287,10 +288,8 @@ const CaseList = ({
             </TableHeader>
             <TableBody>
               {filteredCases.map((caseItem) => {
-                const user = profile?.role === 'consultant' && !isImpersonating
-                  ? companies.find(c => c.id === caseItem.userId)?.name
-                  : null;
-                const company = companies.find(c => c.id === caseItem.companyId)?.name;
+                const user = users.find(u => u.id === caseItem.userId);
+                const company = companies.find(c => c.id === caseItem.companyId);
                 const isStarred = starredCases.includes(caseItem.id);
                 
                 return (
@@ -317,8 +316,12 @@ const CaseList = ({
                         {formatPriority(caseItem.priority)}
                       </Badge>
                     </TableCell>
-                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{user || currentUser?.name}</TableCell>
-                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{company}</TableCell>
+                    {isConsultant && !isImpersonating && (
+                      <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>
+                        {user?.name || 'Unknown User'}
+                      </TableCell>
+                    )}
+                    <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{company?.name}</TableCell>
                     <TableCell onClick={() => navigate(`/cases/${caseItem.id}`)}>{format(new Date(caseItem.createdAt), 'MMM dd, yyyy')}</TableCell>
                     <TableCell>
                       <div className="flex space-x-1">
