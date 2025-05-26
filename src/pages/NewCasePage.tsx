@@ -100,13 +100,25 @@ const NewCasePage = () => {
         }
 
         // Transform the data to match our User interface
-        const transformedUsers: User[] = (data || []).map(user => ({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          company_id: user.company_id,
-          company_name: user.companies?.name || 'Unknown Company'
-        }));
+        const transformedUsers: User[] = (data || []).map(user => {
+          // Handle both array and object cases for companies
+          let companyName = 'Unknown Company';
+          if (user.companies) {
+            if (Array.isArray(user.companies)) {
+              companyName = user.companies.length > 0 ? user.companies[0].name : 'Unknown Company';
+            } else {
+              companyName = user.companies.name || 'Unknown Company';
+            }
+          }
+
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            company_id: user.company_id,
+            company_name: companyName
+          };
+        });
 
         console.log('Fetched users with companies:', transformedUsers);
         setUsers(transformedUsers);
