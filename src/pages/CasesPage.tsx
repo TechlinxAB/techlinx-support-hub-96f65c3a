@@ -51,6 +51,9 @@ const CasesPage = () => {
   // Add new sort state
   const [sortOption, setSortOption] = useState<SortOption>('date-desc');
 
+  // Determine if user is consultant
+  const isConsultant = profile?.role === 'consultant';
+
   // Track if initial data has been loaded
   useEffect(() => {
     if (!loadingCases && cases && !initialDataLoaded) {
@@ -146,7 +149,7 @@ const CasesPage = () => {
     let filteredCases = cases || [];
     
     // If user role is not consultant OR if impersonating a user (not a consultant), only show user's cases
-    if (profile?.role !== 'consultant' || (isImpersonating && profile?.role !== 'consultant')) {
+    if (!isConsultant || (isImpersonating && !isConsultant)) {
       filteredCases = filteredCases.filter(c => c.userId === profile?.id);
     }
     
