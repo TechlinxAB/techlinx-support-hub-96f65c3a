@@ -49,6 +49,17 @@ interface User {
   company_name?: string;
 }
 
+// Type for the Supabase query result
+interface UserWithCompany {
+  id: string;
+  name: string;
+  email: string;
+  company_id: string;
+  companies: {
+    name: string;
+  } | null;
+}
+
 const NewCasePage = () => {
   const { categories, addCase } = useAppContext();
   const { profile: currentUser } = useAuth();
@@ -100,15 +111,11 @@ const NewCasePage = () => {
         }
 
         // Transform the data to match our User interface
-        const transformedUsers: User[] = (data || []).map(user => {
-          // Handle both array and object cases for companies
+        const transformedUsers: User[] = (data as UserWithCompany[] || []).map(user => {
+          // Handle company name extraction
           let companyName = 'Unknown Company';
-          if (user.companies) {
-            if (Array.isArray(user.companies)) {
-              companyName = user.companies.length > 0 ? user.companies[0].name : 'Unknown Company';
-            } else {
-              companyName = user.companies.name || 'Unknown Company';
-            }
+          if (user.companies && user.companies.name) {
+            companyName = user.companies.name;
           }
 
           return {
