@@ -46,9 +46,7 @@ interface User {
   name: string;
   email: string;
   company_id: string;
-  companies?: {
-    name: string;
-  };
+  company_name?: string;
 }
 
 const NewCasePage = () => {
@@ -87,7 +85,7 @@ const NewCasePage = () => {
             name,
             email,
             company_id,
-            companies (
+            companies!inner (
               name
             )
           `)
@@ -107,11 +105,10 @@ const NewCasePage = () => {
           name: user.name,
           email: user.email,
           company_id: user.company_id,
-          companies: Array.isArray(user.companies) && user.companies.length > 0 
-            ? user.companies[0] 
-            : undefined
+          company_name: user.companies?.name || 'Unknown Company'
         }));
 
+        console.log('Fetched users with companies:', transformedUsers);
         setUsers(transformedUsers);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -252,7 +249,7 @@ const NewCasePage = () => {
                         <SelectContent>
                           {users.map((user) => (
                             <SelectItem key={user.id} value={user.id}>
-                              {user.name} ({user.email}) - {user.companies?.name || 'No Company'}
+                              {user.name} ({user.email}) - {user.company_name}
                             </SelectItem>
                           ))}
                         </SelectContent>
