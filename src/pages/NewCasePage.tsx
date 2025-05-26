@@ -57,7 +57,7 @@ interface UserWithCompany {
   company_id: string;
   companies: {
     name: string;
-  }[] | null;
+  } | null;
 }
 
 const NewCasePage = () => {
@@ -96,7 +96,7 @@ const NewCasePage = () => {
             name,
             email,
             company_id,
-            companies!inner (
+            companies (
               name
             )
           `)
@@ -112,10 +112,10 @@ const NewCasePage = () => {
 
         // Transform the data to match our User interface
         const transformedUsers: User[] = (data as UserWithCompany[] || []).map(user => {
-          // Handle company name extraction from array
+          // Handle company name extraction from the joined table
           let companyName = 'Unknown Company';
-          if (user.companies && user.companies.length > 0) {
-            companyName = user.companies[0].name;
+          if (user.companies && user.companies.name) {
+            companyName = user.companies.name;
           }
 
           return {
