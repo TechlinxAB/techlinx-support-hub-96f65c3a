@@ -56,7 +56,7 @@ interface SupabaseUserResult {
   company_id: string;
   companies: {
     name: string;
-  }[];
+  }; // Single object, not array - this matches what Supabase actually returns
 }
 
 const NewCasePage = () => {
@@ -113,7 +113,10 @@ const NewCasePage = () => {
 
         // Transform the data to match our User interface
         const transformedUsers: User[] = (data as SupabaseUserResult[] || []).map(user => {
-          const companyName = user.companies?.[0]?.name || 'Unknown Company';
+          // Access the company name directly from the single object
+          const companyName = user.companies?.name || 'Unknown Company';
+          
+          console.log(`User: ${user.name}, Company data:`, user.companies, `Extracted name: ${companyName}`);
           
           return {
             id: user.id,
