@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,18 +45,7 @@ interface User {
   name: string;
   email: string;
   company_id: string;
-  company_name?: string;
-}
-
-// Type for the Supabase query result - matching what Supabase actually returns
-interface SupabaseUserResult {
-  id: string;
-  name: string;
-  email: string;
-  company_id: string;
-  companies: {
-    name: string;
-  }[] | null;
+  company_name: string;
 }
 
 const NewCasePage = () => {
@@ -96,7 +84,7 @@ const NewCasePage = () => {
             name,
             email,
             company_id,
-            companies (
+            companies!inner (
               name
             )
           `)
@@ -110,14 +98,12 @@ const NewCasePage = () => {
           return;
         }
 
-        // Transform the data to match our User interface
-        const transformedUsers: User[] = (data as SupabaseUserResult[] || []).map(user => {
-          // Handle company name extraction from the joined table array
-          let companyName = 'Unknown Company';
-          if (user.companies && user.companies.length > 0) {
-            companyName = user.companies[0].name;
-          }
+        console.log('Raw Supabase data:', data);
 
+        // Transform the data to match our User interface
+        const transformedUsers: User[] = (data || []).map(user => {
+          const companyName = user.companies?.name || 'Unknown Company';
+          
           return {
             id: user.id,
             name: user.name,
@@ -127,7 +113,7 @@ const NewCasePage = () => {
           };
         });
 
-        console.log('Fetched users with companies:', transformedUsers);
+        console.log('Transformed users with companies:', transformedUsers);
         setUsers(transformedUsers);
       } catch (error) {
         console.error('Error fetching users:', error);
