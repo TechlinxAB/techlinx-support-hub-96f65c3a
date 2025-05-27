@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -112,9 +111,20 @@ const NewCasePage = () => {
         console.log('Raw Supabase data:', data);
 
         // Transform the data to match our User interface
-        const transformedUsers: User[] = (data as SupabaseUserResult[] || []).map(user => {
-          // Access the company name directly from the single object
-          const companyName = user.companies?.name || 'Unknown Company';
+        // Handle both possible data structures flexibly
+        const transformedUsers: User[] = (data || []).map((user: any) => {
+          // Handle both array and single object formats for companies
+          let companyName = 'Unknown Company';
+          
+          if (user.companies) {
+            if (Array.isArray(user.companies)) {
+              // Old format: array
+              companyName = user.companies[0]?.name || 'Unknown Company';
+            } else {
+              // New format: single object
+              companyName = user.companies.name || 'Unknown Company';
+            }
+          }
           
           console.log(`User: ${user.name}, Company data:`, user.companies, `Extracted name: ${companyName}`);
           
