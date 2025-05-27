@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -102,7 +103,7 @@ const NewCasePage = () => {
 
         // Transform the data to match our User interface
         const transformedUsers: User[] = (data || []).map(user => {
-          const companyName = user.companies?.name || 'Unknown Company';
+          const companyName = user.companies?.[0]?.name || 'Unknown Company';
           
           return {
             id: user.id,
