@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,6 +46,16 @@ interface User {
   email: string;
   company_id: string;
   company_name: string;
+}
+
+interface SupabaseUserResult {
+  id: string;
+  name: string;
+  email: string;
+  company_id: string;
+  companies: {
+    name: string;
+  };
 }
 
 const NewCasePage = () => {
@@ -102,8 +111,8 @@ const NewCasePage = () => {
         console.log('Raw Supabase data:', data);
 
         // Transform the data to match our User interface
-        const transformedUsers: User[] = (data || []).map(user => {
-          const companyName = user.companies?.[0]?.name || 'Unknown Company';
+        const transformedUsers: User[] = (data as SupabaseUserResult[] || []).map(user => {
+          const companyName = user.companies?.name || 'Unknown Company';
           
           return {
             id: user.id,
