@@ -49,15 +49,15 @@ interface User {
   company_name?: string;
 }
 
-// Type for the Supabase query result
-interface UserWithCompany {
+// Type for the Supabase query result - matching what Supabase actually returns
+interface SupabaseUserResult {
   id: string;
   name: string;
   email: string;
   company_id: string;
   companies: {
     name: string;
-  } | null;
+  }[] | null;
 }
 
 const NewCasePage = () => {
@@ -111,11 +111,11 @@ const NewCasePage = () => {
         }
 
         // Transform the data to match our User interface
-        const transformedUsers: User[] = (data as UserWithCompany[] || []).map(user => {
-          // Handle company name extraction from the joined table
+        const transformedUsers: User[] = (data as SupabaseUserResult[] || []).map(user => {
+          // Handle company name extraction from the joined table array
           let companyName = 'Unknown Company';
-          if (user.companies && user.companies.name) {
-            companyName = user.companies.name;
+          if (user.companies && user.companies.length > 0) {
+            companyName = user.companies[0].name;
           }
 
           return {
