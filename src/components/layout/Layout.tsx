@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -147,11 +148,20 @@ const Layout = () => {
     );
   }
 
-  // No loading overlay during page transitions anymore
-  const showTransitionOverlay = false;
-
   return (
     <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
+      {/* Persistent Header - outside of page transitions */}
+      <div 
+        className="fixed top-0 right-0 z-30 bg-white border-b border-gray-200"
+        style={{ 
+          backgroundColor: 'white',
+          left: contentMarginLeft,
+          transition: 'left 0.3s ease'
+        }}
+      >
+        <Header />
+      </div>
+
       {/* Main content area that properly adjusts to sidebar width */}
       <div 
         className="flex-1 flex flex-col transition-all duration-300 bg-white"
@@ -159,11 +169,10 @@ const Layout = () => {
           marginLeft: contentMarginLeft,
           backgroundColor: 'white',
           position: 'relative',
-          zIndex: 1
+          zIndex: 1,
+          paddingTop: '4rem' // Add padding for fixed header
         }}
       >
-        <Header />
-        
         {/* Content area with AnimatePresence for page transitions */}
         <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
           <AnimatePresence mode="wait">

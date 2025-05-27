@@ -26,7 +26,7 @@ const Header: React.FC = () => {
   };
   
   return (
-    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-20 w-full">
+    <div className="h-16 w-full">
       <Container className="h-full">
         <div className="flex justify-between items-center h-full">
           <div className="flex items-center">
@@ -51,7 +51,7 @@ const Header: React.FC = () => {
           </div>
         </div>
       </Container>
-    </header>
+    </div>
   );
 };
 
