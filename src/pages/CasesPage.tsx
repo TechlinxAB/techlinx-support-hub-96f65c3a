@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle, ArrowUpDown } from 'lucide-react';
@@ -48,9 +47,17 @@ const CasesPage = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortOption, setSortOption] = useState<SortOption>('date-desc');
+  const [displayCases, setDisplayCases] = useState(cases || []);
 
   // Determine if user is consultant
   const isConsultant = profile?.role === 'consultant';
+
+  // Update display cases when cases change, but keep previous data during loading to prevent flicker
+  useEffect(() => {
+    if (cases && cases.length > 0) {
+      setDisplayCases(cases);
+    }
+  }, [cases]);
 
   // Check if we're being directed to watchlist filter - only run once on mount
   useEffect(() => {
@@ -63,8 +70,8 @@ const CasesPage = () => {
 
   // Get watchlist count using useMemo to prevent recalculation
   const watchlistCount = useMemo(() => 
-    cases ? cases.filter(c => starredCases.includes(c.id)).length : 0,
-    [cases, starredCases]
+    displayCases ? displayCases.filter(c => starredCases.includes(c.id)).length : 0,
+    [displayCases, starredCases]
   );
   
   // Navigate to case detail
@@ -135,10 +142,10 @@ const CasesPage = () => {
 
   // Memoized filtered and sorted cases to prevent unnecessary recalculations
   const processedCases = useMemo(() => {
-    if (!cases) return [];
+    if (!displayCases) return [];
 
     // Filter cases based on user role and impersonation state
-    let filteredCases = cases;
+    let filteredCases = displayCases;
     
     // If user role is not consultant OR if impersonating a user (not a consultant), only show user's cases
     if (!isConsultant || (isImpersonating && !isConsultant)) {
@@ -174,7 +181,7 @@ const CasesPage = () => {
           return dateB - dateA; // Default to most recent
       }
     });
-  }, [cases, isConsultant, isImpersonating, profile?.id, searchQuery, sortOption]);
+  }, [displayCases, isConsultant, isImpersonating, profile?.id, searchQuery, sortOption]);
 
   // Filter cases based on active tab
   const tabFilteredCases = useMemo(() => {
@@ -289,7 +296,7 @@ const CasesPage = () => {
     <div className="space-y-6">
       {/* Header section with title, search, filter dropdown, and action buttons */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Cases</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-black">Cases</h1>
 
         {/* Search, dropdown filter, and new case button in a container */}
         <div className="flex w-full md:w-auto space-x-2 items-center">
@@ -353,8 +360,8 @@ const CasesPage = () => {
         </div>
       </div>
       
-      {/* Show loading spinner only when actually loading */}
-      {loadingCases ? (
+      {/* Show loading spinner only when actually loading and no data exists */}
+      {loadingCases && displayCases.length === 0 ? (
         <div className="flex items-center justify-center p-12">
           <Loader className="h-8 w-8 animate-spin text-primary" />
         </div>
