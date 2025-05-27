@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Loader, Search, Filter, Star, Trash2, FileText, Clock, CheckCircle, AlertTriangle, PlusCircle, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,33 +46,26 @@ const CasesPage = () => {
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
-  // Add new sort state
   const [sortOption, setSortOption] = useState<SortOption>('date-desc');
 
   // Determine if user is consultant
   const isConsultant = profile?.role === 'consultant';
 
-  // Track if initial data has been loaded
-  useEffect(() => {
-    if (!loadingCases && cases && !initialDataLoaded) {
-      setInitialDataLoaded(true);
-    }
-  }, [loadingCases, cases, initialDataLoaded]);
-
-  // Check if we're being directed to watchlist filter
+  // Check if we're being directed to watchlist filter - only run once on mount
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const filter = params.get('filter');
     if (filter === 'watchlist') {
       setActiveTab('watchlist');
     }
-  }, [location]);
+  }, [location.search]);
 
-  // Get watchlist count for badge
-  const watchlistCount = cases ? cases.filter(c => starredCases.includes(c.id)).length : 0;
+  // Get watchlist count using useMemo to prevent recalculation
+  const watchlistCount = useMemo(() => 
+    cases ? cases.filter(c => starredCases.includes(c.id)).length : 0,
+    [cases, starredCases]
+  );
   
   // Navigate to case detail
   const viewCase = (caseId: string) => {
@@ -139,36 +133,29 @@ const CasesPage = () => {
     }
   };
 
-  // Display case list as a table component
-  const CaseListTable = ({ statusFilter, watchlistFilter, searchQuery }: { 
-    statusFilter?: CaseStatus | 'all', 
-    watchlistFilter?: boolean,
-    searchQuery: string 
-  }) => {
+  // Memoized filtered and sorted cases to prevent unnecessary recalculations
+  const processedCases = useMemo(() => {
+    if (!cases) return [];
+
     // Filter cases based on user role and impersonation state
-    let filteredCases = cases || [];
+    let filteredCases = cases;
     
     // If user role is not consultant OR if impersonating a user (not a consultant), only show user's cases
     if (!isConsultant || (isImpersonating && !isConsultant)) {
       filteredCases = filteredCases.filter(c => c.userId === profile?.id);
     }
     
-    // Apply additional filters
-    filteredCases = filteredCases.filter(c => {
-      // Text search filter
-      const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // Status filter
-      const matchesStatus = statusFilter === 'all' ? true : c.status === statusFilter;
-      
-      // Watchlist filter
-      const matchesWatchlist = watchlistFilter ? starredCases.includes(c.id) : true;
-      
-      return matchesSearch && matchesStatus && matchesWatchlist;
-    });
+    // Apply text search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredCases = filteredCases.filter(c => 
+        c.title.toLowerCase().includes(query) || 
+        c.description.toLowerCase().includes(query)
+      );
+    }
 
     // Sort cases based on selected sort option
-    filteredCases = [...filteredCases].sort((a, b) => {
+    return [...filteredCases].sort((a, b) => {
       const dateA = new Date(a.updatedAt).getTime();
       const dateB = new Date(b.updatedAt).getTime();
       const statusOrderA = getStatusOrder(a.status);
@@ -187,8 +174,23 @@ const CasesPage = () => {
           return dateB - dateA; // Default to most recent
       }
     });
+  }, [cases, isConsultant, isImpersonating, profile?.id, searchQuery, sortOption]);
 
-    if (filteredCases.length === 0) {
+  // Filter cases based on active tab
+  const tabFilteredCases = useMemo(() => {
+    switch (activeTab) {
+      case 'watchlist':
+        return processedCases.filter(c => starredCases.includes(c.id));
+      case 'all':
+        return processedCases;
+      default:
+        return processedCases.filter(c => c.status === activeTab);
+    }
+  }, [processedCases, activeTab, starredCases]);
+
+  // Display case list as a table component
+  const CaseListTable = ({ cases: tableCases }: { cases: typeof processedCases }) => {
+    if (tableCases.length === 0) {
       return <div className="text-center py-6 text-muted-foreground">No cases found</div>;
     }
 
@@ -211,7 +213,7 @@ const CasesPage = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredCases.map(caseItem => {
+          {tableCases.map(caseItem => {
             const user = users.find(u => u.id === caseItem.userId);
             
             return (
@@ -351,76 +353,74 @@ const CasesPage = () => {
         </div>
       </div>
       
-      {/* Filter tabs with nicer styling */}
-      <div className={`rounded-lg border shadow-sm p-4 bg-card transition-all duration-200 ${showFilters ? 'block' : 'hidden'}`}>
-        <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
-          <TabsList className="grid w-full grid-cols-3 mb-2 lg:grid-cols-6">
-            <TabsTrigger value="all" className="flex items-center gap-1.5">
-              <FileText className="h-4 w-4" />
-              <span>All Cases</span>
-            </TabsTrigger>
-            <TabsTrigger value="new" className="flex items-center gap-1.5">
-              <PlusCircle className="h-4 w-4" />
-              <span>New</span>
-            </TabsTrigger>
-            <TabsTrigger value="ongoing" className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4" />
-              <span>Ongoing</span>
-            </TabsTrigger>
-            <TabsTrigger value="resolved" className="flex items-center gap-1.5">
-              <AlertTriangle className="h-4 w-4" />
-              <span>Awaiting</span> 
-            </TabsTrigger>
-            <TabsTrigger value="completed" className="flex items-center gap-1.5">
-              <CheckCircle className="h-4 w-4" />
-              <span>Completed</span>
-            </TabsTrigger>
-            <TabsTrigger value="watchlist" className="relative flex items-center gap-1.5">
-              <Star className="h-4 w-4" />
-              <span>Watchlist</span>
-              {watchlistCount > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
-                  {watchlistCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-          
-          {/* Move TabsContent components inside the Tabs component */}
-          <TabsContent value="all">
-            <CaseListTable statusFilter="all" searchQuery={searchQuery} />
-          </TabsContent>
-          <TabsContent value="new">
-            <CaseListTable statusFilter="new" searchQuery={searchQuery} />
-          </TabsContent>
-          <TabsContent value="ongoing">
-            <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />
-          </TabsContent>
-          <TabsContent value="resolved">
-            <CaseListTable statusFilter="resolved" searchQuery={searchQuery} />
-          </TabsContent>
-          <TabsContent value="completed">
-            <CaseListTable statusFilter="completed" searchQuery={searchQuery} />
-          </TabsContent>
-          <TabsContent value="watchlist">
-            <CaseListTable watchlistFilter={true} searchQuery={searchQuery} />
-          </TabsContent>
-        </Tabs>
-      </div>
-      
-      {(loadingCases && !initialDataLoaded) ? (
+      {/* Show loading spinner only when actually loading */}
+      {loadingCases ? (
         <div className="flex items-center justify-center p-12">
           <Loader className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : (
         <>
-          {/* Remove duplicate TabsContent components that were outside the Tabs component */}
-          {activeTab === "all" && !showFilters && <CaseListTable statusFilter="all" searchQuery={searchQuery} />}
-          {activeTab === "new" && !showFilters && <CaseListTable statusFilter="new" searchQuery={searchQuery} />}
-          {activeTab === "ongoing" && !showFilters && <CaseListTable statusFilter="ongoing" searchQuery={searchQuery} />}
-          {activeTab === "resolved" && !showFilters && <CaseListTable statusFilter="resolved" searchQuery={searchQuery} />}
-          {activeTab === "completed" && !showFilters && <CaseListTable statusFilter="completed" searchQuery={searchQuery} />}
-          {activeTab === "watchlist" && !showFilters && <CaseListTable watchlistFilter={true} searchQuery={searchQuery} />}
+          {/* Filter tabs with nicer styling */}
+          {showFilters && (
+            <div className="rounded-lg border shadow-sm p-4 bg-card transition-all duration-200">
+              <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as CaseStatus | 'all' | 'watchlist')}>
+                <TabsList className="grid w-full grid-cols-3 mb-2 lg:grid-cols-6">
+                  <TabsTrigger value="all" className="flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
+                    <span>All Cases</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="new" className="flex items-center gap-1.5">
+                    <PlusCircle className="h-4 w-4" />
+                    <span>New</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="ongoing" className="flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" />
+                    <span>Ongoing</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="resolved" className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>Awaiting</span> 
+                  </TabsTrigger>
+                  <TabsTrigger value="completed" className="flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Completed</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="watchlist" className="relative flex items-center gap-1.5">
+                    <Star className="h-4 w-4" />
+                    <span>Watchlist</span>
+                    {watchlistCount > 0 && (
+                      <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1 flex items-center justify-center rounded-full">
+                        {watchlistCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+                
+                {/* TabsContent components inside the Tabs component */}
+                <TabsContent value="all">
+                  <CaseListTable cases={tabFilteredCases} />
+                </TabsContent>
+                <TabsContent value="new">
+                  <CaseListTable cases={tabFilteredCases} />
+                </TabsContent>
+                <TabsContent value="ongoing">
+                  <CaseListTable cases={tabFilteredCases} />
+                </TabsContent>
+                <TabsContent value="resolved">
+                  <CaseListTable cases={tabFilteredCases} />
+                </TabsContent>
+                <TabsContent value="completed">
+                  <CaseListTable cases={tabFilteredCases} />
+                </TabsContent>
+                <TabsContent value="watchlist">
+                  <CaseListTable cases={tabFilteredCases} />
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+          
+          {/* Show table when filters are hidden */}
+          {!showFilters && <CaseListTable cases={tabFilteredCases} />}
         </>
       )}
 
