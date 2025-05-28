@@ -13,7 +13,6 @@ import { Loader, Eye, Edit, Save, Plus, RotateCcw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { NewsBlockEditor } from '@/components/news/NewsBlockEditor';
 import { NewsBlockPreview } from '@/components/news/NewsBlockPreview';
-import { NewsBlockTypeSelector } from '@/components/news/NewsBlockTypeSelector';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
@@ -96,6 +95,10 @@ const CompanyNewsBuilderPage = () => {
     console.log('Create new block functionality to be implemented');
   };
 
+  const handleRefresh = () => {
+    refetchBlocks(true);
+  };
+
   if (blocksLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -124,7 +127,7 @@ const CompanyNewsBuilderPage = () => {
         </div>
         
         <div className="flex items-center space-x-2">
-          <Button variant="outline" onClick={refetchBlocks}>
+          <Button variant="outline" onClick={handleRefresh}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
