@@ -12,7 +12,8 @@ const defaultSettings: DashboardSettings = {
   showCompanyNewsButton: true,
   showCompanyDashboardButton: true,
   showActiveCases: true,
-  showCompanyNotices: true
+  showCompanyNotices: true,
+  showRecentNews: true // New property defaults to true
 };
 
 export const useDashboardSettings = (companyId?: string) => {
@@ -36,6 +37,8 @@ export const useDashboardSettings = (companyId?: string) => {
         setSettings({
           ...defaultSettings,
           // You could customize based on companyId here if needed
+          // For backward compatibility, showRecentNews mirrors showCompanyNotices
+          showRecentNews: defaultSettings.showCompanyNotices
         });
         
         setLoading(false);

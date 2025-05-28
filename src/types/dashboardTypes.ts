@@ -1,4 +1,3 @@
-
 export interface CompanySettingsRow {
   id: string;
   company_id: string;
@@ -21,6 +20,8 @@ export interface DashboardSettings {
   showCompanyDashboardButton: boolean;
   showActiveCases: boolean;
   showCompanyNotices: boolean;
+  // New property for Recent News (keeping old one for backward compatibility)
+  showRecentNews?: boolean;
 }
 
 export interface CompanyAnnouncement {

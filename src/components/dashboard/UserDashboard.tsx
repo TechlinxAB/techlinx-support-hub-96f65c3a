@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import DashboardWelcome from './DashboardWelcome';
 import QuickActionButtons from './QuickActionButtons';
 import ActiveCasesList from './ActiveCasesList';
-import CompanyAnnouncements from './CompanyAnnouncements';
+import RecentNews from './RecentNews';
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
-import { useCompanyAnnouncements } from '@/hooks/useCompanyAnnouncements';
+import { useRecentNews } from '@/hooks/useRecentNews';
 import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -19,7 +20,7 @@ const UserDashboard = () => {
   
   // Fetch data
   const { settings, loading: settingsLoading, error: settingsError } = useDashboardSettings(companyId);
-  const { announcements, loading: announcementsLoading } = useCompanyAnnouncements(companyId);
+  const { recentNews, loading: recentNewsLoading } = useRecentNews(companyId);
   
   // Handle settings errors
   useEffect(() => {
@@ -32,7 +33,7 @@ const UserDashboard = () => {
   }, [settingsError]);
   
   // Loading state
-  if (!profile || settingsLoading || announcementsLoading) {
+  if (!profile || settingsLoading || recentNewsLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -90,9 +91,10 @@ const UserDashboard = () => {
       
       <ActiveCasesList cases={userCases} settings={settings} />
       
-      <CompanyAnnouncements 
-        announcements={announcements} 
-        settings={settings} 
+      <RecentNews 
+        recentNews={recentNews} 
+        settings={settings}
+        companyId={companyId}
       />
     </div>
   );
