@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -152,31 +153,32 @@ const CompanyNewsBuilderPage = () => {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" onClick={() => navigate('/companies')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Companies
-          </Button>
+      <div className="space-y-4">
+        <Button variant="ghost" onClick={() => navigate('/companies')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Companies
+        </Button>
+        
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Company News Builder</h1>
             <p className="text-muted-foreground">Create and manage news content for your company</p>
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" onClick={() => navigate(`/company-news/${companyId}`)}>
-            <Eye className="h-4 w-4 mr-2" />
-            View News
-          </Button>
-          <Button variant="outline" onClick={handleRefresh}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button onClick={handleCreateNewBlock}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Block
-          </Button>
+          
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => navigate(`/company-news/${companyId}`)}>
+              <Eye className="h-4 w-4 mr-2" />
+              View News
+            </Button>
+            <Button variant="outline" onClick={handleRefresh}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            <Button onClick={handleCreateNewBlock}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Block
+            </Button>
+          </div>
         </div>
       </div>
 
