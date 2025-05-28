@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { format } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DashboardSettings } from '@/types/dashboardTypes';
 import { RecentNewsItem } from '@/hooks/useRecentNews';
@@ -45,7 +45,6 @@ const RecentNews = ({ recentNews, settings, companyId }: RecentNewsProps) => {
           {recentNews.map(newsItem => (
             <Card key={newsItem.id}>
               <CardHeader>
-                <CardTitle className="text-base">{newsItem.title}</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Published {format(new Date(newsItem.created_at), 'MMMM d, yyyy')}
                 </p>
@@ -54,10 +53,7 @@ const RecentNews = ({ recentNews, settings, companyId }: RecentNewsProps) => {
                 <p className="text-sm">{truncateContent(newsItem.content)}</p>
               </CardContent>
               <CardFooter>
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {newsItem.type} block
-                  </span>
+                <div className="flex items-center justify-end w-full">
                   {companyId && (
                     <Button 
                       variant="outline" 
