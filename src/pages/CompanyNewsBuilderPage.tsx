@@ -16,6 +16,7 @@ import { NewsBlockPreview } from '@/components/news/NewsBlockPreview';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const CompanyNewsBuilderPage = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -91,8 +92,40 @@ const CompanyNewsBuilderPage = () => {
   }, [companyId, profile, session, navigate]);
 
   const handleCreateNewBlock = () => {
-    // Logic for creating new block would go here
     console.log('Create new block functionality to be implemented');
+  };
+
+  const handleDeleteBlock = async () => {
+    if (!selectedBlockId || !selectedBlock) return;
+    
+    if (!confirm(`Are you sure you want to delete "${selectedBlock.title}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('company_news_blocks')
+        .delete()
+        .eq('id', selectedBlockId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Block deleted",
+        description: "The news block has been successfully deleted",
+      });
+
+      // Clear selection and refetch
+      setSelectedBlockId(null);
+      refetchBlocks();
+    } catch (error) {
+      console.error('Error deleting block:', error);
+      toast({
+        title: "Failed to delete block",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleRefresh = () => {
@@ -251,6 +284,7 @@ const CompanyNewsBuilderPage = () => {
                       editedData={editedBlockData}
                       onFormChange={handleFormChange}
                       onNestedContentChange={handleNestedContentChange}
+                      onDelete={handleDeleteBlock}
                     />
                   </TabsContent>
                   
