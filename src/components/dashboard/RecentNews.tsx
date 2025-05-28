@@ -44,16 +44,12 @@ const RecentNews = ({ recentNews, settings, companyId }: RecentNewsProps) => {
         <div className="space-y-4">
           {recentNews.map(newsItem => (
             <Card key={newsItem.id}>
-              <CardHeader>
-                <p className="text-sm text-muted-foreground">
-                  Published {format(new Date(newsItem.created_at), 'MMMM d, yyyy')}
-                </p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">{truncateContent(newsItem.content)}</p>
-              </CardContent>
-              <CardFooter>
-                <div className="flex items-center justify-end w-full">
+              <CardContent className="p-6">
+                <p className="text-sm mb-4">{truncateContent(newsItem.content)}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Published {format(new Date(newsItem.created_at), 'MMMM d, yyyy')}
+                  </p>
                   {companyId && (
                     <Button 
                       variant="outline" 
@@ -64,7 +60,7 @@ const RecentNews = ({ recentNews, settings, companyId }: RecentNewsProps) => {
                     </Button>
                   )}
                 </div>
-              </CardFooter>
+              </CardContent>
             </Card>
           ))}
         </div>
