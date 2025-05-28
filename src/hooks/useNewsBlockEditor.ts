@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
@@ -21,7 +22,7 @@ export const useNewsBlockEditor = (
   const [activeTab, setActiveTab] = useState<string>('edit');
   const [localSaving, setLocalSaving] = useState(false);
   
-  // Track manual save in progress
+  // Track manual save in progress - this will prevent auto-save from cancelling manual saves
   const manualSaveInProgress = useRef(false);
   const lastAutoSaveAttempt = useRef<number>(0);
   const AUTO_SAVE_THROTTLE = 8000; // Increased to 8 seconds between auto-save attempts
@@ -94,7 +95,8 @@ export const useNewsBlockEditor = (
 
   // Clear pending saves when switching blocks or unmounting
   const clearPendingSaves = () => {
-    if (selectedBlockId) {
+    // Only cancel auto-saves, not manual saves
+    if (selectedBlockId && !manualSaveInProgress.current) {
       cancelPendingSave(selectedBlockId);
     }
     
@@ -107,13 +109,20 @@ export const useNewsBlockEditor = (
 
   // Clean up pending operations when component unmounts
   useEffect(() => {
-    return () => clearPendingSaves();
+    return () => {
+      // Only clear if no manual save is in progress
+      if (!manualSaveInProgress.current) {
+        clearPendingSaves();
+      }
+    };
   }, []);
 
   // Initialize edited block data when selection changes
   useEffect(() => {
-    // Clear pending saves from previous block
-    clearPendingSaves();
+    // Only clear pending saves if no manual save is in progress
+    if (!manualSaveInProgress.current) {
+      clearPendingSaves();
+    }
     
     if (selectedBlock && selectedBlockId !== initialSelectedBlockId) {
       // Initialize with default content based on block type if content is undefined
@@ -215,10 +224,12 @@ export const useNewsBlockEditor = (
     if (!selectedBlockId || !selectedBlock || !hasUnsavedChanges) return;
     if (manualSaveInProgress.current) return;
     
-    // Clear any previous pending auto-saves
+    // Set manual save flag to prevent auto-save cancellation
+    manualSaveInProgress.current = true;
+    
+    // Cancel any pending auto-saves since we're doing a manual save
     cancelPendingSave(selectedBlockId);
     
-    manualSaveInProgress.current = true;
     setLocalSaving(true);
     errorToastShown.current = false;
     
@@ -243,15 +254,15 @@ export const useNewsBlockEditor = (
           showToast: true, // Let the save function handle toast management
           onStart: () => {
             setLocalSaving(true);
-            console.log("Save operation started");
+            console.log("Manual save operation started");
           },
           onSuccess: () => {
             setHasUnsavedChanges(false);
             options?.onSaveSuccess?.();
-            console.log("Save operation completed successfully");
+            console.log("Manual save operation completed successfully");
           },
           onError: (error) => {
-            console.error("Save operation failed:", error);
+            console.error("Manual save operation failed:", error);
             options?.onSaveError?.(error);
           }
         }
@@ -272,13 +283,14 @@ export const useNewsBlockEditor = (
       options?.onSaveError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {
       setLocalSaving(false);
-      manualSaveInProgress.current = false;
+      manualSaveInProgress.current = false; // Reset manual save flag
     }
   };
 
   // Auto-save when changes are made with improved throttling and optimistic updates
   useEffect(() => {
-    if (selectedBlockId && hasUnsavedChanges) {
+    // Don't auto-save if manual save is in progress
+    if (selectedBlockId && hasUnsavedChanges && !manualSaveInProgress.current) {
       // Throttle auto-save attempts much more aggressively
       const now = Date.now();
       if (now - lastAutoSaveAttempt.current < AUTO_SAVE_THROTTLE) {
@@ -299,8 +311,10 @@ export const useNewsBlockEditor = (
       
       console.log("Auto-save scheduled...");
       
-      // Cancel any previous pending auto-saves
-      cancelPendingSave(selectedBlockId);
+      // Only cancel previous auto-saves, not manual saves
+      if (!manualSaveInProgress.current) {
+        cancelPendingSave(selectedBlockId);
+      }
       
       const cleanup = debouncedSave(
         selectedBlockId, 
