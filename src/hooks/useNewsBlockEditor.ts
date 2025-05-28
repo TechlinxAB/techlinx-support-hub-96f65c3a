@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CompanyNewsBlock, NewsBlockType } from '@/types/companyNews';
 import { useOptimizedNewsBlockSave } from './useOptimizedNewsBlockSave';
@@ -219,6 +218,73 @@ export const useNewsBlockEditor = (
     setHasUnsavedChanges(true);
   };
 
+  // Toggle publish status
+  const togglePublishStatus = async () => {
+    if (!selectedBlockId || !selectedBlock) return;
+    
+    const newPublishStatus = !editedBlockData.isPublished;
+    
+    // Update local state immediately for better UX
+    setEditedBlockData(prev => ({
+      ...prev,
+      isPublished: newPublishStatus
+    }));
+    
+    // Apply optimistic update to local block list
+    if (options?.updateLocalBlock) {
+      options.updateLocalBlock({
+        id: selectedBlockId,
+        isPublished: newPublishStatus
+      });
+    }
+    
+    try {
+      // Save the publish status change
+      await saveNewsBlock(
+        selectedBlockId, 
+        {
+          is_published: newPublishStatus
+        }, 
+        {
+          showToast: true,
+          onSuccess: () => {
+            toast({
+              title: newPublishStatus ? "Block Published" : "Block Unpublished",
+              description: newPublishStatus 
+                ? "The news block is now visible to users" 
+                : "The news block is now hidden from users",
+              variant: "success"
+            });
+            options?.onSaveSuccess?.();
+          },
+          onError: (error) => {
+            // Revert the optimistic update on error
+            setEditedBlockData(prev => ({
+              ...prev,
+              isPublished: !newPublishStatus
+            }));
+            
+            if (options?.updateLocalBlock) {
+              options.updateLocalBlock({
+                id: selectedBlockId,
+                isPublished: !newPublishStatus
+              });
+            }
+            
+            toast({
+              title: "Failed to update publish status",
+              description: "Please try again",
+              variant: "destructive"
+            });
+            options?.onSaveError?.(error);
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error toggling publish status:', error);
+    }
+  };
+
   // Save current block with enhanced feedback and optimistic updates
   const saveCurrentBlock = async () => {
     if (!selectedBlockId || !selectedBlock || !hasUnsavedChanges) return;
@@ -238,7 +304,8 @@ export const useNewsBlockEditor = (
       options.updateLocalBlock({
         id: selectedBlockId,
         title: editedBlockData.title,
-        content: editedBlockData.content
+        content: editedBlockData.content,
+        isPublished: editedBlockData.isPublished
       });
     }
     
@@ -248,7 +315,8 @@ export const useNewsBlockEditor = (
         selectedBlockId, 
         {
           title: editedBlockData.title,
-          content: editedBlockData.content
+          content: editedBlockData.content,
+          is_published: editedBlockData.isPublished
         }, 
         {
           showToast: true, // Let the save function handle toast management
@@ -305,7 +373,8 @@ export const useNewsBlockEditor = (
         options.updateLocalBlock({
           id: selectedBlockId,
           title: editedBlockData.title,
-          content: editedBlockData.content
+          content: editedBlockData.content,
+          isPublished: editedBlockData.isPublished
         });
       }
       
@@ -320,7 +389,8 @@ export const useNewsBlockEditor = (
         selectedBlockId, 
         {
           title: editedBlockData.title,
-          content: editedBlockData.content
+          content: editedBlockData.content,
+          is_published: editedBlockData.isPublished
         },
         4000, // Increased debounce time to reduce save frequency
         {
@@ -367,6 +437,7 @@ export const useNewsBlockEditor = (
     handleFormChange,
     handleNestedContentChange,
     saveCurrentBlock,
+    togglePublishStatus,
     getDefaultContent,
     clearPendingSaves
   };
