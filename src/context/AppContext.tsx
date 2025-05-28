@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { UserProfile } from './AuthContext';
@@ -227,7 +226,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const [loadingDashboardBlocks, setLoadingDashboardBlocks] = useState<boolean>(false);
   
   // Get auth data SAFELY by accessing it only after loading is complete
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, session } = useAuth();
 
   // Implementation for refetching cases
   const refetchCases = async (caseId?: string): Promise<Case[]> => {
@@ -1005,9 +1004,15 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
   
-  // Company News blocks - Placeholder implementations
+  // Company News blocks - Fixed implementation
   const addCompanyNewsBlock = async (data: any): Promise<any> => {
     try {
+      if (!session?.user?.id) {
+        console.error("No authenticated user found");
+        toast.error("You must be logged in to create news blocks");
+        return null;
+      }
+
       const { data: responseData, error } = await supabase
         .from('company_news_blocks')
         .insert({
@@ -1017,19 +1022,21 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           content: data.content,
           position: data.position,
           parent_id: data.parentId,
-          created_by: data.createdBy,
+          created_by: session.user.id, // Fix: Use session.user.id instead of data.createdBy
           is_published: data.isPublished || false
         })
         .select();
       
       if (error) {
         console.error("Error creating news block:", error);
+        toast.error("Failed to create news block");
         return null;
       }
       
       return responseData ? responseData[0] : null;
     } catch (error) {
       console.error("Error in addCompanyNewsBlock:", error);
+      toast.error("Failed to create news block");
       return null;
     }
   };
