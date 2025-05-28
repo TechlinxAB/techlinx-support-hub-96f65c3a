@@ -25,7 +25,7 @@ const RecentNews = ({ recentNews, settings, companyId }: RecentNewsProps) => {
   
   const handleViewAllNews = () => {
     if (companyId) {
-      window.open(`/company-news/${companyId}`, '_blank');
+      window.location.href = `/company-news/${companyId}`;
     }
   };
   
