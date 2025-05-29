@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -94,6 +93,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Cache the case discussion data
   useEffect(() => {
@@ -552,10 +552,11 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
             
             <div className="mb-3">
               <Input 
+                ref={fileInputRef}
                 type="file" 
                 multiple 
                 onChange={handleAttachmentChange}
-                className="mb-2"
+                className="hidden"
                 disabled={isUploading}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp"
               />
@@ -563,7 +564,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => document.querySelector('input[type="file"]')?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
                 className="gap-2"
               >
