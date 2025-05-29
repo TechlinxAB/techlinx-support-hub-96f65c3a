@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Download, FileText, Image, File, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { getFileUrl, formatFileSize } from '@/utils/fileUtils';
+import { formatFileSize } from '@/utils/fileUtils';
+import { useToast } from '@/components/ui/use-toast';
 
 interface CaseAttachment {
   id: string;
@@ -24,6 +25,7 @@ interface CaseAttachmentsProps {
 export const CaseAttachments: React.FC<CaseAttachmentsProps> = ({ caseId }) => {
   const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchAttachments = async () => {
@@ -56,14 +58,55 @@ export const CaseAttachments: React.FC<CaseAttachmentsProps> = ({ caseId }) => {
     }
   };
 
-  const handleDownload = (attachment: CaseAttachment) => {
-    const url = getFileUrl(attachment.file_path);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = attachment.file_name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (attachment: CaseAttachment) => {
+    try {
+      console.log('Attempting to download attachment:', attachment);
+      
+      // Get a signed URL for download
+      const { data, error } = await supabase.storage
+        .from('case-attachments')
+        .createSignedUrl(attachment.file_path, 60); // Valid for 1 minute
+      
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        toast({
+          title: "Download failed",
+          description: "Could not generate download link. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!data?.signedUrl) {
+        toast({
+          title: "Download failed",
+          description: "Could not generate download link.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Create a temporary link and click it to trigger download
+      const link = document.createElement('a');
+      link.href = data.signedUrl;
+      link.download = attachment.file_name;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download started",
+        description: `Downloading ${attachment.file_name}`,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "An error occurred while downloading the file.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
