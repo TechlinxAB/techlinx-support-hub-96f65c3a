@@ -86,14 +86,26 @@ export const CaseAttachments: React.FC<CaseAttachmentsProps> = ({ caseId }) => {
         return;
       }
       
+      // Fetch the file as a blob and create a download link
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch file');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
       // Create a temporary link and click it to trigger download
       const link = document.createElement('a');
-      link.href = data.signedUrl;
+      link.href = url;
       link.download = attachment.file_name;
-      link.target = '_blank';
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
+      
+      // Clean up
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       toast({
         title: "Download started",
