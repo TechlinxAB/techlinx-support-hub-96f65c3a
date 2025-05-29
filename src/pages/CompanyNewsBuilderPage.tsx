@@ -1,8 +1,10 @@
+
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useNewsBlocksFetcher } from '@/hooks/useNewsBlocksFetcher';
 import { useNewsBlockEditor } from '@/hooks/useNewsBlockEditor';
+import { CompanyNewsBlock } from '@/types/companyNews';
 import { hasCompanyAccess, isConsultant } from '@/utils/authHelpers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
