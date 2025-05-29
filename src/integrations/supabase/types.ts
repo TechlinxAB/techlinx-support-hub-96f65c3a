@@ -491,7 +491,6 @@ export type Database = {
           case_id: string
           content: string
           created_at: string | null
-          deleted_at: string | null
           id: string
           user_id: string
         }
@@ -499,7 +498,6 @@ export type Database = {
           case_id: string
           content: string
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           user_id: string
         }
@@ -507,7 +505,6 @@ export type Database = {
           case_id?: string
           content?: string
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           user_id?: string
         }
@@ -673,7 +670,6 @@ export type Database = {
           case_id: string
           content: string
           created_at: string | null
-          deleted_at: string | null
           id: string
           is_internal: boolean | null
           user_id: string
@@ -682,7 +678,6 @@ export type Database = {
           case_id: string
           content: string
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           is_internal?: boolean | null
           user_id: string
@@ -691,7 +686,6 @@ export type Database = {
           case_id?: string
           content?: string
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           is_internal?: boolean | null
           user_id?: string

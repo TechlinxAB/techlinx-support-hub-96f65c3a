@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image, Trash2 } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -542,58 +542,6 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     }
   }, [offlineMode]); // eslint-disable-line react-hooks/exhaustive-deps
   
-  const handleDeleteReply = async (replyId: string) => {
-    try {
-      const { error } = await supabase
-        .from('replies')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', replyId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Reply deleted",
-        description: "The reply has been deleted successfully.",
-      });
-
-      // Refresh the data after deletion
-      handleRefetch();
-    } catch (error) {
-      console.error('Error deleting reply:', error);
-      toast({
-        title: "Delete failed",
-        description: "Could not delete the reply. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteNote = async (noteId: string) => {
-    try {
-      const { error } = await supabase
-        .from('notes')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', noteId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Note deleted",
-        description: "The note has been deleted successfully.",
-      });
-
-      // Refresh the data after deletion
-      handleRefetch();
-    } catch (error) {
-      console.error('Error deleting note:', error);
-      toast({
-        title: "Delete failed",
-        description: "Could not delete the note. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-  
   if (fetchError && !offlineMode) {
     return (
       <Card>
@@ -723,27 +671,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                             </Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(item.createdAt, { addSuffix: true })}
-                          </span>
-                          {isConsultant && !isOptimistic && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                if (item.type === 'reply') {
-                                  handleDeleteReply(item.id);
-                                } else {
-                                  handleDeleteNote(item.id);
-                                }
-                              }}
-                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(item.createdAt, { addSuffix: true })}
+                        </span>
                       </div>
                       
                       {/* Message content */}
