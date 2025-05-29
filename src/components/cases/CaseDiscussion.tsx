@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,14 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface CaseDiscussionProps {
   caseId: string;
+}
+
+interface ReplyAttachment {
+  id: string;
+  file_name: string;
+  file_path: string;
+  content_type: string;
+  size: number;
 }
 
 // Utility function for exponential backoff retry
@@ -89,6 +97,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [offlineMode, setOfflineMode] = useState(false);
   const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false);
+  const [replyAttachments, setReplyAttachments] = useState<Record<string, ReplyAttachment[]>>({});
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
@@ -121,6 +130,46 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       setLocalNotes(caseNotes);
     }
   }, [replies, notes, caseId]);
+  
+  // Fetch attachments for replies
+  const fetchReplyAttachments = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('case_attachments')
+        .select('id, reply_id, file_name, file_path, content_type, size')
+        .eq('case_id', caseId)
+        .not('reply_id', 'is', null);
+      
+      if (error) throw error;
+      
+      const attachmentsByReply: Record<string, ReplyAttachment[]> = {};
+      data?.forEach(attachment => {
+        if (attachment.reply_id) {
+          if (!attachmentsByReply[attachment.reply_id]) {
+            attachmentsByReply[attachment.reply_id] = [];
+          }
+          attachmentsByReply[attachment.reply_id].push({
+            id: attachment.id,
+            file_name: attachment.file_name,
+            file_path: attachment.file_path,
+            content_type: attachment.content_type || 'application/octet-stream',
+            size: attachment.size || 0
+          });
+        }
+      });
+      
+      setReplyAttachments(attachmentsByReply);
+    } catch (error) {
+      console.error('Error fetching reply attachments:', error);
+    }
+  }, [caseId]);
+  
+  // Fetch attachments when replies change
+  useEffect(() => {
+    if (replies.length > 0) {
+      fetchReplyAttachments();
+    }
+  }, [replies, fetchReplyAttachments]);
   
   // Function to handle manual refetching with error handling and retry
   const handleRefetch = useCallback(async () => {
@@ -209,10 +258,46 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     }
   };
   
+  const getFileIcon = (contentType: string) => {
+    if (contentType.startsWith('image/')) {
+      return <Image className="h-4 w-4" />;
+    } else if (contentType === 'application/pdf' || contentType.includes('document')) {
+      return <FileText className="h-4 w-4" />;
+    } else {
+      return <File className="h-4 w-4" />;
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleDownloadAttachment = (attachment: ReplyAttachment) => {
+    const url = getFileUrl(attachment.file_path);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.file_name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
   const handleAddReply = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!replyContent.trim()) return;
+    // Allow submission with either content or attachments
+    if (!replyContent.trim() && (!attachments || attachments.length === 0)) {
+      toast({
+        title: "Empty reply",
+        description: "Please enter some text or attach a file before sending.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsUploading(true);
     
@@ -221,7 +306,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       const newReply = await retryFetch(() => addReply({
         caseId,
         userId: currentUser!.id,
-        content: replyContent,
+        content: replyContent || '📎 File attachment', // Fallback content for file-only replies
         isInternal: isInternalReply
       }));
 
@@ -259,6 +344,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       setReplyContent('');
       setIsInternalReply(false);
       setAttachments(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       
       toast({
         title: "Reply sent",
@@ -487,11 +575,11 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 const author = users.find(u => u.id === item.userId);
                 
                 if (item.type === 'note' && !isConsultant) {
-                  // Don't show internal notes to regular users
                   return null;
                 }
                 
                 const isOptimistic = (item as any).isOptimistic;
+                const attachmentsForReply = item.type === 'reply' ? replyAttachments[item.id] || [] : [];
                 
                 return (
                   <div 
@@ -532,7 +620,48 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                           {formatDistanceToNow(item.createdAt, { addSuffix: true })}
                         </span>
                       </div>
-                      <p className="whitespace-pre-wrap text-sm">{item.content}</p>
+                      
+                      {/* Message content */}
+                      <p className="whitespace-pre-wrap text-sm mb-2">{item.content}</p>
+                      
+                      {/* Attachments display */}
+                      {attachmentsForReply.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="flex items-center gap-1 mb-2">
+                            <Paperclip className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {attachmentsForReply.length} attachment{attachmentsForReply.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {attachmentsForReply.map((attachment) => (
+                              <div
+                                key={attachment.id}
+                                className="flex items-center justify-between p-2 bg-gray-50 rounded border"
+                              >
+                                <div className="flex items-center gap-2">
+                                  {getFileIcon(attachment.content_type)}
+                                  <div>
+                                    <p className="text-sm font-medium">{attachment.file_name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatFileSize(attachment.size)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDownloadAttachment(attachment)}
+                                  className="gap-1 h-8"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
