@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
-import { FileAttachment } from '@/components/ui/file-attachment';
 import { uploadFile, getFileUrl } from '@/utils/fileUtils';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -89,6 +89,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const [localReplies, setLocalReplies] = useState<any[]>([]);
   const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false);
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
@@ -141,10 +142,13 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           retryFetch(() => refetchNotes(caseId))
         ]);
         
-        toast({
-          title: "Refreshed",
-          description: "Discussion data has been refreshed",
-        });
+        // Only show toast for manual refreshes, not initial fetch
+        if (hasInitiallyFetched) {
+          toast({
+            title: "Refreshed",
+            description: "Discussion data has been refreshed",
+          });
+        }
       } catch (error) {
         console.error('Error refetching data:', error);
         setFetchError('Failed to load discussion data. You can view cached data or try again later.');
@@ -157,6 +161,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         });
       } finally {
         setIsRefetching(false);
+        setHasInitiallyFetched(true);
       }
     }, 300); // 300ms debounce
     
@@ -167,11 +172,11 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         debounceTimerRef.current = null;
       }
     };
-  }, [caseId, refetchReplies, refetchNotes, toast]);
+  }, [caseId, refetchReplies, refetchNotes, toast, hasInitiallyFetched]);
   
   // Initial data fetch - only run once when component mounts or caseId changes
   useEffect(() => {
-    if (caseId) {
+    if (caseId && !hasInitiallyFetched) {
       handleRefetch();
     }
     
@@ -182,7 +187,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         debounceTimerRef.current = null;
       }
     };
-  }, [caseId, handleRefetch]); // Only depend on caseId and handleRefetch to prevent refetch loops
+  }, [caseId]); // Only depend on caseId to prevent refetch loops
   
   // Merge replies and notes, sort by date (prioritize local state if in offline mode)
   const allItems = [
@@ -486,26 +491,23 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                   return null;
                 }
                 
-                const isUserMessage = item.userId === currentUser?.id;
                 const isOptimistic = (item as any).isOptimistic;
                 
                 return (
                   <div 
                     key={`${item.type}-${item.id}`}
-                    className={`flex ${isUserMessage ? 'justify-end' : 'justify-start'}`}
+                    className="w-full"
                   >
                     <div 
-                      className={`max-w-[80%] ${
+                      className={`w-full ${
                         item.type === 'note' 
                           ? 'bg-orange-50 border-orange-200' 
                           : (item as any).isInternal 
                             ? 'bg-gray-50 border-gray-200'
-                            : isUserMessage
-                              ? 'bg-primary-foreground border-primary/20'
-                              : 'bg-muted border-muted-foreground/20'
-                      } border rounded-lg p-3 ${isOptimistic ? 'opacity-70' : ''}`}
+                            : 'bg-muted border-muted-foreground/20'
+                      } border rounded-lg p-4 ${isOptimistic ? 'opacity-70' : ''}`}
                     >
-                      <div className="flex justify-between items-start mb-1">
+                      <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">
                             {author?.name || 'Unknown'}
@@ -549,11 +551,38 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
             />
             
             <div className="mb-3">
-              <FileAttachment
-                files={attachments}
-                onFilesChange={setAttachments}
+              <Input 
+                type="file" 
+                multiple 
+                onChange={handleAttachmentChange}
+                className="mb-2"
                 disabled={isUploading}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp"
               />
+              
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => document.querySelector('input[type="file"]')?.click()}
+                disabled={isUploading}
+                className="gap-2"
+              >
+                <Paperclip className="h-4 w-4" />
+                Attach Files
+              </Button>
+              
+              {attachments && attachments.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm font-medium mb-1">Selected Files:</p>
+                  <div className="space-y-1">
+                    {Array.from(attachments).map((file, index) => (
+                      <div key={index} className="text-sm text-muted-foreground">
+                        {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
