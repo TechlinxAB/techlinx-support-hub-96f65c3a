@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { uploadFile } from '@/utils/fileUtils';
 import { supabase } from '@/integrations/supabase/client';
@@ -79,6 +80,8 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     notes, 
     addReply, 
     addNote, 
+    deleteReply,
+    deleteNote,
     users, 
     loadingReplies, 
     loadingNotes, 
@@ -542,6 +545,22 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     }
   }, [offlineMode]); // eslint-disable-line react-hooks/exhaustive-deps
   
+  const handleDeleteReply = async (replyId: string) => {
+    const success = await deleteReply(replyId);
+    if (success) {
+      // Refetch to update the display
+      handleRefetch();
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    const success = await deleteNote(noteId);
+    if (success) {
+      // Refetch to update the display
+      handleRefetch();
+    }
+  };
+
   if (fetchError && !offlineMode) {
     return (
       <Card>
@@ -671,9 +690,50 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                             </Badge>
                           )}
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(item.createdAt, { addSuffix: true })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(item.createdAt, { addSuffix: true })}
+                          </span>
+                          {isConsultant && !isOptimistic && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Delete {item.type === 'note' ? 'Note' : 'Reply'}
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this {item.type === 'note' ? 'note' : 'reply'}? 
+                                    This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => {
+                                      if (item.type === 'note') {
+                                        handleDeleteNote(item.id);
+                                      } else {
+                                        handleDeleteReply(item.id);
+                                      }
+                                    }}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Message content */}

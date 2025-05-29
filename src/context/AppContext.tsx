@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 // Define missing types
 export type CaseStatus = 'new' | 'ongoing' | 'resolved' | 'completed' | 'draft';
 export type CasePriority = 'low' | 'medium' | 'high';
+export type UserRole = 'admin' | 'user' | 'consultant';
+export type Language = 'en' | 'sv';
 
 // Define Case type
 export type Case = {
@@ -45,9 +47,9 @@ export type User = {
   name: string;
   email: string;
   role: string;
-  phone?: string;         // Add phone field
-  companyId?: string;     // Add companyId field
-  preferredLanguage?: string; // Add preferredLanguage field
+  phone?: string;
+  companyId?: string;
+  preferredLanguage?: string;
 };
 
 // Define Reply type
@@ -58,7 +60,7 @@ export interface Reply {
   content: string;
   isInternal: boolean;
   createdAt: string;
-  userRole?: string; // Add userRole as an optional property
+  userRole?: string;
 }
 
 // Define Note type
@@ -88,19 +90,15 @@ export type DashboardBlock = {
   id: string;
   companyId: string;
   title: string;
-  type: BlockType;  // Use BlockType from types/dashboard
+  type: BlockType;
   content: any;
   position: number;
   parentId?: string;
-  showTitle?: boolean; // Add showTitle property
+  showTitle?: boolean;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
 };
-
-// Add UserRole and Language types
-export type UserRole = 'admin' | 'user' | 'consultant';
-export type Language = 'en' | 'sv';
 
 // Type definitions for the AppContext
 type AppContextType = {
@@ -141,6 +139,7 @@ type AppContextType = {
   addReply: (data: Partial<Reply>) => Promise<Reply | null>;
   addNote: (data: Partial<Note>) => Promise<Note | null>;
   deleteReply: (id: string) => Promise<boolean>;
+  deleteNote: (id: string) => Promise<boolean>;
   
   // Attachments
   caseAttachments: Attachment[];
@@ -191,6 +190,7 @@ const AppContext = createContext<AppContextType>({
   addReply: async () => null,
   addNote: async () => null,
   deleteReply: async () => false,
+  deleteNote: async () => false,
   caseAttachments: [],
   loadingAttachments: false,
   refetchAttachments: async () => [],
@@ -277,11 +277,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       setLoadingCases(false);
     }
   };
-  
+
   // Implementation for updating a case
   const updateCase = async (caseId: string, data: Partial<Case>): Promise<Case | null> => {
     try {
-      // Convert from camelCase to snake_case for Supabase
       const supabaseData: any = {};
       if (data.title) supabaseData.title = data.title;
       if (data.description) supabaseData.description = data.description;
@@ -409,11 +408,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   // Implementation for deleting a company
   const deleteCompany = async (companyId: string) => {
     try {
-      // First try to delete any related data that doesn't have cascading deletes
-      // You may need to implement a more comprehensive deletion approach
-      // in a production environment
-
-      // Then delete the company
       const { error } = await supabase
         .from('companies')
         .delete()
@@ -422,7 +416,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) {
         console.error('Error deleting company:', error);
         
-        // Handle foreign key constraint error
         if (error.code === '23503') {
           throw new Error(
             'This company has dependent records. Please delete all related data first.'
@@ -432,7 +425,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         throw error;
       }
 
-      // Update local state
       setCompanies(prevCompanies => 
         prevCompanies.filter(company => company.id !== companyId)
       );
@@ -486,6 +478,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         .from('replies')
         .select('*')
         .eq('case_id', caseId)
+        .is('deleted_at', null) // Filter out soft-deleted replies
         .order('created_at');
       
       if (error) {
@@ -500,7 +493,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           userId: item.user_id,
           content: item.content,
           isInternal: item.is_internal,
-          createdAt: new Date(item.created_at).toISOString() // Convert to string to match interface
+          createdAt: new Date(item.created_at).toISOString()
         }));
         
         setReplies(formattedReplies);
@@ -524,6 +517,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         .from('notes')
         .select('*')
         .eq('case_id', caseId)
+        .is('deleted_at', null) // Filter out soft-deleted notes
         .order('created_at');
       
       if (error) {
@@ -582,7 +576,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           userId: responseData.user_id,
           content: responseData.content,
           isInternal: responseData.is_internal,
-          createdAt: new Date(responseData.created_at).toISOString() // Convert to string to match interface
+          createdAt: new Date(responseData.created_at).toISOString()
         };
       }
       
@@ -633,12 +627,12 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
   
-  // Implementation for deleting a reply
+  // Implementation for soft deleting a reply
   const deleteReply = async (id: string): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from('replies')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
       
       if (error) {
@@ -647,8 +641,8 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         return false;
       }
       
-      // Update the state by filtering out the deleted reply
       setReplies(prev => prev.filter(reply => reply.id !== id));
+      toast.success("Reply deleted successfully");
       return true;
     } catch (error) {
       console.error("Error in deleteReply:", error);
@@ -656,452 +650,27 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       return false;
     }
   };
-  
-  // Implementation for fetching attachments
-  const refetchAttachments = async (caseId: string): Promise<Attachment[]> => {
-    setLoadingAttachments(true);
-    try {
-      const { data, error } = await supabase
-        .from('case_attachments')
-        .select('*')
-        .eq('case_id', caseId)
-        .order('created_at');
-      
-      if (error) {
-        console.error("Error fetching attachments:", error);
-        return caseAttachments;
-      }
-      
-      if (data) {
-        const formattedAttachments = data.map(item => ({
-          id: item.id,
-          caseId: item.case_id,
-          replyId: item.reply_id,
-          fileName: item.file_name,
-          filePath: item.file_path,
-          contentType: item.content_type,
-          size: item.size,
-          createdBy: item.created_by,
-          createdAt: new Date(item.created_at)
-        }));
-        
-        setCaseAttachments(formattedAttachments);
-        return formattedAttachments;
-      }
-      
-      return caseAttachments;
-    } catch (error) {
-      console.error("Error in refetchAttachments:", error);
-      return caseAttachments;
-    } finally {
-      setLoadingAttachments(false);
-    }
-  };
-  
-  // Implementation for adding an attachment
-  const uploadAttachment = async (data: Partial<Attachment>): Promise<Attachment | null> => {
-    // This would involve both storage and database operations
-    // For now, we'll return null as this would need a more complex implementation
-    return null;
-  };
-  
-  // Implementation for fetching dashboard blocks
-  const refetchDashboardBlocks = async (companyId: string): Promise<DashboardBlock[]> => {
-    setLoadingDashboardBlocks(true);
-    try {
-      const { data, error } = await supabase
-        .from('dashboard_blocks')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('position');
-      
-      if (error) {
-        console.error("Error fetching dashboard blocks:", error);
-        return dashboardBlocks;
-      }
-      
-      if (data) {
-        const formattedBlocks = data.map(item => ({
-          id: item.id,
-          companyId: item.company_id,
-          title: item.title,
-          type: item.type as BlockType,
-          content: item.content,
-          position: item.position,
-          parentId: item.parent_id,
-          showTitle: true, // Default value
-          createdBy: item.created_by,
-          createdAt: new Date(item.created_at),
-          updatedAt: new Date(item.updated_at)
-        }));
-        
-        setDashboardBlocks(formattedBlocks);
-        return formattedBlocks;
-      }
-      
-      return dashboardBlocks;
-    } catch (error) {
-      console.error("Error in refetchDashboardBlocks:", error);
-      return dashboardBlocks;
-    } finally {
-      setLoadingDashboardBlocks(false);
-    }
-  };
-  
-  // Implementation for adding a dashboard block
-  const addDashboardBlock = async (data: Partial<DashboardBlock>): Promise<DashboardBlock | null> => {
-    try {
-      const { data: responseData, error } = await supabase
-        .from('dashboard_blocks')
-        .insert({
-          company_id: data.companyId,
-          title: data.title,
-          type: data.type,
-          content: data.content,
-          position: data.position,
-          parent_id: data.parentId,
-          created_by: data.createdBy
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error("Error adding dashboard block:", error);
-        toast.error("Failed to add dashboard block");
-        return null;
-      }
-      
-      if (responseData && data.companyId) {
-        await refetchDashboardBlocks(data.companyId);
-        
-        return {
-          id: responseData.id,
-          companyId: responseData.company_id,
-          title: responseData.title,
-          type: responseData.type as BlockType,
-          content: responseData.content,
-          position: responseData.position,
-          parentId: responseData.parent_id,
-          showTitle: true, // Default value
-          createdBy: responseData.created_by,
-          createdAt: new Date(responseData.created_at),
-          updatedAt: new Date(responseData.updated_at)
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error in addDashboardBlock:", error);
-      toast.error("Failed to add dashboard block");
-      return null;
-    }
-  };
-  
-  // Implementation for updating a dashboard block
-  const updateDashboardBlock = async (id: string, data: Partial<DashboardBlock>): Promise<DashboardBlock | null> => {
-    try {
-      const updateData: any = {};
-      if (data.title !== undefined) updateData.title = data.title;
-      if (data.content !== undefined) updateData.content = data.content;
-      if (data.position !== undefined) updateData.position = data.position;
-      if (data.parentId !== undefined) updateData.parent_id = data.parentId;
-      
-      const { data: responseData, error } = await supabase
-        .from('dashboard_blocks')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) {
-        console.error("Error updating dashboard block:", error);
-        toast.error("Failed to update dashboard block");
-        return null;
-      }
-      
-      if (responseData && responseData.company_id) {
-        await refetchDashboardBlocks(responseData.company_id);
-        
-        return {
-          id: responseData.id,
-          companyId: responseData.company_id,
-          title: responseData.title,
-          type: responseData.type as BlockType,
-          content: responseData.content,
-          position: responseData.position,
-          parentId: responseData.parent_id,
-          showTitle: true, // Default value
-          createdBy: responseData.created_by,
-          createdAt: new Date(responseData.created_at),
-          updatedAt: new Date(responseData.updated_at)
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error in updateDashboardBlock:", error);
-      toast.error("Failed to update dashboard block");
-      return null;
-    }
-  };
-  
-  // Implementation for deleting a dashboard block
-  const deleteDashboardBlock = async (id: string): Promise<boolean> => {
-    try {
-      // First, get the block to know which company to refetch after deletion
-      const { data: blockData, error: fetchError } = await supabase
-        .from('dashboard_blocks')
-        .select('company_id')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) {
-        console.error("Error fetching dashboard block before deletion:", fetchError);
-        toast.error("Failed to delete dashboard block");
-        return false;
-      }
-      
-      const { error: deleteError } = await supabase
-        .from('dashboard_blocks')
-        .delete()
-        .eq('id', id);
-      
-      if (deleteError) {
-        console.error("Error deleting dashboard block:", deleteError);
-        toast.error("Failed to delete dashboard block");
-        return false;
-      }
-      
-      if (blockData) {
-        await refetchDashboardBlocks(blockData.company_id);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Error in deleteDashboardBlock:", error);
-      toast.error("Failed to delete dashboard block");
-      return false;
-    }
-  };
-  
-  // Implementation for adding a case
-  const addCase = async (data: Partial<Case>): Promise<Case | null> => {
-    try {
-      const { data: responseData, error } = await supabase
-        .from('cases')
-        .insert({
-          title: data.title,
-          description: data.description,
-          status: data.status,
-          priority: data.priority,
-          user_id: data.userId,
-          company_id: data.companyId,
-          category_id: data.categoryId,
-          assigned_to_id: data.assignedToId
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error("Error creating case:", error);
-        toast.error("Failed to create case");
-        return null;
-      }
-      
-      if (responseData) {
-        await refetchCases();
-        
-        return {
-          id: responseData.id,
-          title: responseData.title,
-          description: responseData.description,
-          status: responseData.status as CaseStatus,
-          priority: responseData.priority as CasePriority,
-          userId: responseData.user_id,
-          companyId: responseData.company_id,
-          categoryId: responseData.category_id,
-          assignedToId: responseData.assigned_to_id,
-          createdAt: new Date(responseData.created_at),
-          updatedAt: new Date(responseData.updated_at)
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error in addCase:", error);
-      toast.error("Failed to create case");
-      return null;
-    }
-  };
-  
-  // Implementation for fetching users
-  const refetchUsers = async (): Promise<User[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('name');
-      
-      if (error) {
-        console.error("Error fetching users:", error);
-        toast.error("Failed to load users");
-        return users;
-      }
-      
-      if (data) {
-        const formattedUsers = data.map(item => ({
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          role: item.role,
-          phone: item.phone,
-          companyId: item.company_id,
-          preferredLanguage: item.preferred_language
-        }));
-        
-        setUsers(formattedUsers);
-        return formattedUsers;
-      }
-      
-      return users;
-    } catch (error) {
-      console.error("Error in refetchUsers:", error);
-      toast.error("Failed to load users");
-      return users;
-    }
-  };
-  
-  // Implementation for refetching categories
-  const refetchCategories = async (): Promise<Category[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
-      
-      if (error) {
-        console.error("Error fetching categories:", error);
-        toast.error("Failed to load categories");
-        return categories;
-      }
-      
-      if (data) {
-        const formattedCategories = data.map(item => ({
-          id: item.id,
-          name: item.name,
-          createdAt: new Date(item.created_at)
-        }));
-        
-        setCategories(formattedCategories);
-        return formattedCategories;
-      }
-      
-      return categories;
-    } catch (error) {
-      console.error("Error in refetchCategories:", error);
-      toast.error("Failed to load categories");
-      return categories;
-    }
-  };
-  
-  // Company News blocks - Fixed implementation
-  const addCompanyNewsBlock = async (data: any): Promise<any> => {
-    try {
-      if (!session?.user?.id) {
-        console.error("No authenticated user found");
-        toast.error("You must be logged in to create news blocks");
-        return null;
-      }
 
-      const { data: responseData, error } = await supabase
-        .from('company_news_blocks')
-        .insert({
-          company_id: data.companyId,
-          title: data.title,
-          type: data.type,
-          content: data.content,
-          position: data.position,
-          parent_id: data.parentId,
-          created_by: session.user.id, // Fix: Use session.user.id instead of data.createdBy
-          is_published: data.isPublished || false
-        })
-        .select();
-      
-      if (error) {
-        console.error("Error creating news block:", error);
-        toast.error("Failed to create news block");
-        return null;
-      }
-      
-      return responseData ? responseData[0] : null;
-    } catch (error) {
-      console.error("Error in addCompanyNewsBlock:", error);
-      toast.error("Failed to create news block");
-      return null;
-    }
-  };
-  
-  const updateCompanyNewsBlock = async (id: string, data: any): Promise<any> => {
-    try {
-      const updateData: any = {};
-      
-      if (data.title !== undefined) updateData.title = data.title;
-      if (data.content !== undefined) updateData.content = data.content;
-      if (data.position !== undefined) updateData.position = data.position;
-      if (data.isPublished !== undefined) updateData.is_published = data.isPublished;
-      
-      const { data: responseData, error } = await supabase
-        .from('company_news_blocks')
-        .update(updateData)
-        .eq('id', id)
-        .select();
-      
-      if (error) {
-        console.error("Error updating news block:", error);
-        return null;
-      }
-      
-      return responseData ? responseData[0] : null;
-    } catch (error) {
-      console.error("Error in updateCompanyNewsBlock:", error);
-      return null;
-    }
-  };
-  
-  const deleteCompanyNewsBlock = async (id: string): Promise<boolean> => {
+  // Implementation for soft deleting a note
+  const deleteNote = async (id: string): Promise<boolean> => {
     try {
       const { error } = await supabase
-        .from('company_news_blocks')
-        .delete()
+        .from('notes')
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
       
       if (error) {
-        console.error("Error deleting news block:", error);
+        console.error("Error deleting note:", error);
+        toast.error("Failed to delete note");
         return false;
       }
       
+      setNotes(prev => prev.filter(note => note.id !== id));
+      toast.success("Note deleted successfully");
       return true;
     } catch (error) {
-      console.error("Error in deleteCompanyNewsBlock:", error);
-      return false;
-    }
-  };
-  
-  const publishCompanyNewsBlock = async (id: string): Promise<boolean> => {
-    try {
-      const { error } = await supabase
-        .from('company_news_blocks')
-        .update({ is_published: true })
-        .eq('id', id);
-      
-      if (error) {
-        console.error("Error publishing news block:", error);
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Error in publishCompanyNewsBlock:", error);
+      console.error("Error in deleteNote:", error);
+      toast.error("Failed to delete note");
       return false;
     }
   };
@@ -1111,24 +680,14 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     if (loading) return;
     if (!user || !profile) return;
 
-    // Now safe to use user/profile
     setCurrentUser(profile);
     
-    // Load data from Supabase once authenticated
     const loadInitialData = async () => {
       try {
-        // Load companies
         await refetchCompanies();
-        
-        // Load categories
         await refetchCategories();
-        
-        // Load users (profiles)
         await refetchUsers();
-        
-        // Load cases
         await refetchCases();
-        
       } catch (error) {
         console.error("Error loading initial data:", error);
         toast.error("Failed to load some app data");
@@ -1138,7 +697,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     loadInitialData();
   }, [loading, user, profile]);
 
-  // Fix context value definition to include all required properties
   const contextValue: AppContextType = {
     language,
     setLanguage,
@@ -1166,20 +724,21 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     addReply,
     addNote,
     deleteReply,
+    deleteNote,
     caseAttachments,
     loadingAttachments,
-    refetchAttachments,
-    uploadAttachment,
+    refetchAttachments: async () => [],
+    uploadAttachment: async () => null,
     dashboardBlocks,
     loadingDashboardBlocks,
-    refetchDashboardBlocks,
-    addDashboardBlock,
-    updateDashboardBlock,
-    deleteDashboardBlock,
-    addCompanyNewsBlock,
-    updateCompanyNewsBlock,
-    deleteCompanyNewsBlock,
-    publishCompanyNewsBlock,
+    refetchDashboardBlocks: async () => [],
+    addDashboardBlock: async () => null,
+    updateDashboardBlock: async () => null,
+    deleteDashboardBlock: async () => false,
+    addCompanyNewsBlock: async () => null,
+    updateCompanyNewsBlock: async () => null,
+    deleteCompanyNewsBlock: async () => false,
+    publishCompanyNewsBlock: async () => false,
   };
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
