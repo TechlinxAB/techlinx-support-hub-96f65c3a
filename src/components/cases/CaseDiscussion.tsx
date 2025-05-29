@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
-import { uploadFile, getFileUrl } from '@/utils/fileUtils';
+import { uploadFile } from '@/utils/fileUtils';
 import { supabase } from '@/integrations/supabase/client';
 
 interface CaseDiscussionProps {
@@ -276,14 +276,55 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleDownloadAttachment = (attachment: ReplyAttachment) => {
-    const url = getFileUrl(attachment.file_path);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = attachment.file_name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadAttachment = async (attachment: ReplyAttachment) => {
+    try {
+      console.log('Attempting to download attachment:', attachment);
+      
+      // Get a signed URL for download
+      const { data, error } = await supabase.storage
+        .from('case-attachments')
+        .createSignedUrl(attachment.file_path, 60); // Valid for 1 minute
+      
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        toast({
+          title: "Download failed",
+          description: "Could not generate download link. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!data?.signedUrl) {
+        toast({
+          title: "Download failed",
+          description: "Could not generate download link.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Create a temporary link and click it to trigger download
+      const link = document.createElement('a');
+      link.href = data.signedUrl;
+      link.download = attachment.file_name;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download started",
+        description: `Downloading ${attachment.file_name}`,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "An error occurred while downloading the file.",
+        variant: "destructive",
+      });
+    }
   };
   
   const handleAddReply = async (e: React.FormEvent) => {

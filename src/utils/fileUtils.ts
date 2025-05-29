@@ -38,6 +38,8 @@ export const uploadFile = async (
     const fileName = `${timestamp}-${file.name}`;
     const filePath = `${userId}/${caseId}/${type}/${fileName}`;
 
+    console.log('Uploading file to path:', filePath);
+
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('case-attachments')
@@ -48,6 +50,7 @@ export const uploadFile = async (
       return { success: false, error: 'Failed to upload file' };
     }
 
+    console.log('File uploaded successfully to:', filePath);
     return { success: true, filePath };
   } catch (error) {
     console.error('File upload error:', error);
@@ -55,12 +58,22 @@ export const uploadFile = async (
   }
 };
 
-export const getFileUrl = (filePath: string): string => {
-  const { data } = supabase.storage
-    .from('case-attachments')
-    .getPublicUrl(filePath);
-  
-  return data.publicUrl;
+export const getFileUrl = async (filePath: string): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase.storage
+      .from('case-attachments')
+      .createSignedUrl(filePath, 3600); // Valid for 1 hour
+    
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      return null;
+    }
+    
+    return data?.signedUrl || null;
+  } catch (error) {
+    console.error('Error getting file URL:', error);
+    return null;
+  }
 };
 
 export const formatFileSize = (bytes: number): string => {
