@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -29,8 +28,14 @@ const CompanyNewsBuilderPage = () => {
     loading: blocksLoading,
     error: blocksError,
     refetch: refetchBlocks,
-    updateLocalBlock
+    updateLocalBlock: updateLocalBlockRaw
   } = useNewsBlocksFetcher(companyId);
+
+  // Adapt the updateLocalBlock function to match the expected signature
+  const updateLocalBlock = React.useCallback((block: Partial<CompanyNewsBlock> & { id: string }) => {
+    const { id, ...updates } = block;
+    updateLocalBlockRaw(id, updates);
+  }, [updateLocalBlockRaw]);
 
   // Editor functionality
   const {
