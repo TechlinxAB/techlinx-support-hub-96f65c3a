@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image, Trash2 } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload, Download, File, FileText, Image, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -656,129 +656,17 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
                 const attachmentsForReply = item.type === 'reply' ? replyAttachments[item.id] || [] : [];
                 
                 return (
-                  <div 
+                  <MessageItem
                     key={`${item.type}-${item.id}`}
-                    className="w-full"
-                  >
-                    <div 
-                      className={`w-full ${
-                        item.type === 'note' 
-                          ? 'bg-orange-50 border-orange-200' 
-                          : (item as any).isInternal 
-                            ? 'bg-gray-50 border-gray-200'
-                            : 'bg-muted border-muted-foreground/20'
-                      } border rounded-lg p-4 ${isOptimistic ? 'opacity-70' : ''}`}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">
-                            {author?.name || 'Unknown'}
-                          </span>
-                          {item.type === 'note' && (
-                            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
-                              Internal Note
-                            </Badge>
-                          )}
-                          {item.type === 'reply' && (item as any).isInternal && (
-                            <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
-                              <Lock className="h-3 w-3" /> Internal
-                            </Badge>
-                          )}
-                          {isOptimistic && (
-                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
-                              Sending...
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(item.createdAt, { addSuffix: true })}
-                          </span>
-                          {isConsultant && !isOptimistic && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Delete {item.type === 'note' ? 'Note' : 'Reply'}
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this {item.type === 'note' ? 'note' : 'reply'}? 
-                                    This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => {
-                                      if (item.type === 'note') {
-                                        handleDeleteNote(item.id);
-                                      } else {
-                                        handleDeleteReply(item.id);
-                                      }
-                                    }}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Message content */}
-                      <p className="whitespace-pre-wrap text-sm mb-2">{item.content}</p>
-                      
-                      {/* Attachments display */}
-                      {attachmentsForReply.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="flex items-center gap-1 mb-2">
-                            <Paperclip className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium text-muted-foreground">
-                              {attachmentsForReply.length} attachment{attachmentsForReply.length > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {attachmentsForReply.map((attachment) => (
-                              <div
-                                key={attachment.id}
-                                className="flex items-center justify-between p-2 bg-gray-50 rounded border"
-                              >
-                                <div className="flex items-center gap-2">
-                                  {getFileIcon(attachment.content_type)}
-                                  <div>
-                                    <p className="text-sm font-medium">{attachment.file_name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {formatFileSize(attachment.size)}
-                                    </p>
-                                  </div>
-                                </div>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDownloadAttachment(attachment)}
-                                  className="gap-1 h-8"
-                                >
-                                  <Download className="h-3 w-3" />
-                                  Download
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    item={item}
+                    author={author}
+                    isConsultant={isConsultant}
+                    isOptimistic={isOptimistic}
+                    attachments={attachmentsForReply}
+                    onDeleteReply={handleDeleteReply}
+                    onDeleteNote={handleDeleteNote}
+                    onDownloadAttachment={handleDownloadAttachment}
+                  />
                 );
               })}
             </div>
@@ -891,6 +779,172 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+};
+
+// Extracted MessageItem component for better organization
+const MessageItem: React.FC<{
+  item: any;
+  author: any;
+  isConsultant: boolean;
+  isOptimistic: boolean;
+  attachments: ReplyAttachment[];
+  onDeleteReply: (id: string) => void;
+  onDeleteNote: (id: string) => void;
+  onDownloadAttachment: (attachment: ReplyAttachment) => void;
+}> = ({ item, author, isConsultant, isOptimistic, attachments, onDeleteReply, onDeleteNote, onDownloadAttachment }) => {
+  const [showAttachments, setShowAttachments] = useState(false);
+
+  const getFileIcon = (contentType: string) => {
+    if (contentType.startsWith('image/')) {
+      return <Image className="h-4 w-4" />;
+    } else if (contentType === 'application/pdf' || contentType.includes('document')) {
+      return <FileText className="h-4 w-4" />;
+    } else {
+      return <File className="h-4 w-4" />;
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  return (
+    <div className="w-full">
+      <div 
+        className={`w-full ${
+          item.type === 'note' 
+            ? 'bg-orange-50 border-orange-200' 
+            : (item as any).isInternal 
+              ? 'bg-gray-50 border-gray-200'
+              : 'bg-muted border-muted-foreground/20'
+        } border rounded-lg p-4 ${isOptimistic ? 'opacity-70' : ''}`}
+      >
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">
+              {author?.name || 'Unknown'}
+            </span>
+            {item.type === 'note' && (
+              <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
+                Internal Note
+              </Badge>
+            )}
+            {item.type === 'reply' && (item as any).isInternal && (
+              <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
+                <Lock className="h-3 w-3" /> Internal
+              </Badge>
+            )}
+            {isOptimistic && (
+              <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+                Sending...
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {formatDistanceToNow(item.createdAt, { addSuffix: true })}
+            </span>
+            {isConsultant && !isOptimistic && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Delete {item.type === 'note' ? 'Note' : 'Reply'}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete this {item.type === 'note' ? 'note' : 'reply'}? 
+                      This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        if (item.type === 'note') {
+                          onDeleteNote(item.id);
+                        } else {
+                          onDeleteReply(item.id);
+                        }
+                      }}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </div>
+        
+        {/* Message content */}
+        <p className="whitespace-pre-wrap text-sm mb-2">{item.content}</p>
+        
+        {/* Collapsible attachments display */}
+        {attachments.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <button
+              onClick={() => setShowAttachments(!showAttachments)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showAttachments ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              <Paperclip className="h-4 w-4" />
+              <span>
+                {attachments.length} attachment{attachments.length > 1 ? 's' : ''}
+              </span>
+            </button>
+            
+            {showAttachments && (
+              <div className="space-y-2 mt-2">
+                {attachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded border"
+                  >
+                    <div className="flex items-center gap-2">
+                      {getFileIcon(attachment.content_type)}
+                      <div>
+                        <p className="text-sm font-medium">{attachment.file_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatFileSize(attachment.size)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onDownloadAttachment(attachment)}
+                      className="gap-1 h-8"
+                    >
+                      <Download className="h-3 w-3" />
+                      Download
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
