@@ -86,26 +86,38 @@ export const CaseAttachments: React.FC<CaseAttachmentsProps> = ({ caseId }) => {
         return;
       }
       
-      // Fetch the file as a blob and create a download link
-      const response = await fetch(data.signedUrl);
+      // Fetch the file as a blob with proper headers to force download
+      const response = await fetch(data.signedUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch file');
+        throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
       }
       
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
       
-      // Create a temporary link and click it to trigger download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = attachment.file_name;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
+      // Create a blob URL and force download
+      const blobUrl = window.URL.createObjectURL(blob);
       
-      // Clean up
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Create a temporary link element for download
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = attachment.file_name;
+      downloadLink.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      // Clean up the blob URL
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 100);
       
       toast({
         title: "Download started",
