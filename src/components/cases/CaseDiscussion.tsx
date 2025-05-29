@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { Paperclip, SendHorizontal, Lock, RefreshCw } from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw, Upload } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import { FileAttachment } from '@/components/ui/file-attachment';
 import { uploadFile, getFileUrl } from '@/utils/fileUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CaseDiscussionProps {
   caseId: string;
