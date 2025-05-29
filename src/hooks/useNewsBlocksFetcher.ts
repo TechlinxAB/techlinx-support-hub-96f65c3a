@@ -1,221 +1,108 @@
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CompanyNewsBlock } from '@/types/companyNews';
-import { toast } from '@/components/ui/use-toast';
 
 export const useNewsBlocksFetcher = (companyId: string | undefined) => {
   const [blocks, setBlocks] = useState<CompanyNewsBlock[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  // Cache fetched data with longer TTL
-  const cachedData = useRef<{
-    companyId: string | undefined,
-    data: CompanyNewsBlock[],
-    timestamp: number,
-    etag?: string
-  } | null>(null);
-
-  // Tracking fetch state
-  const isMounted = useRef(true);
-  const activeRequest = useRef<AbortController | null>(null);
-  const lastFetchTime = useRef<number>(0);
-  const MIN_FETCH_INTERVAL = 2000; // Reduced to 2 seconds to allow more responsive updates
-  const CACHE_TTL = 15000; // Cache valid for 15 seconds (reduced for more responsive UI)
   
-  // Flag to track if a fetch was forced
-  const fetchForced = useRef<boolean>(false);
-  // Track if we've already shown a success toast for this operation
-  const successToastShown = useRef<boolean>(false);
+  // Track if component is mounted to prevent state updates on unmounted components
+  const isMounted = useRef(true);
+  
+  // Track active request to allow cancellation
+  const activeRequest = useRef<AbortController | null>(null);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMounted.current = false;
       if (activeRequest.current) {
         activeRequest.current.abort();
-        activeRequest.current = null;
       }
     };
   }, []);
 
-  // Update local blocks without refetching - enhanced to ensure proper sorting
-  const updateLocalBlock = useCallback((updatedBlock: Partial<CompanyNewsBlock> & { id: string }) => {
-    setBlocks(currentBlocks => {
-      const updatedBlocks = currentBlocks.map(block => 
-        block.id === updatedBlock.id 
-          ? { ...block, ...updatedBlock, updatedAt: new Date() } 
-          : block
-      );
-      
-      // Re-sort blocks by position to ensure proper order
-      return updatedBlocks.sort((a, b) => a.position - b.position);
-    });
-    
-    // Also update cache if it exists
-    if (cachedData.current) {
-      cachedData.current.data = cachedData.current.data.map(block => 
-        block.id === updatedBlock.id 
-          ? { ...block, ...updatedBlock, updatedAt: new Date() } 
-          : block
-      ).sort((a, b) => a.position - b.position);
-    }
-  }, []);
-
-  // Define fetchNewsBlocks with a clear, explicit signature
-  const fetchNewsBlocks = useCallback(async (force: boolean = false) => {
+  const fetchBlocks = useCallback(async (showRefreshToast = false) => {
     if (!companyId) {
       setLoading(false);
       return;
     }
 
-    fetchForced.current = force;
-    successToastShown.current = false;
-
-    // Return cached data if available and not forced refresh
-    const now = Date.now();
-    if (
-      !force && 
-      cachedData.current?.companyId === companyId && 
-      now - cachedData.current.timestamp < CACHE_TTL
-    ) {
-      console.log("Using cached news blocks data");
-      setBlocks(cachedData.current.data);
-      setLoading(false);
-      return;
-    }
-
-    // Prevent too frequent fetches
-    if (!force && now - lastFetchTime.current < MIN_FETCH_INTERVAL) {
-      console.log("Fetch attempted too soon, skipping");
-      return;
-    }
-
-    // Cancel any in-progress requests
-    if (activeRequest.current) {
-      console.log("Cancelling in-progress fetch");
-      activeRequest.current.abort();
-    }
-
-    // Start new request
-    setLoading(true);
-    lastFetchTime.current = now;
-    activeRequest.current = new AbortController();
-
     try {
-      console.log(`Fetching news blocks for company ${companyId}`);
-      const fetchStartTime = performance.now();
+      setLoading(true);
+      setError(null);
       
-      // Check the auth status to ensure we're properly authenticated before making the request
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.warn("No active session found, request may fail");
-      } else {
-        console.log("Authenticated request with user ID:", session.user.id);
+      // Cancel any existing request
+      if (activeRequest.current) {
+        activeRequest.current.abort();
       }
       
-      const { data, error } = await supabase
+      // Create new abort controller
+      activeRequest.current = new AbortController();
+
+      const { data, error: fetchError } = await supabase
         .from('company_news_blocks')
         .select('*')
         .eq('company_id', companyId)
+        .order('order_index', { ascending: true })
         .abortSignal(activeRequest.current.signal);
 
-      const fetchTime = performance.now() - fetchStartTime;
-      console.log(`Fetch completed in ${fetchTime.toFixed(2)}ms`);
-
-      if (!isMounted.current) return;
+      // Clear the active request reference
       activeRequest.current = null;
 
-      if (error) throw error;
-
-      // Transform the data to match CompanyNewsBlock type
-      const transformedBlocks: CompanyNewsBlock[] = data 
-        ? data.map(block => ({
-            id: block.id,
-            companyId: block.company_id,
-            title: block.title,
-            content: block.content,
-            type: block.type as any,
-            position: block.position,
-            parentId: block.parent_id || undefined,
-            createdAt: new Date(block.created_at),
-            updatedAt: new Date(block.updated_at),
-            createdBy: block.created_by,
-            isPublished: block.is_published || false
-          }))
-        : [];
-
-      // Sort the blocks by position
-      const sortedBlocks = transformedBlocks.sort((a, b) => a.position - b.position);
-
-      setBlocks(sortedBlocks);
-      setError(null);
-
-      // Cache the fetched data
-      cachedData.current = {
-        companyId,
-        data: sortedBlocks,
-        timestamp: now
-      };
-      
-      // Only show fetch success toast if it was forced and we haven't shown one yet
-      if (force && fetchForced.current && !successToastShown.current) {
-        toast({
-          title: "Content refreshed",
-          duration: 2000
-        });
-        successToastShown.current = true;
-      }
-    } catch (err: any) {
-      // Ignore aborted requests
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        console.log("Fetch was aborted");
-        return;
+      if (fetchError) {
+        throw fetchError;
       }
 
       if (isMounted.current) {
-        console.error('Error fetching news blocks:', err);
-        setError(err instanceof Error ? err : new Error(String(err)));
+        const processedBlocks: CompanyNewsBlock[] = (data || []).map(block => ({
+          id: block.id,
+          type: block.type,
+          content: block.content,
+          title: block.title,
+          orderIndex: block.order_index,
+          isPublished: block.is_published,
+          createdAt: block.created_at,
+          updatedAt: block.updated_at
+        }));
+
+        setBlocks(processedBlocks);
+        setError(null);
         
-        // Only show toast for forced fetches to avoid spamming the user
-        if (force && fetchForced.current && !successToastShown.current) {
-          toast({
-            title: "Failed to load news content",
-            description: err.message || "Please try again",
-            variant: "destructive"
-          });
-          successToastShown.current = true;
-        }
+        // Removed the toast notification that was showing "content refreshed"
+      }
+    } catch (err) {
+      // Handle aborted requests gracefully
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.log('Fetch request was aborted');
+        return;
+      }
+
+      console.error('Error fetching news blocks:', err);
+      if (isMounted.current) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch news blocks'));
       }
     } finally {
       if (isMounted.current) {
         setLoading(false);
       }
-      fetchForced.current = false;
     }
   }, [companyId]);
 
-  // Fetch initial data
+  // Initial fetch
   useEffect(() => {
-    // When companyId changes, clear cache
-    if (cachedData.current?.companyId !== companyId) {
-      cachedData.current = null;
-      fetchNewsBlocks(true);
-    } else if (!cachedData.current) {
-      fetchNewsBlocks(true);
-    }
-  }, [companyId, fetchNewsBlocks]);
+    fetchBlocks();
+  }, [fetchBlocks]);
 
-  // Public API - Make sure refetch is correctly exported with the same signature
-  return { 
-    blocks, 
-    loading, 
-    error, 
-    refetch: fetchNewsBlocks, // Correctly pass the fetchNewsBlocks function as refetch
-    updateLocalBlock,
-    lastFetchTime: lastFetchTime.current,
-    isCacheValid: cachedData.current && Date.now() - cachedData.current.timestamp < CACHE_TTL
+  const refetch = useCallback((showRefreshToast = false) => {
+    return fetchBlocks(showRefreshToast);
+  }, [fetchBlocks]);
+
+  return {
+    blocks,
+    loading,
+    error,
+    refetch
   };
 };
