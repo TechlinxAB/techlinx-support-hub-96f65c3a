@@ -332,6 +332,55 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
   
+  // Implementation for adding a case
+  const addCase = async (data: Partial<Case>): Promise<Case | null> => {
+    try {
+      const { data: responseData, error } = await supabase
+        .from('cases')
+        .insert({
+          title: data.title,
+          description: data.description,
+          status: data.status || 'new',
+          priority: data.priority || 'medium',
+          user_id: data.userId,
+          company_id: data.companyId,
+          category_id: data.categoryId,
+          assigned_to_id: data.assignedToId
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating case:", error);
+        toast.error("Failed to create case");
+        return null;
+      }
+      
+      if (responseData) {
+        await refetchCases();
+        return {
+          id: responseData.id,
+          title: responseData.title,
+          description: responseData.description,
+          status: responseData.status as CaseStatus,
+          priority: responseData.priority as CasePriority,
+          userId: responseData.user_id,
+          companyId: responseData.company_id,
+          categoryId: responseData.category_id,
+          assignedToId: responseData.assigned_to_id,
+          createdAt: new Date(responseData.created_at),
+          updatedAt: new Date(responseData.updated_at)
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in addCase:", error);
+      toast.error("Failed to create case");
+      return null;
+    }
+  };
+  
   // Implementation for adding a company
   const addCompany = async (data: Partial<Company>): Promise<Company | null> => {
     try {
@@ -675,6 +724,76 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Implementation for fetching all users
+  const refetchUsers = async (): Promise<User[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error("Error fetching users:", error);
+        toast.error("Failed to load users");
+        return users;
+      }
+      
+      if (data) {
+        const formattedUsers = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          email: item.email,
+          role: item.role,
+          phone: item.phone,
+          companyId: item.company_id,
+          preferredLanguage: item.preferred_language
+        }));
+        
+        setUsers(formattedUsers);
+        return formattedUsers;
+      }
+      
+      return users;
+    } catch (error) {
+      console.error("Error in refetchUsers:", error);
+      toast.error("Failed to load users");
+      return users;
+    }
+  };
+
+  // Implementation for fetching all categories
+  const refetchCategories = async (): Promise<Category[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+        return categories;
+      }
+      
+      if (data) {
+        const formattedCategories = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          createdAt: new Date(item.created_at)
+        }));
+        
+        setCategories(formattedCategories);
+        return formattedCategories;
+      }
+      
+      return categories;
+    } catch (error) {
+      console.error("Error in refetchCategories:", error);
+      toast.error("Failed to load categories");
+      return categories;
+    }
+  };
+  
   // Load data when app initializes and user is authenticated
   useEffect(() => {
     if (loading) return;
