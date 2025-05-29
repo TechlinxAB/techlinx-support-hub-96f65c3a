@@ -280,22 +280,12 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     try {
       console.log('Attempting to download attachment:', attachment);
       
-      // Get a signed URL for download
-      const { data, error } = await supabase.storage
+      // Get the public URL directly since the bucket is now public
+      const { data } = await supabase.storage
         .from('case-attachments')
-        .createSignedUrl(attachment.file_path, 60); // Valid for 1 minute
+        .getPublicUrl(attachment.file_path);
       
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        toast({
-          title: "Download failed",
-          description: "Could not generate download link. Please try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!data?.signedUrl) {
+      if (!data?.publicUrl) {
         toast({
           title: "Download failed",
           description: "Could not generate download link.",
@@ -304,14 +294,38 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
         return;
       }
       
-      // Create a temporary link and click it to trigger download
-      const link = document.createElement('a');
-      link.href = data.signedUrl;
-      link.download = attachment.file_name;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Fetch the file as a blob with proper headers to force download
+      const response = await fetch(data.publicUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Create a blob URL and force download
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      // Create a temporary link element for download
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = attachment.file_name;
+      downloadLink.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      // Clean up the blob URL
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 100);
       
       toast({
         title: "Download started",

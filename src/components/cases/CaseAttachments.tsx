@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,22 +61,12 @@ export const CaseAttachments: React.FC<CaseAttachmentsProps> = ({ caseId }) => {
     try {
       console.log('Attempting to download attachment:', attachment);
       
-      // Get a signed URL for download
-      const { data, error } = await supabase.storage
+      // Get the public URL directly since the bucket is now public
+      const { data } = await supabase.storage
         .from('case-attachments')
-        .createSignedUrl(attachment.file_path, 60); // Valid for 1 minute
+        .getPublicUrl(attachment.file_path);
       
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        toast({
-          title: "Download failed",
-          description: "Could not generate download link. Please try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!data?.signedUrl) {
+      if (!data?.publicUrl) {
         toast({
           title: "Download failed",
           description: "Could not generate download link.",
@@ -87,7 +76,7 @@ export const CaseAttachments: React.FC<CaseAttachmentsProps> = ({ caseId }) => {
       }
       
       // Fetch the file as a blob with proper headers to force download
-      const response = await fetch(data.signedUrl, {
+      const response = await fetch(data.publicUrl, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache',
