@@ -45,7 +45,7 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
         .from('company_news_blocks')
         .select('*')
         .eq('company_id', companyId)
-        .order('order_index', { ascending: true })
+        .order('position', { ascending: true })
         .abortSignal(activeRequest.current.signal);
 
       // Clear the active request reference
@@ -58,19 +58,20 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
       if (isMounted.current) {
         const processedBlocks: CompanyNewsBlock[] = (data || []).map(block => ({
           id: block.id,
+          companyId: block.company_id,
           type: block.type,
           content: block.content,
           title: block.title,
-          orderIndex: block.order_index,
-          isPublished: block.is_published,
-          createdAt: block.created_at,
-          updatedAt: block.updated_at
+          position: block.position,
+          parentId: block.parent_id,
+          createdAt: new Date(block.created_at),
+          updatedAt: new Date(block.updated_at),
+          createdBy: block.created_by,
+          isPublished: block.is_published
         }));
 
         setBlocks(processedBlocks);
         setError(null);
-        
-        // Removed the toast notification that was showing "content refreshed"
       }
     } catch (err) {
       // Handle aborted requests gracefully
@@ -99,10 +100,19 @@ export const useNewsBlocksFetcher = (companyId: string | undefined) => {
     return fetchBlocks(showRefreshToast);
   }, [fetchBlocks]);
 
+  const updateLocalBlock = useCallback((blockId: string, updates: Partial<CompanyNewsBlock>) => {
+    setBlocks(prevBlocks => 
+      prevBlocks.map(block => 
+        block.id === blockId ? { ...block, ...updates } : block
+      )
+    );
+  }, []);
+
   return {
     blocks,
     loading,
     error,
-    refetch
+    refetch,
+    updateLocalBlock
   };
 };
