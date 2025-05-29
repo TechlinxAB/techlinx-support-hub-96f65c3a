@@ -1,96 +1,43 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
-import { 
-  Paperclip, 
-  SendHorizontal, 
-  Lock, 
-  RefreshCw, 
-  File, 
-  FileText, 
-  X, 
-  Trash2,
-  Mail
-} from 'lucide-react';
+import { Paperclip, SendHorizontal, Lock, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { notificationService } from '@/services/notificationService';
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/components/ui/use-toast';
+import { FileAttachment } from '@/components/ui/file-attachment';
+import { uploadFile, getFileUrl } from '@/utils/fileUtils';
 
 interface CaseDiscussionProps {
   caseId: string;
 }
 
-// Cache helper for discussions
-const discussionCache = {
-  get: (caseId: string) => {
-    try {
-      const cached = localStorage.getItem(`discussion-cache-${caseId}`);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        
-        // Cache expires after 5 minutes
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          return data;
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Cache retrieval error:', error);
-      return null;
-    }
-  },
-  
-  set: (caseId: string, replies: any[], attachments: any[]) => {
-    try {
-      localStorage.setItem(`discussion-cache-${caseId}`, JSON.stringify({
-        data: { replies, attachments },
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.error('Cache storage error:', error);
-    }
-  }
-};
-
 // Utility function for exponential backoff retry
-const retryOperation = async (operation: () => Promise<any>, maxRetries = 3, initialDelay = 300) => {
+const retryFetch = async (fn: () => Promise<any>, maxRetries = 5, initialDelay = 300) => {
   let retries = 0;
   
   while (retries < maxRetries) {
     try {
-      return await operation();
+      return await fn();
     } catch (error) {
       retries++;
       
-      if (retries >= maxRetries) {
+      if (retries === maxRetries) {
         throw error;
       }
       
-      // Exponential backoff with jitter
+      // Calculate delay with exponential backoff (300ms, 600ms, 1200ms, etc.)
       const delay = initialDelay * Math.pow(2, retries - 1);
-      const jitter = Math.random() * 200;
+      
+      // Add some randomness to prevent synchronized retries
+      const jitter = Math.random() * 300;
       
       console.log(`Retry ${retries}/${maxRetries} after ${delay + jitter}ms`);
       await new Promise(resolve => setTimeout(resolve, delay + jitter));
@@ -98,420 +45,355 @@ const retryOperation = async (operation: () => Promise<any>, maxRetries = 3, ini
   }
 };
 
-// Get file size in human readable format
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-// Get file icon based on mime type
-const getFileIcon = (mimeType: string) => {
-  if (mimeType.startsWith('image/')) return <File className="h-4 w-4" />;
-  if (mimeType.startsWith('text/')) return <FileText className="h-4 w-4" />;
-  if (mimeType.startsWith('application/pdf')) return <FileText className="h-4 w-4" />;
-  return <Paperclip className="h-4 w-4" />;
+// Helper to interact with local storage
+const localStorageCache = {
+  getItem: (key: string) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      console.log('Unable to cache in localStorage');
+    }
+  }
 };
 
 const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
   const { 
     currentUser, 
     replies, 
+    notes, 
     addReply, 
-    deleteReply,
+    addNote, 
     users, 
     loadingReplies, 
+    loadingNotes, 
     refetchReplies,
-    caseAttachments,
-    loadingAttachments,
-    refetchAttachments,
-    uploadAttachment
+    refetchNotes 
   } = useAppContext();
   
   const [replyContent, setReplyContent] = useState('');
   const [isInternalReply, setIsInternalReply] = useState(false);
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [noteContent, setNoteContent] = useState('');
+  const [attachments, setAttachments] = useState<FileList | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isRefetching, setIsRefetching] = useState(false);
   const [localReplies, setLocalReplies] = useState<any[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
-  const [isUploading, setIsUploading] = useState(false);
+  const [localNotes, setLocalNotes] = useState<any[]>([]);
   const [offlineMode, setOfflineMode] = useState(false);
-  const [dataFetched, setDataFetched] = useState(false);
-  const [replyToDelete, setReplyToDelete] = useState<string | null>(null);
-  const [isSendingNotification, setIsSendingNotification] = useState(false);
   
   const { toast } = useToast();
   const isConsultant = currentUser?.role === 'consultant';
-  const lastFetchTimeRef = useRef<number>(0);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Initialize with cached data if available
+  // Cache the case discussion data
   useEffect(() => {
-    const cached = discussionCache.get(caseId);
-    if (cached) {
-      setLocalReplies(cached.replies || []);
-      
-      // Still fetch fresh data, but we have something to show immediately
-      console.log('Using cached discussion data while fetching fresh data');
+    const cachedDiscussion = localStorageCache.getItem(`case-discussion-${caseId}`);
+    
+    if (cachedDiscussion) {
+      if (cachedDiscussion.replies) setLocalReplies(cachedDiscussion.replies);
+      if (cachedDiscussion.notes) setLocalNotes(cachedDiscussion.notes);
     }
   }, [caseId]);
-
-  // Debounced fetch function to prevent excessive requests
-  const debouncedFetch = useCallback((caseId: string) => {
-    // Don't fetch too frequently (at least 2 seconds between requests)
-    const now = Date.now();
-    if (now - lastFetchTimeRef.current < 2000) {
-      // Clear existing timeout if it exists
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
+  
+  // Update cache when data changes
+  useEffect(() => {
+    if (replies.length > 0 || notes.length > 0) {
+      const caseReplies = replies.filter(r => r.caseId === caseId);
+      const caseNotes = notes.filter(n => n.caseId === caseId);
       
-      // Set a new timeout
-      fetchTimeoutRef.current = setTimeout(() => {
-        debouncedFetch(caseId);
-      }, 2000);
+      localStorageCache.setItem(`case-discussion-${caseId}`, {
+        replies: caseReplies,
+        notes: caseNotes,
+        timestamp: new Date().toISOString()
+      });
       
-      return;
+      setLocalReplies(caseReplies);
+      setLocalNotes(caseNotes);
+    }
+  }, [replies, notes, caseId]);
+  
+  // Function to handle manual refetching with error handling and retry
+  const handleRefetch = useCallback(async () => {
+    // Clear previous timer if it exists
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
     
-    lastFetchTimeRef.current = now;
-    
-    setIsRefetching(true);
-    setFetchError(null);
-    
-    Promise.all([
-      retryOperation(() => refetchReplies(caseId)),
-      retryOperation(() => refetchAttachments(caseId))
-    ])
-      .then(() => {
-        setOfflineMode(false);
-        // Update the cache with fresh data
-        const caseReplies = replies.filter(r => r.caseId === caseId);
-        const caseFiles = caseAttachments.filter(a => a.caseId === caseId);
-        discussionCache.set(caseId, caseReplies, caseFiles);
-        setDataFetched(true);
-      })
-      .catch(error => {
-        console.error('Error fetching discussion data:', error);
-        setFetchError('Failed to load discussion data. Using cached data if available.');
+    // Debounce the refetch
+    debounceTimerRef.current = setTimeout(async () => {
+      setIsRefetching(true);
+      setFetchError(null);
+      setOfflineMode(false);
+      
+      try {
+        await Promise.all([
+          retryFetch(() => refetchReplies(caseId)),
+          retryFetch(() => refetchNotes(caseId))
+        ]);
+        
+        toast({
+          title: "Refreshed",
+          description: "Discussion data has been refreshed",
+        });
+      } catch (error) {
+        console.error('Error refetching data:', error);
+        setFetchError('Failed to load discussion data. You can view cached data or try again later.');
         setOfflineMode(true);
-        setDataFetched(true);
         
         toast({
           title: "Connection issue",
-          description: "Displaying cached data. Click refresh to try again.",
+          description: "Using cached data where available. Retry when connection improves.",
           variant: "destructive"
         });
-      })
-      .finally(() => {
+      } finally {
         setIsRefetching(false);
-      });
-  }, [caseId, refetchReplies, refetchAttachments, replies, caseAttachments, toast]);
-  
-  // Initial data fetch with limited frequency, but only ONCE
-  useEffect(() => {
-    if (caseId && !dataFetched) {
-      debouncedFetch(caseId);
-    }
+      }
+    }, 300); // 300ms debounce
     
+    // Cleanup function
     return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
-  }, [caseId, debouncedFetch, dataFetched]);
+  }, [caseId, refetchReplies, refetchNotes, toast]);
   
-  // Merge replies from context and local state (for optimistic updates)
-  const mergedReplies = [...(offlineMode ? localReplies : replies.filter(r => r.caseId === caseId))];
-  const caseFiles = caseAttachments.filter(a => a.caseId === caseId);
+  // Initial data fetch - only run once when component mounts or caseId changes
+  useEffect(() => {
+    if (caseId) {
+      handleRefetch();
+    }
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [caseId, handleRefetch]); // Only depend on caseId and handleRefetch to prevent refetch loops
   
-  // Sort all items by date
-  const allItems = mergedReplies.map(r => ({
-    ...r,
-    type: 'reply',
-    createdAt: new Date(r.createdAt)
-  })).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // Merge replies and notes, sort by date (prioritize local state if in offline mode)
+  const allItems = [
+    ...(offlineMode ? localReplies : replies.filter(r => r.caseId === caseId)).map(r => ({
+      ...r,
+      type: 'reply',
+      createdAt: new Date(r.createdAt)
+    })),
+    ...(offlineMode ? localNotes : notes.filter(n => n.caseId === caseId)).map(n => ({
+      ...n,
+      type: 'note',
+      createdAt: new Date(n.createdAt)
+    }))
+  ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   
   const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      // Convert FileList to array for easier management
-      const filesArray = Array.from(e.target.files);
-      setAttachments(prev => [...prev, ...filesArray]);
+    if (e.target.files) {
+      setAttachments(e.target.files);
     }
   };
   
-  const removeAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
-  };
-  
-  // Upload a single file and return its path
-  const uploadFile = async (file: File, replyId: string): Promise<string | null> => {
-    try {
-      // Generate a unique file path to prevent overwriting
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-      const filePath = `${caseId}/${replyId}/${fileName}`;
-      
-      // Start tracking upload progress for this file
-      const uploadId = `${file.name}-${Date.now()}`;
-      setUploadProgress(prev => ({ ...prev, [uploadId]: 0 }));
-      
-      // Upload the file to Supabase Storage with progress tracking
-      const { data, error } = await supabase.storage
-        .from('case-attachments')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
-      // After upload completes, set progress to 100%
-      setUploadProgress(prev => ({ ...prev, [uploadId]: 100 }));
-      
-      if (error) {
-        console.error('Error uploading file:', error);
-        return null;
-      }
-      
-      return filePath;
-    } catch (error) {
-      console.error('Exception during file upload:', error);
-      return null;
-    }
-  };
-  
-  // Send notification about a new reply
-  const sendNotification = async (newReply: any, recipientType: 'user' | 'consultant') => {
-    if (!newReply || !newReply.id) {
-      console.error('Cannot send notification: Invalid reply data');
-      return false;
-    }
-    
-    setIsSendingNotification(true);
-    try {
-      // Send notification using the notification service
-      const success = await notificationService.sendReplyNotification(
-        caseId,
-        newReply.id,
-        currentUser?.role !== 'consultant' // isUserReply (if not consultant, then it's a user)
-      );
-    
-      return success;
-    } catch (error) {
-      console.error('Error sending notification:', error);
-      return false;
-    } finally {
-      setIsSendingNotification(false);
-    }
-  };
-  
-  // Handle adding a reply
   const handleAddReply = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!replyContent.trim() && attachments.length === 0) {
-      toast({
-        title: "Empty reply",
-        description: "Please add some text or attach files to send a reply.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
+    if (!replyContent.trim()) return;
+
     setIsUploading(true);
     
     try {
-      // First, add the reply to get a reply ID
-      const newReply = await addReply({
+      // First create the reply
+      const newReply = await retryFetch(() => addReply({
         caseId,
         userId: currentUser!.id,
-        content: replyContent || "(No message)", // Use placeholder if only attachments
+        content: replyContent,
         isInternal: isInternalReply
-      });
-      
-      if (!newReply || !newReply.id) {
-        throw new Error("Failed to create reply");
-      }
-      
-      const replyId = newReply.id;
-      
-      // If there are attachments, upload them
-      if (attachments.length > 0) {
-        for (const file of attachments) {
-          // Upload the file
-          const filePath = await uploadFile(file, replyId);
+      }));
+
+      // Upload attachments if any
+      if (attachments && attachments.length > 0 && newReply) {
+        const uploadPromises = Array.from(attachments).map(async (file) => {
+          const uploadResult = await uploadFile(file, currentUser!.id, caseId, 'reply');
           
-          if (filePath) {
-            // Save attachment metadata in the database
-            await uploadAttachment({
-              caseId,
-              replyId: replyId,
-              fileName: file.name,
-              filePath,
-              contentType: file.type,
-              size: file.size,
-              createdBy: currentUser!.id
-            });
+          if (uploadResult.success && uploadResult.filePath) {
+            // Save attachment record to database
+            const { error } = await supabase
+              .from('case_attachments')
+              .insert({
+                case_id: caseId,
+                reply_id: newReply.id,
+                file_name: file.name,
+                file_path: uploadResult.filePath,
+                content_type: file.type,
+                size: file.size,
+                created_by: currentUser!.id
+              });
+              
+            if (error) {
+              console.error('Error saving attachment record:', error);
+              throw error;
+            }
+          } else {
+            throw new Error(uploadResult.error || 'Upload failed');
           }
-        }
+        });
+
+        await Promise.all(uploadPromises);
       }
+      
+      setReplyContent('');
+      setIsInternalReply(false);
+      setAttachments(null);
       
       toast({
         title: "Reply sent",
-        description: attachments.length > 0 
-          ? `Your reply with ${attachments.length} attachment(s) has been added.` 
-          : "Your reply has been added successfully."
+        description: "Your reply has been added to the discussion.",
       });
       
-      // Determine recipient type based on current user role
-      const recipientType = currentUser?.role === 'consultant' ? 'user' : 'consultant';
-      
-      // Don't send notification for internal replies to users
-      if (!(isInternalReply && recipientType === 'user')) {
-        // Send notification after reply is successfully created
-        sendNotification(newReply, recipientType);
-      }
-      
-      // Clear form
-      setReplyContent('');
-      setIsInternalReply(false);
-      setAttachments([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
-      // Refresh data after successful submission
-      debouncedFetch(caseId);
-      
+      // Refresh the data after a successful submission
+      handleRefetch();
     } catch (error) {
-      console.error('Error adding reply with attachments:', error);
+      console.error('Error adding reply:', error);
       
       toast({
-        title: "Failed to send",
-        description: "There was an error sending your reply. Please try again.",
-        variant: "destructive"
+        title: "Failed to send reply",
+        description: "Please try again or contact support if the problem persists.",
+        variant: "destructive",
       });
     } finally {
       setIsUploading(false);
-      setUploadProgress({});
     }
   };
   
-  const handleDeleteReply = async (replyId: string) => {
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!noteContent.trim()) return;
+    
     try {
-      await deleteReply(replyId);
+      // Optimistic update
+      const tempId = `temp-${Date.now()}`;
+      const optimisticNote = {
+        id: tempId,
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+        createdAt: new Date(),
+        isOptimistic: true
+      };
+      
+      setLocalNotes(prev => [...prev, optimisticNote]);
+      
+      // Save to server with retry
+      await retryFetch(() => addNote({
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+      }));
+      
+      setNoteContent('');
       
       toast({
-        title: "Reply deleted",
-        description: "The reply has been deleted successfully."
+        title: "Note added",
+        description: "Your internal note has been added.",
       });
       
-      debouncedFetch(caseId);
+      // Refresh data after successful submission
+      handleRefetch();
     } catch (error) {
-      console.error('Error deleting reply:', error);
+      console.error('Error adding note:', error);
       
       toast({
-        title: "Delete failed",
-        description: "There was an error deleting the reply. Please try again.",
-        variant: "destructive"
+        title: "Failed to add note",
+        description: "Your note is saved locally and will be added when connection is restored.",
+        variant: "destructive",
       });
-    } finally {
-      setReplyToDelete(null);
+      
+      // Store unsent notes for later sync
+      const pendingNotes = JSON.parse(localStorage.getItem('pendingNotes') || '[]');
+      pendingNotes.push({
+        type: 'note',
+        caseId,
+        userId: currentUser!.id,
+        content: noteContent,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem('pendingNotes', JSON.stringify(pendingNotes));
     }
   };
   
-  const handleRefresh = () => {
-    setIsRefetching(true);
-    setOfflineMode(false);
-    debouncedFetch(caseId);
-  };
-  
-  // Get attachments for a specific reply
-  const getReplyAttachments = (replyId: string) => {
-    return caseAttachments.filter(attachment => attachment.replyId === replyId);
-  };
-  
-  // Calculate initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
-  };
-  
-  // Generate a download URL for an attachment
-  const getDownloadUrl = async (filePath: string) => {
+  const retryPendingMessages = async () => {
+    // Try to send any pending messages
+    const pendingMessages = JSON.parse(localStorage.getItem('pendingMessages') || '[]');
+    const pendingNotes = JSON.parse(localStorage.getItem('pendingNotes') || '[]');
+    
+    if (pendingMessages.length === 0 && pendingNotes.length === 0) return;
+    
     try {
-      const { data, error } = await supabase.storage
-        .from('case-attachments')
-        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
-      
-      if (error || !data?.signedUrl) {
-        console.error('Error creating signed URL:', error);
-        return null;
+      // Process replies
+      for (const message of pendingMessages) {
+        if (message.caseId === caseId) {
+          await addReply({
+            caseId: message.caseId,
+            userId: message.userId,
+            content: message.content,
+            isInternal: message.isInternal
+          });
+        }
       }
       
-      return data.signedUrl;
-    } catch (error) {
-      console.error('Exception getting download URL:', error);
-      return null;
-    }
-  };
-  
-  const handleDownload = async (attachment: any) => {
-    try {
-      const url = await getDownloadUrl(attachment.filePath);
-      
-      if (!url) {
-        toast({
-          title: "Download failed",
-          description: "Could not generate download link. Please try again.",
-          variant: "destructive"
-        });
-        return;
+      // Process notes
+      for (const note of pendingNotes) {
+        if (note.caseId === caseId) {
+          await addNote({
+            caseId: note.caseId,
+            userId: note.userId,
+            content: note.content
+          });
+        }
       }
       
-      // Create a temporary link and simulate click to download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = attachment.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading file:', error);
+      // Clear pending items
+      localStorage.setItem('pendingMessages', JSON.stringify(
+        pendingMessages.filter((m: any) => m.caseId !== caseId)
+      ));
+      
+      localStorage.setItem('pendingNotes', JSON.stringify(
+        pendingNotes.filter((n: any) => n.caseId !== caseId)
+      ));
+      
       toast({
-        title: "Download failed",
-        description: "There was an error downloading the file.",
-        variant: "destructive"
+        title: "Sync completed",
+        description: "Your pending messages have been sent.",
+      });
+      
+      handleRefetch();
+    } catch (error) {
+      toast({
+        title: "Sync failed",
+        description: "Unable to sync your pending messages. Will retry later.",
+        variant: "destructive",
       });
     }
   };
   
-  // Preview for image attachments
-  const renderAttachmentPreview = (attachment: any) => {
-    if (attachment.contentType?.startsWith('image/')) {
-      return (
-        <img
-          src={`https://uaoeabhtbynyfzyfzogp.supabase.co/storage/v1/object/public/case-attachments/${attachment.filePath}`}
-          alt={attachment.fileName}
-          className="mt-2 max-h-60 rounded-md object-contain bg-gray-50"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-      );
+  useEffect(() => {
+    // Attempt to send pending messages when component loads
+    if (!offlineMode && (localStorage.getItem('pendingMessages') || localStorage.getItem('pendingNotes'))) {
+      retryPendingMessages();
     }
-    return null;
-  };
-
-  // If there's an error and no cached data
-  if (fetchError && !offlineMode && localReplies.length === 0) {
+  }, [offlineMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  if (fetchError && !offlineMode) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
@@ -519,15 +401,24 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
           <Alert className="mb-4" variant="destructive">
             <AlertDescription>{fetchError}</AlertDescription>
           </Alert>
-          <div className="flex justify-center">
-            <Button 
-              onClick={handleRefresh} 
-              variant="outline"
-              disabled={isRefetching}
-              className="gap-2"
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-center">
+              <Button 
+                onClick={handleRefetch} 
+                variant="outline"
+                disabled={isRefetching}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+                {isRefetching ? 'Retrying...' : 'Retry'}
+              </Button>
+            </div>
+            
+            <Button
+              onClick={() => setOfflineMode(true)}
+              variant="secondary"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-              {isRefetching ? 'Retrying...' : 'Retry'}
+              View Cached Discussions
             </Button>
           </div>
         </CardContent>
@@ -535,8 +426,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
     );
   }
   
-  // Show loading state only when we have no data at all
-  if ((loadingReplies || loadingAttachments || isRefetching) && allItems.length === 0) {
+  if ((loadingReplies || loadingNotes || isRefetching) && allItems.length === 0) {
     return (
       <Card>
         <CardHeader>Discussion</CardHeader>
@@ -548,9 +438,9 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
       </Card>
     );
   }
-
+  
   return (
-    <div>
+    <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">
@@ -564,7 +454,7 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={handleRefresh}
+                onClick={handleRefetch}
                 disabled={isRefetching}
                 className="h-8 gap-1"
               >
@@ -573,135 +463,73 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
               </Button>
             </div>
           </div>
+          {offlineMode && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Showing cached discussions. Some messages may be pending upload.
+            </p>
+          )}
         </CardHeader>
         
-        <CardContent>
+        <CardContent className="space-y-4">
           {allItems.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {allItems.map((item, index) => {
+            <div className="space-y-4">
+              {allItems.map((item) => {
                 const author = users.find(u => u.id === item.userId);
                 
-                const isOptimistic = (item as any).isOptimistic;
-                const initials = author?.name ? getInitials(author.name) : "??";
+                if (item.type === 'note' && !isConsultant) {
+                  // Don't show internal notes to regular users
+                  return null;
+                }
                 
-                // Get attachments for this reply
-                const replyAttachments = item.type === 'reply' 
-                  ? getReplyAttachments(item.id) 
-                  : [];
+                const isUserMessage = item.userId === currentUser?.id;
+                const isOptimistic = (item as any).isOptimistic;
                 
                 return (
                   <div 
                     key={`${item.type}-${item.id}`}
-                    className="flex gap-4"
+                    className={`flex ${isUserMessage ? 'justify-end' : 'justify-start'}`}
                   >
-                    <Avatar className="h-10 w-10 flex-shrink-0">
-                      <AvatarFallback>{initials}</AvatarFallback>
-                    </Avatar>
-                    
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2 justify-between">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium">
+                    <div 
+                      className={`max-w-[80%] ${
+                        item.type === 'note' 
+                          ? 'bg-orange-50 border-orange-200' 
+                          : (item as any).isInternal 
+                            ? 'bg-gray-50 border-gray-200'
+                            : isUserMessage
+                              ? 'bg-primary-foreground border-primary/20'
+                              : 'bg-muted border-muted-foreground/20'
+                      } border rounded-lg p-3 ${isOptimistic ? 'opacity-70' : ''}`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">
                             {author?.name || 'Unknown'}
                           </span>
-                          
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(item.createdAt, { addSuffix: true })}
-                          </span>
-                          
-                          {item.isInternal && (
+                          {item.type === 'note' && (
+                            <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
+                              Internal Note
+                            </Badge>
+                          )}
+                          {item.type === 'reply' && (item as any).isInternal && (
                             <Badge variant="outline" className="flex items-center gap-1 bg-gray-100 text-gray-800 border-gray-200">
                               <Lock className="h-3 w-3" /> Internal
                             </Badge>
                           )}
-                          
                           {isOptimistic && (
                             <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
                               Sending...
                             </Badge>
                           )}
                         </div>
-                        
-                        {isConsultant && !isOptimistic && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReplyToDelete(item.id);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Reply</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this reply? 
-                                  This will also remove any attached files.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteReply(item.id);
-                                  }}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(item.createdAt, { addSuffix: true })}
+                        </span>
                       </div>
-                      
-                      <div className={`p-3 rounded-md ${
-                        item.isInternal 
-                          ? 'bg-gray-50 border border-gray-200'
-                          : 'bg-white border border-gray-200'
-                      } ${isOptimistic ? 'opacity-70' : ''}`}>
-                        <p className="whitespace-pre-wrap">{item.content}</p>
-                        
-                        {/* Display attachments */}
-                        {replyAttachments.length > 0 && (
-                          <div className="mt-3 pt-2 border-t border-gray-200 space-y-2">
-                            <p className="text-xs font-medium text-gray-500">Attachments:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {replyAttachments.map((attachment: any) => (
-                                <div 
-                                  key={attachment.id} 
-                                  className="flex flex-col border rounded-md overflow-hidden"
-                                >
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs justify-start gap-2 p-2 h-auto"
-                                    onClick={() => handleDownload(attachment)}
-                                  >
-                                    {getFileIcon(attachment.contentType)}
-                                    <span className="truncate max-w-40">{attachment.fileName}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      ({formatFileSize(attachment.size)})
-                                    </span>
-                                  </Button>
-                                  {renderAttachmentPreview(attachment)}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      <p className="whitespace-pre-wrap text-sm">{item.content}</p>
                     </div>
                   </div>
                 );
@@ -709,113 +537,85 @@ const CaseDiscussion: React.FC<CaseDiscussionProps> = ({ caseId }) => {
             </div>
           )}
           
-          <div className="mt-8 pt-4 border-t border-gray-200">
-            <form onSubmit={handleAddReply} className="space-y-4">
-              <Textarea 
-                placeholder="Type your reply..." 
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                rows={4}
-                className="w-full"
-                disabled={isUploading || isSendingNotification}
+          <form onSubmit={handleAddReply} className="pt-4">
+            <Textarea 
+              placeholder="Type your reply..." 
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              rows={4}
+              className="mb-3"
+              disabled={isUploading}
+            />
+            
+            <div className="mb-3">
+              <FileAttachment
+                files={attachments}
+                onFilesChange={setAttachments}
+                disabled={isUploading}
               />
-              
-              {/* Display selected file previews */}
-              {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {attachments.map((file, index) => (
-                    <div 
-                      key={`${file.name}-${index}`}
-                      className="flex items-center gap-2 bg-gray-50 border rounded-md p-2"
-                    >
-                      {file.type.startsWith('image/') ? (
-                        <div className="h-8 w-8 relative">
-                          <img 
-                            src={URL.createObjectURL(file)}
-                            alt={file.name}
-                            className="h-full w-full object-cover rounded"
-                          />
-                        </div>
-                      ) : (
-                        getFileIcon(file.type) 
-                      )}
-                      <span className="text-sm truncate max-w-36">{file.name}</span>
-                      <span className="text-xs text-muted-foreground">({formatFileSize(file.size)})</span>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 w-7 p-0 ml-auto"
-                        onClick={() => removeAttachment(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Upload progress */}
-              {isUploading && Object.keys(uploadProgress).length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm">Uploading files...</p>
-                  <Progress value={
-                    Object.values(uploadProgress).reduce((sum, current) => sum + current, 0) / 
-                    (Object.values(uploadProgress).length * 100) * 100
-                  } />
-                </div>
-              )}
-              
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center">
-                  <Input 
-                    type="file" 
-                    multiple 
-                    onChange={handleAttachmentChange}
-                    id="file-upload"
-                    ref={fileInputRef}
-                    className="max-w-xs"
-                    disabled={isUploading || isSendingNotification}
-                  />
-                </div>
+            </div>
+            
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+              <div className="flex flex-wrap items-center gap-4">
+                {isConsultant && (
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="internal" 
+                      checked={isInternalReply}
+                      onCheckedChange={setIsInternalReply}
+                      disabled={isUploading}
+                    />
+                    <Label htmlFor="internal" className="text-sm">Internal reply</Label>
+                  </div>
+                )}
                 
-                <div className="flex items-center gap-4">
-                  {isConsultant && (
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        id="internal" 
-                        checked={isInternalReply}
-                        onCheckedChange={setIsInternalReply}
-                        disabled={isUploading || isSendingNotification}
-                      />
-                      <Label htmlFor="internal" className="text-sm">Internal reply</Label>
-                    </div>
+                <Button 
+                  type="submit" 
+                  className="gap-2"
+                  disabled={isUploading || (!replyContent.trim() && (!attachments || attachments.length === 0))}
+                >
+                  {isUploading ? (
+                    <>
+                      <Upload className="h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <SendHorizontal className="h-4 w-4" />
+                      Send Reply
+                    </>
                   )}
-                  
-                  <Button 
-                    type="submit" 
-                    className="gap-2"
-                    disabled={isUploading || isSendingNotification || 
-                             (!replyContent.trim() && attachments.length === 0)}
-                  >
-                    {isUploading ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <SendHorizontal className="h-4 w-4" />
-                        Send Reply
-                      </>
-                    )}
-                  </Button>
-                </div>
+                </Button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </CardContent>
       </Card>
+      
+      {isConsultant && (
+        <Card>
+          <CardHeader className="pb-3">
+            <h3 className="text-lg font-semibold">Internal Notes</h3>
+            <p className="text-sm text-muted-foreground">
+              Notes are only visible to consultants
+            </p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddNote} className="space-y-3">
+              <Textarea 
+                placeholder="Add internal note..." 
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                rows={4}
+              />
+              
+              <div className="flex justify-end">
+                <Button type="submit">Add Note</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

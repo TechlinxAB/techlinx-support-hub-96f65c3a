@@ -27,6 +27,8 @@ import { toast } from 'sonner';
 import { notificationService } from '@/services/notificationService';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { FileAttachment } from '@/components/ui/file-attachment';
+import { uploadFile } from '@/utils/fileUtils';
 
 // Form schema for creating a new case
 const newCaseSchema = z.object({
@@ -65,6 +67,7 @@ const NewCasePage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [attachments, setAttachments] = useState<FileList | null>(null);
 
   const isConsultant = currentUser?.role === 'consultant';
 
@@ -193,6 +196,36 @@ const NewCasePage = () => {
 
       if (!newCase) {
         throw new Error('Failed to create case');
+      }
+
+      // Upload attachments if any
+      if (attachments && attachments.length > 0) {
+        const uploadPromises = Array.from(attachments).map(async (file) => {
+          const uploadResult = await uploadFile(file, currentUser.id, newCase.id, 'case');
+          
+          if (uploadResult.success && uploadResult.filePath) {
+            // Save attachment record to database
+            const { error } = await supabase
+              .from('case_attachments')
+              .insert({
+                case_id: newCase.id,
+                file_name: file.name,
+                file_path: uploadResult.filePath,
+                content_type: file.type,
+                size: file.size,
+                created_by: currentUser.id
+              });
+              
+            if (error) {
+              console.error('Error saving attachment record:', error);
+            }
+          } else {
+            console.error('File upload failed:', uploadResult.error);
+            toast.error(`Failed to upload ${file.name}: ${uploadResult.error}`);
+          }
+        });
+
+        await Promise.all(uploadPromises);
       }
       
       // If this is a high priority case, send a notification
@@ -368,6 +401,15 @@ const NewCasePage = () => {
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Attachments</label>
+                <FileAttachment
+                  files={attachments}
+                  onFilesChange={setAttachments}
+                  disabled={isSubmitting}
                 />
               </div>
 
