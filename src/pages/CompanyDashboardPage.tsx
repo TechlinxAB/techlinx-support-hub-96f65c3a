@@ -227,11 +227,6 @@ const CompanyDashboardPage = () => {
   
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{userCompany.name} - Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to your company dashboard</p>
-      </div>
-      
       {loadingDashboardBlocks ? (
         <div className="flex items-center justify-center p-12">
           <Loader className="h-8 w-8 animate-spin text-primary" />
