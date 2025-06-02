@@ -149,8 +149,8 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-white w-full" style={{ backgroundColor: 'white' }}>
-      {/* Persistent Header - outside of page transitions */}
+    <div className="min-h-screen bg-white w-full">
+      {/* Fixed Header */}
       <div 
         className="fixed top-0 right-0 z-30 bg-white border-b border-gray-200"
         style={{ 
@@ -162,27 +162,27 @@ const Layout = () => {
         <Header />
       </div>
 
-      {/* Main content area that properly adjusts to sidebar width */}
+      {/* Main content area - simplified to prevent double scrollbars */}
       <div 
-        className="flex-1 flex flex-col transition-all duration-300 bg-white"
+        className="transition-all duration-300 bg-white min-h-screen"
         style={{ 
           marginLeft: contentMarginLeft,
           backgroundColor: 'white',
-          position: 'relative',
-          zIndex: 1,
           paddingTop: '4rem' // Add padding for fixed header
         }}
       >
         {/* Content area with AnimatePresence for page transitions */}
-        <main className="flex-1 bg-white overflow-x-hidden py-6 w-full" style={{ backgroundColor: 'white' }}>
+        <div className="bg-white w-full">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Container>
-                <Outlet />
+                <div className="py-6">
+                  <Outlet />
+                </div>
               </Container>
             </PageTransition>
           </AnimatePresence>
-        </main>
+        </div>
       </div>
     </div>
   );

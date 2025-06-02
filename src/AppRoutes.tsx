@@ -43,12 +43,12 @@ const AppRoutes = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-white" style={{ backgroundColor: 'white' }}> 
+      <div className="min-h-screen bg-white w-full"> 
         {/* Only render the sidebar when not on the auth page */}
         {!isAuthPage && <PersistentSidebar />}
 
-        {/* Main content wrapper with explicit white background */}
-        <div className="w-full h-full bg-white flex-1" style={{ backgroundColor: 'white', position: 'relative', zIndex: 1 }}> 
+        {/* Main content wrapper - simplified to prevent double scrollbars */}
+        <div className="w-full bg-white"> 
           <Routes location={location}>
             {/* Auth route - doesn't use the main layout */}
             <Route path="/auth" element={<AuthPage />} />
@@ -56,9 +56,7 @@ const AppRoutes = () => {
             {/* All protected routes */}
             <Route path="/*" element={
               <ProtectedRoute>
-                <div className="w-full h-full bg-white"> 
-                  <Layout />
-                </div>
+                <Layout />
               </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />
