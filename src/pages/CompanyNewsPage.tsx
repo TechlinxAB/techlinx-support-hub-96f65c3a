@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
@@ -23,6 +22,17 @@ const CompanyNewsPage = () => {
   
   const company = companies.find(c => c.id === companyId);
   const isConsultant = currentUser?.role === 'consultant';
+
+  // Handle back navigation - go back to previous page or user dashboard
+  const handleBack = () => {
+    // Check if there's history to go back to
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      // Fallback to user dashboard
+      navigate('/');
+    }
+  };
 
   // Function to render a block based on its type
   const renderBlock = (block: CompanyNewsBlock) => {
@@ -196,7 +206,7 @@ const CompanyNewsPage = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate('/companies')}>
+          <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
@@ -232,7 +242,7 @@ const CompanyNewsPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" onClick={() => navigate('/companies')}>
+          <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
