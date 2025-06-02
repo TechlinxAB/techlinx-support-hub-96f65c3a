@@ -150,10 +150,10 @@ type AppContextType = {
   // Dashboard blocks
   dashboardBlocks: DashboardBlock[];
   loadingDashboardBlocks: boolean;
+  addDashboardBlock: (block: Omit<DashboardBlock, 'id' | 'createdAt' | 'updatedAt'>) => Promise<DashboardBlock | null>;
+  updateDashboardBlock: (blockId: string, updates: Partial<DashboardBlock>) => Promise<DashboardBlock | null>;
+  deleteDashboardBlock: (blockId: string) => Promise<boolean>;
   refetchDashboardBlocks: (companyId: string) => Promise<DashboardBlock[]>;
-  addDashboardBlock: (data: Partial<DashboardBlock>) => Promise<DashboardBlock | null>;
-  updateDashboardBlock: (id: string, data: Partial<DashboardBlock>) => Promise<DashboardBlock | null>;
-  deleteDashboardBlock: (id: string) => Promise<boolean>;
   
   // Company News blocks
   addCompanyNewsBlock: (data: any) => Promise<any>;
@@ -163,52 +163,10 @@ type AppContextType = {
 };
 
 // Create the context with default values
-const AppContext = createContext<AppContextType>({
-  language: 'en',
-  setLanguage: () => {},
-  currentUser: null,
-  cases: [],
-  loadingCases: false,
-  refetchCases: async () => [],
-  updateCase: async () => null,
-  addCase: async () => null,
-  companies: [],
-  addCompany: async () => null,
-  updateCompany: async () => null,
-  deleteCompany: async () => false,
-  refetchCompanies: async () => [],
-  users: [],
-  refetchUsers: async () => [],
-  categories: [],
-  refetchCategories: async () => [],
-  replies: [],
-  notes: [],
-  loadingReplies: false,
-  loadingNotes: false,
-  refetchReplies: async () => [],
-  refetchNotes: async () => [],
-  addReply: async () => null,
-  addNote: async () => null,
-  deleteReply: async () => false,
-  deleteNote: async () => false,
-  caseAttachments: [],
-  loadingAttachments: false,
-  refetchAttachments: async () => [],
-  uploadAttachment: async () => null,
-  dashboardBlocks: [],
-  loadingDashboardBlocks: false,
-  refetchDashboardBlocks: async () => [],
-  addDashboardBlock: async () => null,
-  updateDashboardBlock: async () => null,
-  deleteDashboardBlock: async () => false,
-  addCompanyNewsBlock: async (data: any) => null,
-  updateCompanyNewsBlock: async (id: string, data: any) => null,
-  deleteCompanyNewsBlock: async (id: string) => false,
-  publishCompanyNewsBlock: async (id: string) => false,
-});
+const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Provider component to wrap the app
-export const AppProvider = ({ children }: { children: React.ReactNode }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('en');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [cases, setCases] = useState<Case[]>([]);
@@ -816,7 +774,173 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     loadInitialData();
   }, [loading, user, profile]);
 
-  const contextValue: AppContextType = {
+  const addDashboardBlock = async (block: Omit<DashboardBlock, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      console.log("Adding dashboard block:", block);
+      
+      const { data, error } = await supabase
+        .from('dashboard_blocks')
+        .insert({
+          company_id: block.companyId,
+          title: block.title,
+          content: block.content,
+          type: block.type,
+          position: block.position,
+          parent_id: block.parentId || null,
+          created_by: block.createdBy
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error adding dashboard block:", error);
+        throw error;
+      }
+
+      console.log("Dashboard block added successfully:", data);
+
+      if (data) {
+        const newBlock: DashboardBlock = {
+          id: data.id,
+          companyId: data.company_id,
+          title: data.title,
+          content: data.content,
+          type: data.type,
+          position: data.position,
+          parentId: data.parent_id,
+          createdAt: new Date(data.created_at),
+          updatedAt: new Date(data.updated_at),
+          createdBy: data.created_by,
+          showTitle: data.content?.showTitle !== false
+        };
+
+        setDashboardBlocks(prev => [...prev, newBlock]);
+        return newBlock;
+      }
+    } catch (error) {
+      console.error('Error in addDashboardBlock:', error);
+      throw error;
+    }
+  };
+
+  const updateDashboardBlock = async (blockId: string, updates: Partial<DashboardBlock>) => {
+    try {
+      console.log("Updating dashboard block:", blockId, updates);
+      
+      const updateData: any = {};
+      
+      if (updates.title !== undefined) updateData.title = updates.title;
+      if (updates.content !== undefined) updateData.content = updates.content;
+      if (updates.type !== undefined) updateData.type = updates.type;
+      if (updates.position !== undefined) updateData.position = updates.position;
+      if (updates.parentId !== undefined) updateData.parent_id = updates.parentId;
+      
+      updateData.updated_at = new Date().toISOString();
+
+      const { data, error } = await supabase
+        .from('dashboard_blocks')
+        .update(updateData)
+        .eq('id', blockId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating dashboard block:", error);
+        throw error;
+      }
+
+      console.log("Dashboard block updated successfully:", data);
+
+      if (data) {
+        const updatedBlock: DashboardBlock = {
+          id: data.id,
+          companyId: data.company_id,
+          title: data.title,
+          content: data.content,
+          type: data.type,
+          position: data.position,
+          parentId: data.parent_id,
+          createdAt: new Date(data.created_at),
+          updatedAt: new Date(data.updated_at),
+          createdBy: data.created_by,
+          showTitle: data.content?.showTitle !== false
+        };
+
+        setDashboardBlocks(prev => 
+          prev.map(block => block.id === blockId ? updatedBlock : block)
+        );
+        return updatedBlock;
+      }
+    } catch (error) {
+      console.error('Error in updateDashboardBlock:', error);
+      throw error;
+    }
+  };
+
+  const deleteDashboardBlock = async (blockId: string) => {
+    try {
+      console.log("Deleting dashboard block:", blockId);
+      
+      const { error } = await supabase
+        .from('dashboard_blocks')
+        .delete()
+        .eq('id', blockId);
+
+      if (error) {
+        console.error("Error deleting dashboard block:", error);
+        throw error;
+      }
+
+      console.log("Dashboard block deleted successfully");
+      setDashboardBlocks(prev => prev.filter(block => block.id !== blockId));
+    } catch (error) {
+      console.error('Error in deleteDashboardBlock:', error);
+      throw error;
+    }
+  };
+
+  const refetchDashboardBlocks = async (companyId: string) => {
+    try {
+      console.log("Fetching dashboard blocks for company:", companyId);
+      setLoadingDashboardBlocks(true);
+      
+      const { data, error } = await supabase
+        .from('dashboard_blocks')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('position', { ascending: true });
+
+      if (error) {
+        console.error("Error fetching dashboard blocks:", error);
+        throw error;
+      }
+
+      console.log("Dashboard blocks fetched successfully:", data);
+
+      const blocks: DashboardBlock[] = (data || []).map(block => ({
+        id: block.id,
+        companyId: block.company_id,
+        title: block.title,
+        content: block.content,
+        type: block.type,
+        position: block.position,
+        parentId: block.parent_id,
+        createdAt: new Date(block.created_at),
+        updatedAt: new Date(block.updated_at),
+        createdBy: block.created_by,
+        showTitle: block.content?.showTitle !== false
+      }));
+
+      setDashboardBlocks(blocks);
+    } catch (error) {
+      console.error('Error in refetchDashboardBlocks:', error);
+      throw error;
+    } finally {
+      setLoadingDashboardBlocks(false);
+    }
+  };
+
+  const value: AppContextType = {
     language,
     setLanguage,
     currentUser,
@@ -850,17 +974,17 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     uploadAttachment: async () => null,
     dashboardBlocks,
     loadingDashboardBlocks,
-    refetchDashboardBlocks: async () => [],
-    addDashboardBlock: async () => null,
-    updateDashboardBlock: async () => null,
-    deleteDashboardBlock: async () => false,
-    addCompanyNewsBlock: async () => null,
-    updateCompanyNewsBlock: async () => null,
-    deleteCompanyNewsBlock: async () => false,
-    publishCompanyNewsBlock: async () => false,
+    addDashboardBlock,
+    updateDashboardBlock,
+    deleteDashboardBlock,
+    refetchDashboardBlocks,
+    addCompanyNewsBlock: async (data: any) => null,
+    updateCompanyNewsBlock: async (id: string, data: any) => null,
+    deleteCompanyNewsBlock: async (id: string) => false,
+    publishCompanyNewsBlock: async (id: string) => false,
   };
 
-  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
 // Custom hook to use the AppContext

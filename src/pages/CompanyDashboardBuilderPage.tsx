@@ -182,6 +182,12 @@ const CompanyDashboardBuilderPage = () => {
       const showTitle = formData.showTitle !== false;
       const { blockTitle: _, showTitle: __, ...contentData } = formData;
       
+      // Add showTitle to content
+      const contentWithShowTitle = {
+        ...contentData,
+        showTitle: showTitle
+      };
+      
       if (!companyId) {
         throw new Error("No company ID provided");
       }
@@ -195,20 +201,11 @@ const CompanyDashboardBuilderPage = () => {
       if (editingBlock) {
         console.log(`Updating block ID: ${editingBlock.id}`);
         
-        const { error } = await supabase
-          .from('dashboard_blocks')
-          .update({
-            title: blockTitle,
-            content: contentData,
-            type: selectedBlockType,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingBlock.id);
-        
-        if (error) {
-          console.error("Error updating block:", error);
-          throw error;
-        }
+        await updateDashboardBlock(editingBlock.id, {
+          title: blockTitle,
+          content: contentWithShowTitle,
+          type: selectedBlockType
+        });
         
       } else {
         const maxPosition = sortedBlocks.length > 0
@@ -220,24 +217,15 @@ const CompanyDashboardBuilderPage = () => {
         console.log("- User ID:", currentUserId);
         console.log("- Position:", maxPosition);
         
-        const { error } = await supabase
-          .from('dashboard_blocks')
-          .insert({
-            company_id: companyId,
-            title: blockTitle,
-            content: contentData,
-            type: selectedBlockType,
-            position: maxPosition,
-            created_by: currentUserId
-          });
-        
-        if (error) {
-          console.error("Error creating block:", error);
-          throw error;
-        }
+        await addDashboardBlock({
+          companyId: companyId,
+          title: blockTitle,
+          content: contentWithShowTitle,
+          type: selectedBlockType,
+          position: maxPosition,
+          createdBy: currentUserId
+        });
       }
-      
-      await refetchDashboardBlocks(companyId);
       
       toast.success("Block saved successfully", { id: toastId });
       setDialogOpen(false);
