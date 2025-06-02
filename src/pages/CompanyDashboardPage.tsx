@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { DashboardBlock } from '@/types/dashboard';
@@ -51,22 +50,19 @@ const CompanyDashboardPage = () => {
         switch (level) {
           case 1:
             return (
-              <div className="flex items-center gap-2 mt-6 mb-4">
-                <Heading1 className="h-6 w-6 text-primary" />
+              <div className="mt-6 mb-4">
                 <h1 className="text-3xl font-bold">{block.content.text}</h1>
               </div>
             );
           case 2:
             return (
-              <div className="flex items-center gap-2 mt-5 mb-3">
-                <Heading2 className="h-5 w-5 text-primary" />
+              <div className="mt-5 mb-3">
                 <h2 className="text-2xl font-semibold">{block.content.text}</h2>
               </div>
             );
           default:
             return (
-              <div className="flex items-center gap-2 mt-4 mb-2">
-                <Heading3 className="h-4 w-4 text-primary" />
+              <div className="mt-4 mb-2">
                 <h3 className="text-xl font-medium">{block.content.text}</h3>
               </div>
             );
@@ -76,7 +72,7 @@ const CompanyDashboardPage = () => {
         return (
           <div className="prose max-w-none mb-4">
             {shouldShowTitle && <h3 className="text-lg font-medium mb-2">{block.title}</h3>}
-            <p>{block.content.text}</p>
+            <div className="whitespace-pre-wrap">{block.content.text}</div>
           </div>
         );
       

@@ -877,7 +877,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const deleteDashboardBlock = async (blockId: string) => {
+  const deleteDashboardBlock = async (blockId: string): Promise<boolean> => {
     try {
       console.log("Deleting dashboard block:", blockId);
       
@@ -893,13 +893,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       console.log("Dashboard block deleted successfully");
       setDashboardBlocks(prev => prev.filter(block => block.id !== blockId));
+      return true;
     } catch (error) {
       console.error('Error in deleteDashboardBlock:', error);
-      throw error;
+      return false;
     }
   };
 
-  const refetchDashboardBlocks = async (companyId: string) => {
+  const refetchDashboardBlocks = async (companyId: string): Promise<DashboardBlock[]> => {
     try {
       console.log("Fetching dashboard blocks for company:", companyId);
       setLoadingDashboardBlocks(true);
@@ -932,9 +933,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
 
       setDashboardBlocks(blocks);
+      return blocks;
     } catch (error) {
       console.error('Error in refetchDashboardBlocks:', error);
-      throw error;
+      return [];
     } finally {
       setLoadingDashboardBlocks(false);
     }
