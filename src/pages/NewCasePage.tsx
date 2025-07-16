@@ -228,15 +228,13 @@ const NewCasePage = () => {
         await Promise.all(uploadPromises);
       }
       
-      // If this is a high priority case, send a notification
-      if (isHighPriority) {
-        console.log(`Sending high priority notification for new case ${newCase.id}`);
-        
-        notificationService.sendHighPriorityCaseNotification(newCase.id)
-          .catch(error => {
-            console.error(`Error sending high priority notification: ${error.message}`);
-          });
-      }
+      // Send notification for all new cases to services@techlinx.se
+      console.log(`Sending new case notification for case ${newCase.id} with priority ${values.priority}`);
+      
+      notificationService.sendNewCaseNotification(newCase.id)
+        .catch(error => {
+          console.error(`Error sending new case notification: ${error.message}`);
+        });
 
       toast.success('Case created successfully');
       navigate(`/cases/${newCase.id}`);

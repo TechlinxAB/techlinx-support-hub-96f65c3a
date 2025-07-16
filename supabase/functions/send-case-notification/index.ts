@@ -15,6 +15,7 @@ interface CaseNotificationRequest {
   recipientType: "user" | "consultant";
   skipEmail?: boolean; // Optional flag to skip actual email sending
   isHighPriority?: boolean; // Optional flag to explicitly mark high priority
+  isNewCase?: boolean; // Optional flag to mark as new case notification
 }
 
 serve(async (req: Request) => {
@@ -36,7 +37,7 @@ serve(async (req: Request) => {
       );
     }
     
-    const { caseId, replyId, recipientType, skipEmail = false, isHighPriority = false } = parsedBody;
+    const { caseId, replyId, recipientType, skipEmail = false, isHighPriority = false, isNewCase = false } = parsedBody;
     
     if (!caseId) {
       return new Response(

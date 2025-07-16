@@ -148,6 +148,117 @@ export const notificationService = {
   },
   
   /**
+   * Send a notification for any new case to services@techlinx.se
+   * @param caseId The ID of the case
+   */
+  async sendNewCaseNotification(caseId: string): Promise<boolean> {
+    try {
+      console.log(`Sending new case notification for case ${caseId}`);
+      
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error(`Error sending new case notification: ${sessionError.message}`);
+        throw new Error(`Authentication error: ${sessionError.message}`);
+      }
+      
+      if (!sessionData.session) {
+        console.error(`Error sending new case notification: Not authenticated - no session data`);
+        throw new Error("Not authenticated");
+      }
+      
+      // Get the API URL from environment or constants
+      const functionsUrl = "https://uaoeabhtbynyfzyfzogp.supabase.co/functions/v1";
+      
+      // Call the notification edge function
+      try {
+        console.log(`Calling edge function for new case ${caseId}`);
+        
+        const response = await fetch(
+          `${functionsUrl}/send-case-notification`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              caseId,
+              replyId: "",
+              recipientType: "consultant", // New cases always go to consultants (services@techlinx.se)
+              isNewCase: true // Mark this as a new case notification
+            }),
+            // Add timeout to prevent hanging on network issues
+            signal: AbortSignal.timeout(15000) // 15 second timeout
+          }
+        );
+        
+        const responseData = await response.json().catch(() => ({ 
+          error: `HTTP error ${response.status}`,
+          warning: true  
+        }));
+        
+        // Check for warnings in the response
+        if (responseData.warning) {
+          console.warn(`New case notification warning: ${responseData.message}`);
+          
+          // Show a toast warning when notification has issues
+          toast({
+            title: "Case notification issue",
+            description: responseData.message || "The case was created, but the notification delivery had an issue.",
+            variant: "warning",
+            duration: 5000,
+          });
+          
+          // We still return true because the case creation was successful
+          return true;
+        }
+        
+        // If there's an error in the response
+        if (!response.ok || responseData.error) {
+          console.error(`Error sending new case notification: ${JSON.stringify(responseData)}`);
+          
+          toast({
+            title: "Case notification issue",
+            description: "The case was created, but notification to consultants may not have been delivered.",
+            variant: "warning",
+            duration: 5000,
+          });
+          
+          // Don't throw error, just return false
+          return false;
+        }
+  
+        // Handle success
+        console.log(`New case notification response:`, responseData);
+        return true;
+      } catch (fetchError: any) {
+        console.error(`Error sending new case notification: ${fetchError.message}`);
+        
+        // Handle network timeout specifically
+        if (fetchError.name === 'AbortError' || fetchError.name === 'TimeoutError') {
+          toast.emailOffline({
+            description: "The notification system is currently experiencing connectivity issues. Your case was created, but notifications couldn't be sent."
+          });
+        } else {
+          // Show warning but don't block the UI
+          toast({
+            title: "Case notification issue",
+            description: "Your case was created, but there was an issue notifying consultants.",
+            variant: "warning",
+            duration: 5000,
+          });
+        }
+        
+        return true; // We return true because the case creation was successful
+      }
+    } catch (error: any) {
+      console.error(`Error in sendNewCaseNotification: ${error.message}`);
+      return false;
+    }
+  },
+  
+  /**
    * Send a notification for a new high priority case
    * @param caseId The ID of the case
    */

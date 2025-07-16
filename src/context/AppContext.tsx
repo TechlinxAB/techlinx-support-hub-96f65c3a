@@ -577,6 +577,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (responseData && data.caseId) {
         await refetchReplies(data.caseId);
         
+        // Send notification about the new reply
+        if (data.userId && currentUser) {
+          const isUserReply = currentUser.role === 'user';
+          console.log(`Sending reply notification for case ${data.caseId}, reply ${responseData.id}, isUserReply: ${isUserReply}`);
+          
+          // Import notification service dynamically to avoid circular imports
+          import("@/services/notificationService").then(({ notificationService }) => {
+            notificationService.sendReplyNotification(data.caseId!, responseData.id, isUserReply)
+              .catch(error => {
+                console.error(`Error sending reply notification: ${error.message}`);
+              });
+          }).catch(error => {
+            console.error(`Error importing notification service: ${error.message}`);
+          });
+        }
+        
         return {
           id: responseData.id,
           caseId: responseData.case_id,
