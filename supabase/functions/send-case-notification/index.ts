@@ -204,18 +204,22 @@ serve(async (req: Request) => {
     // Check if this is a high priority case (either explicitly marked or case priority is high)
     const shouldShowHighPriority = (isHighPriority || caseIsHighPriority) && settings.enable_priority_notifications;
     
-    if (shouldShowHighPriority) {
-      if (isNewCase) {
+    if (isNewCase) {
+      if (shouldShowHighPriority) {
         subject = `🚨 URGENT: High Priority Case Submitted - ${caseTitle}`;
       } else {
-        subject = `🚨 URGENT: High Priority Case Update - ${caseTitle}`;
+        subject = `New Case Submitted - ${caseTitle}`;
       }
-    } else if (isNewCase) {
-      subject = `New Case Submitted - ${caseTitle}`;
     } else if (recipientType === "user") {
+      // Users never see priority level in subject - treat all cases the same
       subject = `Your case has been updated - ${caseTitle}`;
     } else {
-      subject = `Case Update - ${caseTitle}`;
+      // For consultants (services@techlinx.se), show priority if it's high priority
+      if (shouldShowHighPriority) {
+        subject = `🚨 URGENT: High Priority Case Update - ${caseTitle}`;
+      } else {
+        subject = `Case Update - ${caseTitle}`;
+      }
     }
     
     // Set notification type label for logs and email styling
