@@ -201,13 +201,21 @@ serve(async (req: Request) => {
     // Set email subject based on case priority and recipient
     let subject: string;
     
-    // Simplified hardcoded subject lines
-    if (isHighPriority && settings.enable_priority_notifications) {
-      subject = `URGENT: High Priority Case - ${caseTitle}`;
+    // Check if this is a high priority case (either explicitly marked or case priority is high)
+    const shouldShowHighPriority = (isHighPriority || caseIsHighPriority) && settings.enable_priority_notifications;
+    
+    if (shouldShowHighPriority) {
+      if (isNewCase) {
+        subject = `🚨 URGENT: High Priority Case Submitted - ${caseTitle}`;
+      } else {
+        subject = `🚨 URGENT: High Priority Case Update - ${caseTitle}`;
+      }
+    } else if (isNewCase) {
+      subject = `New Case Submitted - ${caseTitle}`;
     } else if (recipientType === "user") {
       subject = `Your case has been updated - ${caseTitle}`;
     } else {
-      subject = `New case activity - ${caseTitle}`;
+      subject = `Case Update - ${caseTitle}`;
     }
     
     // Set notification type label for logs and email styling
